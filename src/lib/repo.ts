@@ -78,6 +78,19 @@ export async function ensureUser(
   return user;
 }
 
+/** Keep the LINE display name / picture fresh (best effort). */
+export async function touchProfile(
+  db: SupabaseClient,
+  userId: string,
+  profile: { displayName?: string; pictureUrl?: string },
+): Promise<void> {
+  const patch: Record<string, string> = {};
+  if (profile.displayName) patch.display_name = profile.displayName;
+  if (profile.pictureUrl) patch.picture_url = profile.pictureUrl;
+  if (Object.keys(patch).length === 0) return;
+  await db.from("users").update(patch).eq("id", userId);
+}
+
 export async function getSettings(db: SupabaseClient, userId: string): Promise<SettingsRow> {
   const { data, error } = await db
     .from("user_settings")
@@ -117,6 +130,7 @@ export async function insertTransaction(
     occurredAt: Date;
     status: "confirmed" | "pending_confirm";
     rawText: string;
+    source?: "text" | "manual";
   },
 ): Promise<TxRow> {
   const { data, error } = await db
@@ -128,7 +142,7 @@ export async function insertTransaction(
       amount: satangToString(input.amountSatang),
       category_id: input.categoryId,
       occurred_at: input.occurredAt.toISOString(),
-      source: "text",
+      source: input.source ?? "text",
       status: input.status,
       raw_text: input.rawText,
     })
