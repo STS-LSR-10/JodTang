@@ -1,0 +1,171 @@
+import { describe, expect, it } from "vitest";
+import { CONFIRM_THRESHOLD, parseMessage } from "./text-parser";
+
+// 2026-10-15 15:00 in Bangkok
+const NOW = new Date("2026-10-15T08:00:00Z");
+
+function one(text: string) {
+  const { entries } = parseMessage(text, NOW);
+  expect(entries).toHaveLength(1);
+  return entries[0]!;
+}
+
+describe("parseMessage: basics", () => {
+  it.each([
+    ["กาแฟ 30", "expense", "กาแฟ", 3000],
+    ["ข้าวมันไก่ 50.50", "expense", "ข้าวมันไก่", 5050],
+    ["เงินเดือน 20,000", "income", "เงินเดือน", 2_000_000],
+    ["+500 ขายของ", "income", "ขายของ", 50_000],
+    ["-120 ค่าน้ำมัน", "expense", "ค่าน้ำมัน", 12_000],
+    ["กาแฟ ๓๐", "expense", "กาแฟ", 3000],
+    ["30 กาแฟ", "expense", "กาแฟ", 3000],
+    ["กาแฟ 30 บาท", "expense", "กาแฟ", 3000],
+    ["฿45 ชานม", "expense", "ชานม", 4500],
+    ["ปันผล 1,234.56", "income", "ปันผล", 123_456],
+    ["ขายของ 20,000.50 บาท", "income", "ขายของ", 2_000_050],
+    ["ค่าคอม 800", "income", "ค่าคอม", 80_000],
+    ["7-11 ซื้อของ 100", "expense", "7-11 ซื้อของ", 10_000],
+  ])("%s", (text, type, title, satang) => {
+    const e = one(text);
+    expect(e.type).toBe(type);
+    expect(e.title).toBe(title);
+    expect(e.amountSatang).toBe(satang);
+    expect(e.confidence).toBeGreaterThanOrEqual(CONFIRM_THRESHOLD);
+  });
+});
+
+describe("parseMessage: units", () => {
+  it.each([
+    ["ข้าว 1.5k", 150_000],
+    ["ค่าห้อง 5พัน", 500_000],
+    ["โบนัส 2หมื่น", 2_000_000],
+    ["ค่าเทอม 1แสน", 10_000_000],
+    ["ทอง 2K", 200_000],
+  ])("%s", (text, satang) => {
+    expect(one(text).amountSatang).toBe(satang);
+  });
+});
+
+describe("parseMessage: multiple entries", () => {
+  it("splits on comma", () => {
+    const { entries } = parseMessage("กาแฟ 30, ข้าว 50", NOW);
+    expect(entries.map((e) => [e.title, e.amountSatang])).toEqual([
+      ["กาแฟ", 3000],
+      ["ข้าว", 5000],
+    ]);
+  });
+
+  it("splits on comma without a space", () => {
+    expect(parseMessage("กาแฟ 30,ข้าว 50", NOW).entries).toHaveLength(2);
+  });
+
+  it("does not split thousands separators", () => {
+    const { entries } = parseMessage("เงินเดือน 20,000, กาแฟ 30", NOW);
+    expect(entries.map((e) => e.amountSatang)).toEqual([2_000_000, 3000]);
+  });
+
+  it("splits on newlines", () => {
+    const { entries } = parseMessage("กาแฟ 30\nข้าว 50\nเงินเดือน 20000", NOW);
+    expect(entries.map((e) => e.type)).toEqual(["expense", "expense", "income"]);
+  });
+});
+
+describe("parseMessage: dates", () => {
+  it("เมื่อวาน (leading)", () => {
+    const e = one("เมื่อวาน กาแฟ 45");
+    expect(e.title).toBe("กาแฟ");
+    expect(e.occurredAt.toISOString()).toBe("2026-10-14T05:00:00.000Z");
+  });
+
+  it("เมื่อวาน (trailing)", () => {
+    expect(one("กาแฟ 45 เมื่อวาน").occurredAt.toISOString()).toBe("2026-10-14T05:00:00.000Z");
+  });
+
+  it("เมื่อวานซืน", () => {
+    expect(one("เมื่อวานซืน กาแฟ 45").occurredAt.toISOString()).toBe("2026-10-13T05:00:00.000Z");
+  });
+
+  it("วันนี้ keeps the current time", () => {
+    expect(one("วันนี้ ข้าว 60").occurredAt.getTime()).toBe(NOW.getTime());
+  });
+
+  it("DD/MM in the current year", () => {
+    const e = one("12/10 ค่าไฟ 1200");
+    expect(e.title).toBe("ค่าไฟ");
+    expect(e.amountSatang).toBe(120_000);
+    expect(e.occurredAt.toISOString()).toBe("2026-10-12T05:00:00.000Z");
+  });
+
+  it("DD/MM/YYYY with Buddhist year", () => {
+    expect(one("12/10/2569 ค่าไฟ 1200").occurredAt.toISOString()).toBe("2026-10-12T05:00:00.000Z");
+  });
+
+  it("DD/MM/YY two-digit year", () => {
+    expect(one("12/10/26 ค่าไฟ 1200").occurredAt.toISOString()).toBe("2026-10-12T05:00:00.000Z");
+  });
+
+  it("a future DD/MM falls back to last year", () => {
+    expect(one("25/12 ของขวัญ 500").occurredAt.toISOString()).toBe("2025-12-25T05:00:00.000Z");
+  });
+
+  it("trailing DD/MM", () => {
+    expect(one("ค่าไฟ 1200 12/10").occurredAt.toISOString()).toBe("2026-10-12T05:00:00.000Z");
+  });
+
+  it("an invalid date is not consumed", () => {
+    const { entries } = parseMessage("31/02 ค่าไฟ 1200", NOW);
+    expect(entries).toHaveLength(1);
+    expect(entries[0]!.occurredAt.getTime()).toBe(NOW.getTime());
+  });
+});
+
+describe("parseMessage: type inference", () => {
+  it("ดอกเบี้ย is income", () => {
+    expect(one("ดอกเบี้ย 12").type).toBe("income");
+  });
+
+  it("ดอกเบี้ยจ่าย is expense", () => {
+    expect(one("ดอกเบี้ยจ่าย 300").type).toBe("expense");
+  });
+
+  it("explicit sign wins over keywords", () => {
+    expect(one("-500 เงินเดือน").type).toBe("expense");
+  });
+
+  it("a bare sign + amount is income with a default title", () => {
+    const e = one("+500");
+    expect(e.type).toBe("income");
+    expect(e.title).toBe("รายรับ");
+    expect(e.confidence).toBeGreaterThanOrEqual(CONFIRM_THRESHOLD);
+  });
+});
+
+describe("parseMessage: needs confirmation", () => {
+  it("a bare number is ambiguous", () => {
+    const e = one("500");
+    expect(e.confidence).toBeLessThan(CONFIRM_THRESHOLD);
+    expect(e.amountSatang).toBe(50_000);
+  });
+
+  it("a very large amount asks first", () => {
+    expect(one("ซื้อรถ 1,500,000").confidence).toBeLessThan(CONFIRM_THRESHOLD);
+  });
+});
+
+describe("parseMessage: rejects", () => {
+  it.each(["สวัสดี", "ข้าว 0", "โทร 0812345678", ""])("%j yields no entries", (text) => {
+    expect(parseMessage(text, NOW).entries).toHaveLength(0);
+  });
+
+  it("reports unparsed segments", () => {
+    const r = parseMessage("กาแฟ 30, สวัสดี", NOW);
+    expect(r.entries).toHaveLength(1);
+    expect(r.unparsed).toEqual(["สวัสดี"]);
+  });
+
+  it("ignores very long sentences", () => {
+    const text =
+      "วันนี้ฉันไปเดินเล่นที่สวนสาธารณะแล้วเจอเพื่อนเก่าที่ไม่ได้เจอกันมานานมากเลยคุยกันนานมากมาย 2 ชั่วโมง";
+    expect(parseMessage(text, NOW).entries).toHaveLength(0);
+  });
+});
