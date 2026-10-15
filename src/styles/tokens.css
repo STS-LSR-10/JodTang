@@ -1,0 +1,36 @@
+/* Mee-Tang design tokens — keep in sync with docs/design-tokens.md */
+:root {
+  --primary: #0f766e;
+  --primary-soft: #ccfbf1;
+  --accent: #f59e0b;
+  --expense: #e11d48;
+  --income: #059669;
+  --background: #f8fafc;
+  --surface: #ffffff;
+  --foreground: #0f172a;
+  --muted: #64748b;
+  --border: #e2e8f0;
+  --radius: 16px;
+}
+
+.dark {
+  --primary: #2dd4bf;
+  --primary-soft: #134e4a;
+  --accent: #fbbf24;
+  --expense: #fb7185;
+  --income: #34d399;
+  --background: #0b1220;
+  --surface: #111a2b;
+  --foreground: #e2e8f0;
+  --muted: #94a3b8;
+  --border: #1e293b;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+}
+
+.num {
+  font-variant-numeric: tabular-nums;
+}
