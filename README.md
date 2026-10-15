@@ -55,8 +55,12 @@ pnpm lint && pnpm typecheck && pnpm test
 4. เปิดทดสอบในแอป LINE ที่ `https://liff.line.me/<LIFF_ID>/summary`
    (เปิดนอกแอปก็ได้ จะเด้งไปหน้า LINE Login)
 
-หน้าที่พร้อมใช้: **สรุป**, **รายการ** (กรอง/ค้นหา/เพิ่ม/ลบ), **ตั้งค่า**
-ส่วน **วิเคราะห์** และ **หมวด/งบ** เป็น placeholder (Phase 3)
+หน้าที่พร้อมใช้: **สรุป**, **รายการ** (กรอง/ค้นหา/เพิ่ม/ลบ), **หมวด/งบ**
+(เพิ่ม/แก้/ซ่อน/เรียงหมวด, ตั้งคำค้น, งบรวมหรือแยกหมวด + แจ้งเตือน 80%/100%),
+**วิเคราะห์** (กราฟแท่ง 6 เดือน/สัปดาห์/วัน และโดนัทตามหมวด), **ตั้งค่า**
+
+> ต้องรัน migration `supabase/migrations/0004_budget_mode_overrides_analytics.sql`
+> ก่อนใช้โหมดงบ ปรับหมวดมาตรฐาน และกราฟ (ไฟล์รันซ้ำได้)
 
 ## Rich Menu
 
@@ -78,7 +82,11 @@ pnpm richmenu --replace   # สร้างเมนู อัปโหลดภ
 | GET/POST | `/api/transactions` | รายการ (กรอง `type,q,from,to,categoryId`) / เพิ่มด้วยมือ |
 | DELETE | `/api/transactions/:id` | ลบ (soft delete) |
 | GET/PATCH | `/api/settings` | รูปแบบการ์ด, รอบงบ |
-| GET | `/api/categories` | หมวดที่ใช้ได้ |
+| GET/POST | `/api/categories` | หมวดที่ใช้ได้ (`?all=1` รวมที่ซ่อน) / เพิ่มหมวดของตัวเอง |
+| PATCH/DELETE | `/api/categories/:id` | แก้/ซ่อน/ลบ (หมวดมาตรฐานแก้ได้เฉพาะคำค้น/ซ่อน/ลำดับ) |
+| POST | `/api/categories/reorder` | เรียงลำดับหมวด |
+| GET/PUT | `/api/budgets` | โหมดงบ (รวม/แยกหมวด), งบ และยอดใช้ในรอบนี้ |
+| GET | `/api/analytics?view=month\|week\|day&scope=cycle\|all` | ข้อมูลกราฟแท่งและโดนัท |
 
 `user_id` มาจาก session ที่ตรวจแล้วเท่านั้น ไม่รับจาก client
 
@@ -115,5 +123,5 @@ docs           design tokens, เอกสารอื่น ๆ
 
 ## Roadmap
 
-Phase 0 Setup (✓) → 1 Webhook + จดข้อความ (✓) → 2 LIFF พื้นฐาน (✓) → 3 หมวด/งบ/วิเคราะห์ →
+Phase 0 Setup (✓) → 1 Webhook + จดข้อความ (✓) → 2 LIFF พื้นฐาน (✓) → 3 หมวด/งบ/วิเคราะห์ (✓) →
 4 สลิป OCR → 5 Plus & Extra → 6 Hardening
