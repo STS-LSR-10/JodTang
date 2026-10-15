@@ -1,7 +1,10 @@
 import { z } from "zod";
 import { apiError, guard, json } from "@/lib/api";
 import { requireUser } from "@/lib/auth/require-user";
+import { budgetAlertsFor } from "@/lib/budget-alert";
 import { categorizeByRules } from "@/lib/categorize/rules";
+import { getServerEnv } from "@/lib/env";
+import { createLineClient } from "@/lib/line/client";
 import { TX_SELECT, toTxDto } from "@/lib/dto";
 import { toSatang } from "@/lib/money";
 import { insertTransaction, loadCategories, loadMemory } from "@/lib/repo";
@@ -116,6 +119,26 @@ export async function POST(request: Request): Promise<Response> {
       rawText: body.title,
       source: "manual",
     });
+    // Budget alert for entries made in the web app: pushed to the chat (best effort).
+    try {
+      const alerts = await budgetAlertsFor(db, {
+        userId: auth.userId,
+        type: body.type,
+        categoryId,
+        amountSatang,
+        occurredAt: new Date(tx.occurred_at),
+        now: new Date(),
+      });
+      if (alerts.length > 0) {
+        const line = createLineClient(getServerEnv().LINE_CHANNEL_ACCESS_TOKEN);
+        await line.push(
+          auth.lineUserId,
+          alerts.map((t) => ({ type: "text", text: t })),
+        );
+      }
+    } catch (error) {
+      console.error("budget alert failed:", error instanceof Error ? error.message : "unknown");
+    }
     return json({ id: tx.id }, 201);
   });
 }

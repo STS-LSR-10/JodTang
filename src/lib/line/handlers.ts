@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { budgetAlertsFor } from "@/lib/budget-alert";
 import { calendarMonthRange, cycleRange, dayRange } from "@/lib/budget-cycle";
 import { categorizeByRules, type CategoryLite } from "@/lib/categorize/rules";
 import { parseCommand, type Command } from "@/lib/commands";
@@ -155,7 +156,36 @@ async function saveEntries(
       buildTypeQuestion({ txId: p.tx.id, title: p.tx.title, amountSatang: p.entry.amountSatang }),
     );
   }
+
+  // Budget alerts go last so they are the freshest thing in the chat (even with cards turned off).
+  const alerts: string[] = [];
+  for (const c of confirmed) {
+    alerts.push(...(await safeAlerts(deps, user.id, c.tx, c.categoryId)));
+  }
+  for (const a of alerts) messages.push(text(a));
   return messages;
+}
+
+/** Budget alerts are best effort: a failure here must never block recording the entry. */
+async function safeAlerts(
+  deps: HandlerDeps,
+  userId: string,
+  tx: TxRow,
+  categoryId: string | null,
+): Promise<string[]> {
+  try {
+    return await budgetAlertsFor(deps.db, {
+      userId,
+      type: tx.type,
+      categoryId,
+      amountSatang: txAmountSatang(tx),
+      occurredAt: new Date(tx.occurred_at),
+      now: deps.now(),
+    });
+  } catch (error) {
+    console.error("budget alert failed:", error instanceof Error ? error.message : "unknown error");
+    return [];
+  }
 }
 
 async function confirmCard(
@@ -304,8 +334,9 @@ async function handlePostback(
       status: "confirmed",
     });
     if (!updated) return [text(NOT_FOUND_TEXT)];
-    if (settings.confirm_style === "off") return [text("จดแล้ว")];
-    return [await confirmCard(updated, categoryId, categories, settings, user, deps)];
+    const alerts = (await safeAlerts(deps, user.id, updated, categoryId)).map((a) => text(a));
+    if (settings.confirm_style === "off") return [text("จดแล้ว"), ...alerts];
+    return [await confirmCard(updated, categoryId, categories, settings, user, deps), ...alerts];
   }
 
   return [];

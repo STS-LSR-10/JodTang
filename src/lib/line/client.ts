@@ -24,6 +24,16 @@ export function createLineClient(accessToken: string) {
       if (!res.ok) throw new Error(`LINE reply failed: ${res.status}`);
     },
 
+    /** Push (outside a reply). Counts against the OA's monthly push quota — use sparingly. */
+    async push(lineUserId: string, messages: LineMessage[]): Promise<void> {
+      const res = await fetch(`${API}/message/push`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ to: lineUserId, messages: messages.slice(0, 5) }),
+      });
+      if (!res.ok) throw new Error(`LINE push failed: ${res.status}`);
+    },
+
     async getProfile(lineUserId: string): Promise<LineProfile | null> {
       const res = await fetch(`${API}/profile/${encodeURIComponent(lineUserId)}`, { headers });
       if (!res.ok) return null;

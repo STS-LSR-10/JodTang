@@ -1,5 +1,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { CategoryLite, MemoryLite } from "@/lib/categorize/rules";
+import {
+  applyOverrides,
+  type CategoryDetail,
+  type CategoryOverride,
+} from "@/lib/categorize/overrides";
+import type { MemoryLite } from "@/lib/categorize/rules";
 import { satangToString, toSatang } from "@/lib/money";
 import type { BudgetCycle, ConfirmStyle, TxType } from "@/lib/types";
 
@@ -101,13 +106,123 @@ export async function getSettings(db: SupabaseClient, userId: string): Promise<S
   return (data as SettingsRow | null) ?? DEFAULT_SETTINGS;
 }
 
-export async function loadCategories(db: SupabaseClient, userId: string): Promise<CategoryLite[]> {
+/** System categories (with this user's overrides applied) plus the user's own. */
+export async function loadCategories(
+  db: SupabaseClient,
+  userId: string,
+): Promise<CategoryDetail[]> {
+  const [cats, overrides] = await Promise.all([
+    db
+      .from("categories")
+      .select("id,user_id,type,name,icon,color,keywords,sort_order,is_hidden")
+      .or(`user_id.is.null,user_id.eq.${userId}`),
+    db
+      .from("category_overrides")
+      .select("category_id,keywords,is_hidden,sort_order")
+      .eq("user_id", userId),
+  ]);
+  if (cats.error) fail("load categories", cats.error);
+  // A missing overrides table (migration 0004 not applied yet) must not break categorizing.
+  const ov = overrides.error ? [] : ((overrides.data ?? []) as CategoryOverride[]);
+  return applyOverrides((cats.data ?? []) as CategoryDetail[], ov);
+}
+
+/** Sum of confirmed expenses in [from, to), optionally for one category. */
+export async function expenseTotalSatang(
+  db: SupabaseClient,
+  input: { userId: string; from: Date; to: Date; categoryId?: string },
+): Promise<number> {
+  let query = db
+    .from("transactions")
+    .select("amount")
+    .eq("user_id", input.userId)
+    .eq("status", "confirmed")
+    .eq("type", "expense")
+    .gte("occurred_at", input.from.toISOString())
+    .lt("occurred_at", input.to.toISOString());
+  if (input.categoryId) query = query.eq("category_id", input.categoryId);
+  const { data, error } = await query;
+  if (error) fail("sum expenses", error);
+  return (data ?? []).reduce(
+    (sum, r) => sum + toSatang((r as { amount: number | string }).amount),
+    0,
+  );
+}
+
+export interface BudgetRow {
+  id: string;
+  category_id: string | null;
+  amount: number | string;
+}
+
+export async function loadBudgets(db: SupabaseClient, userId: string): Promise<BudgetRow[]> {
   const { data, error } = await db
-    .from("categories")
-    .select("id,user_id,type,name,keywords,sort_order,is_hidden")
-    .or(`user_id.is.null,user_id.eq.${userId}`);
-  if (error) fail("load categories", error);
-  return (data ?? []) as CategoryLite[];
+    .from("budgets")
+    .select("id,category_id,amount")
+    .eq("user_id", userId);
+  if (error) fail("load budgets", error);
+  return (data ?? []) as BudgetRow[];
+}
+
+/** Budget mode lives in user_settings.budget_mode (migration 0004); default when unavailable. */
+export async function getBudgetMode(
+  db: SupabaseClient,
+  userId: string,
+): Promise<"overall" | "category"> {
+  const { data, error } = await db
+    .from("user_settings")
+    .select("budget_mode")
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (error || !data) return "overall";
+  return (data as { budget_mode?: string }).budget_mode === "category" ? "category" : "overall";
+}
+
+/** Set (amount) or clear (null) the overall (categoryId null) or per-category budget. */
+export async function setBudget(
+  db: SupabaseClient,
+  input: {
+    userId: string;
+    categoryId: string | null;
+    amountSatang: number | null;
+    cycle: BudgetCycle;
+  },
+): Promise<void> {
+  // Partial unique indexes cannot be used as an upsert target, so look the row up first.
+  let find = db.from("budgets").select("id").eq("user_id", input.userId);
+  find = input.categoryId ? find.eq("category_id", input.categoryId) : find.is("category_id", null);
+  const found = await find.maybeSingle();
+  if (found.error) fail("find budget", found.error);
+  const existing = found.data as { id: string } | null;
+
+  if (input.amountSatang === null) {
+    if (existing) {
+      const del = await db
+        .from("budgets")
+        .delete()
+        .eq("id", existing.id)
+        .eq("user_id", input.userId);
+      if (del.error) fail("delete budget", del.error);
+    }
+    return;
+  }
+  const amount = satangToString(input.amountSatang);
+  if (existing) {
+    const upd = await db
+      .from("budgets")
+      .update({ amount, cycle: input.cycle })
+      .eq("id", existing.id)
+      .eq("user_id", input.userId);
+    if (upd.error) fail("update budget", upd.error);
+  } else {
+    const ins = await db.from("budgets").insert({
+      user_id: input.userId,
+      category_id: input.categoryId,
+      amount,
+      cycle: input.cycle,
+    });
+    if (ins.error) fail("insert budget", ins.error);
+  }
 }
 
 export async function loadMemory(db: SupabaseClient, userId: string): Promise<MemoryLite[]> {
