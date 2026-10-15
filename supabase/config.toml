@@ -1,0 +1,22 @@
+# Supabase CLI config for local development (`supabase start`).
+project_id = "meetang"
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public"]
+
+[db]
+port = 54322
+major_version = 15
+
+[db.migrations]
+enabled = true
+
+[storage]
+enabled = true
+file_size_limit = "10MiB"
+
+[auth]
+enabled = true
+site_url = "http://localhost:3000"
