@@ -41,7 +41,46 @@ pnpm lint && pnpm typecheck && pnpm test
 - **ngrok:** `ngrok http 3000` แล้วใช้ `https://<id>.ngrok-free.app/api/line/webhook`
   (ตั้ง `APP_BASE_URL` ให้ตรง)
 
-> Webhook จะพร้อมใช้งานตั้งแต่ Phase 1
+## LIFF (หน้าเว็บในแอป LINE)
+
+1. ใน LINE Login channel → แท็บ **LIFF** → **Add**
+   - Endpoint URL: `https://<โดเมน>/summary`
+   - Scope: `profile`, `openid` · Size: `Full`
+2. ตั้งค่าใน Vercel (แล้ว Redeploy):
+   - `NEXT_PUBLIC_LIFF_ID` = LIFF ID
+   - `LINE_LOGIN_CHANNEL_ID` = Channel ID ของ **LINE Login channel** (ใช้ตรวจ ID token)
+   - `APP_BASE_URL` = โดเมน production
+3. Provider เดียวกัน: LINE Login channel และ Messaging API channel ต้องอยู่ใน Provider เดียวกัน
+   ไม่งั้น LINE user id จะไม่ตรงกับที่ webhook เห็น
+4. เปิดทดสอบในแอป LINE ที่ `https://liff.line.me/<LIFF_ID>/summary`
+   (เปิดนอกแอปก็ได้ จะเด้งไปหน้า LINE Login)
+
+หน้าที่พร้อมใช้: **สรุป**, **รายการ** (กรอง/ค้นหา/เพิ่ม/ลบ), **ตั้งค่า**
+ส่วน **วิเคราะห์** และ **หมวด/งบ** เป็น placeholder (Phase 3)
+
+## Rich Menu
+
+```bash
+pnpm richmenu --dry-run   # สร้างภาพ assets/richmenu.png อย่างเดียว (ไม่ยิงเครือข่าย)
+pnpm richmenu --replace   # สร้างเมนู อัปโหลดภาพ ตั้งเป็นค่าเริ่มต้น (ลบเมนู meetang-main เดิมก่อน)
+```
+
+สคริปต์อ่าน `LINE_CHANNEL_ACCESS_TOKEN` และ `NEXT_PUBLIC_LIFF_ID` จาก `.env.local`
+(ไฟล์นี้ไม่ถูก commit) ช่อง `จดรายการ` เปิดคีย์บอร์ด ส่วนที่เหลือเปิด LIFF ตามหน้า
+
+## API (ต้องแนบ `Authorization: Bearer <session>`)
+
+| Method | Path | หน้าที่ |
+|---|---|---|
+| POST | `/api/auth/liff` | แลก LIFF ID token เป็น session (1 ชม.) |
+| GET | `/api/me` | โปรไฟล์/แผน/ตังสะสม |
+| GET | `/api/summary?scope=cycle\|month\|day` | สรุปรายรับ/จ่าย + รายการล่าสุด |
+| GET/POST | `/api/transactions` | รายการ (กรอง `type,q,from,to,categoryId`) / เพิ่มด้วยมือ |
+| DELETE | `/api/transactions/:id` | ลบ (soft delete) |
+| GET/PATCH | `/api/settings` | รูปแบบการ์ด, รอบงบ |
+| GET | `/api/categories` | หมวดที่ใช้ได้ |
+
+`user_id` มาจาก session ที่ตรวจแล้วเท่านั้น ไม่รับจาก client
 
 ## Supabase
 
@@ -76,5 +115,5 @@ docs           design tokens, เอกสารอื่น ๆ
 
 ## Roadmap
 
-Phase 0 Setup (✓) → 1 Webhook + จดข้อความ → 2 LIFF พื้นฐาน → 3 หมวด/งบ/วิเคราะห์ →
+Phase 0 Setup (✓) → 1 Webhook + จดข้อความ (✓) → 2 LIFF พื้นฐาน (✓) → 3 หมวด/งบ/วิเคราะห์ →
 4 สลิป OCR → 5 Plus & Extra → 6 Hardening
