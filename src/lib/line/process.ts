@@ -18,8 +18,22 @@ function isLineEvent(value: unknown): value is LineEvent {
  */
 export async function processEvents(rawEvents: unknown[]): Promise<void> {
   const env = getServerEnv();
-  const db = getAdminClient();
   const line = createLineClient(env.LINE_CHANNEL_ACCESS_TOKEN);
+
+  let db: ReturnType<typeof getAdminClient>;
+  try {
+    db = getAdminClient();
+  } catch (error) {
+    // Config problem: still tell the user something went wrong instead of staying silent.
+    console.error("line setup failed:", error instanceof Error ? error.message : "unknown error");
+    for (const raw of rawEvents) {
+      if (isLineEvent(raw) && raw.replyToken) {
+        await line.reply(raw.replyToken, [text(ERROR_TEXT)]).catch(() => undefined);
+      }
+    }
+    return;
+  }
+
   const deps: HandlerDeps = {
     db,
     reply: line.reply,

@@ -67,6 +67,22 @@ export function getPublicEnv(source: EnvSource = process.env): PublicEnv {
   return parse(publicSchema, source, "public");
 }
 
+const supabaseAdminSchema = z.object({
+  NEXT_PUBLIC_SUPABASE_URL: z.string().url(),
+  SUPABASE_SERVICE_ROLE_KEY: z.string().min(1),
+});
+
+/**
+ * Only what the service-role client needs, so the webhook does not depend on
+ * unrelated variables (LIFF id, base URL). Server only.
+ */
+export function getSupabaseAdminEnv(source: EnvSource = process.env) {
+  if (typeof window !== "undefined") {
+    throw new Error("getSupabaseAdminEnv() must not be called in the browser");
+  }
+  return parse(supabaseAdminSchema, source, "supabase");
+}
+
 /** Server only. Never import this from client components. */
 export function getServerEnv(source: EnvSource = process.env): ServerEnv {
   if (typeof window !== "undefined") {

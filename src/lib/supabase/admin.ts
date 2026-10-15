@@ -1,5 +1,5 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import { getPublicEnv, getServerEnv } from "@/lib/env";
+import { getSupabaseAdminEnv } from "@/lib/env";
 
 let cached: SupabaseClient | null = null;
 
@@ -9,11 +9,10 @@ let cached: SupabaseClient | null = null;
  */
 export function getAdminClient(): SupabaseClient {
   if (!cached) {
-    cached = createClient(
-      getPublicEnv().NEXT_PUBLIC_SUPABASE_URL,
-      getServerEnv().SUPABASE_SERVICE_ROLE_KEY,
-      { auth: { persistSession: false, autoRefreshToken: false } },
-    );
+    const env = getSupabaseAdminEnv();
+    cached = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
   }
   return cached;
 }

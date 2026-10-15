@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getPublicEnv, getServerEnv } from "./env";
+import { getPublicEnv, getServerEnv, getSupabaseAdminEnv } from "./env";
 
 const base = {
   LINE_CHANNEL_ID: "a",
@@ -54,6 +54,17 @@ describe("env", () => {
 
   it("treats empty strings as unset", () => {
     expect(() => getServerEnv({ ...base, GEMINI_API_KEY: "" })).toThrowError(/GEMINI_API_KEY/);
+  });
+
+  it("supabase admin env needs only the URL and service key", () => {
+    const env = getSupabaseAdminEnv({
+      NEXT_PUBLIC_SUPABASE_URL: "https://x.supabase.co",
+      SUPABASE_SERVICE_ROLE_KEY: "k",
+    });
+    expect(env.SUPABASE_SERVICE_ROLE_KEY).toBe("k");
+    expect(() =>
+      getSupabaseAdminEnv({ NEXT_PUBLIC_SUPABASE_URL: "https://x.supabase.co" }),
+    ).toThrowError(/SUPABASE_SERVICE_ROLE_KEY/);
   });
 
   it("rejects an unknown provider", () => {
