@@ -1,0 +1,20 @@
+export function json(data: unknown, status = 200): Response {
+  return Response.json(data, { status, headers: { "Cache-Control": "no-store" } });
+}
+
+/** Error body shape: { error: string } with a polite Thai message. */
+export function apiError(message: string, status: number): Response {
+  return json({ error: message }, status);
+}
+
+export const SERVER_ERROR_TEXT = "ขออภัย ระบบสะดุดชั่วคราว ลองใหม่อีกครั้งนะ";
+
+/** Wrap a handler so unexpected errors become a friendly 500 (message is logged without PII). */
+export async function guard(fn: () => Promise<Response>): Promise<Response> {
+  try {
+    return await fn();
+  } catch (error) {
+    console.error("api error:", error instanceof Error ? error.message : "unknown error");
+    return apiError(SERVER_ERROR_TEXT, 500);
+  }
+}

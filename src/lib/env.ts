@@ -30,6 +30,9 @@ const serverSchema = z
     SUPABASE_SERVICE_ROLE_KEY: z.string().min(1),
     SESSION_JWT_SECRET: z.string().min(32, "SESSION_JWT_SECRET must be at least 32 chars"),
     CRON_SECRET: z.string().min(1),
+    // The LIFF app lives in a LINE Login channel; its id is the `client_id` for ID token
+    // verification. Falls back to LINE_CHANNEL_ID when both live in the same channel.
+    LINE_LOGIN_CHANNEL_ID: optionalString,
     // AI: pick one provider; only that provider's key is required.
     AI_PROVIDER: z.enum(AI_PROVIDERS).default("gemini"),
     AI_MODEL: optionalString, // overrides the provider's default model
