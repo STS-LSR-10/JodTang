@@ -24,6 +24,7 @@ import { formatThaiDate } from "@/lib/thai-date";
 import type { LineMessage, TxType } from "@/lib/types";
 import { buildConfirmMessage, buildTypeQuestion } from "./flex";
 import {
+  COMPOSE_TIP_TEXT,
   EDIT_HINT_TEXT,
   EDIT_USAGE_TEXT,
   HELP_TEXT,
@@ -264,6 +265,9 @@ async function handlePostback(
 ): Promise<LineMessage[]> {
   const params = new URLSearchParams(data);
   const action = params.get("a");
+  // Rich Menu "จดรายการ": the keyboard is opened by LINE; we just show a short tip.
+  if (action === "compose") return [text(COMPOSE_TIP_TEXT)];
+
   const id = params.get("id");
   if (!action || !id) return [];
 
