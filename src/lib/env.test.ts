@@ -1,5 +1,14 @@
-﻿import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { getPublicEnv, getServerEnv } from "./env";
+
+const base = {
+  LINE_CHANNEL_ID: "a",
+  LINE_CHANNEL_SECRET: "a",
+  LINE_CHANNEL_ACCESS_TOKEN: "a",
+  SUPABASE_SERVICE_ROLE_KEY: "a",
+  SESSION_JWT_SECRET: "x".repeat(32),
+  CRON_SECRET: "a",
+};
 
 describe("env", () => {
   it("accepts a complete public env", () => {
@@ -19,17 +28,37 @@ describe("env", () => {
   });
 
   it("rejects a short session secret", () => {
-    const base = {
-      LINE_CHANNEL_ID: "a",
-      LINE_CHANNEL_SECRET: "a",
-      LINE_CHANNEL_ACCESS_TOKEN: "a",
-      SUPABASE_SERVICE_ROLE_KEY: "a",
-      ANTHROPIC_API_KEY: "a",
-      CRON_SECRET: "a",
-    };
-    expect(() => getServerEnv({ ...base, SESSION_JWT_SECRET: "short" })).toThrowError(
-      /SESSION_JWT_SECRET/,
+    expect(() =>
+      getServerEnv({ ...base, SESSION_JWT_SECRET: "short", GEMINI_API_KEY: "k" }),
+    ).toThrowError(/SESSION_JWT_SECRET/);
+  });
+
+  it("defaults to gemini and requires its key", () => {
+    expect(() => getServerEnv({ ...base })).toThrowError(/GEMINI_API_KEY/);
+    const env = getServerEnv({ ...base, GEMINI_API_KEY: "k" });
+    expect(env.AI_PROVIDER).toBe("gemini");
+  });
+
+  it("only requires the selected provider's key", () => {
+    expect(() =>
+      getServerEnv({ ...base, AI_PROVIDER: "anthropic", GEMINI_API_KEY: "k" }),
+    ).toThrowError(/ANTHROPIC_API_KEY/);
+    const env = getServerEnv({
+      ...base,
+      AI_PROVIDER: "openai",
+      OPENAI_API_KEY: "k",
+      AI_MODEL: "gpt-x",
+    });
+    expect(env.AI_MODEL).toBe("gpt-x");
+  });
+
+  it("treats empty strings as unset", () => {
+    expect(() => getServerEnv({ ...base, GEMINI_API_KEY: "" })).toThrowError(/GEMINI_API_KEY/);
+  });
+
+  it("rejects an unknown provider", () => {
+    expect(() => getServerEnv({ ...base, AI_PROVIDER: "foo", GEMINI_API_KEY: "k" })).toThrowError(
+      /AI_PROVIDER/,
     );
-    expect(getServerEnv({ ...base, SESSION_JWT_SECRET: "x".repeat(32) }).CRON_SECRET).toBe("a");
   });
 });

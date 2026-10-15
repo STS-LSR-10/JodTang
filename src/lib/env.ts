@@ -7,15 +7,46 @@ const publicSchema = z.object({
   APP_BASE_URL: z.string().url(),
 });
 
-const serverSchema = z.object({
-  LINE_CHANNEL_ID: z.string().min(1),
-  LINE_CHANNEL_SECRET: z.string().min(1),
-  LINE_CHANNEL_ACCESS_TOKEN: z.string().min(1),
-  SUPABASE_SERVICE_ROLE_KEY: z.string().min(1),
-  ANTHROPIC_API_KEY: z.string().min(1),
-  SESSION_JWT_SECRET: z.string().min(32, "SESSION_JWT_SECRET must be at least 32 chars"),
-  CRON_SECRET: z.string().min(1),
-});
+export const AI_PROVIDERS = ["gemini", "anthropic", "openai"] as const;
+export type AiProviderName = (typeof AI_PROVIDERS)[number];
+
+const AI_KEY_BY_PROVIDER = {
+  gemini: "GEMINI_API_KEY",
+  anthropic: "ANTHROPIC_API_KEY",
+  openai: "OPENAI_API_KEY",
+} as const satisfies Record<AiProviderName, string>;
+
+// Treat empty strings (e.g. `GEMINI_API_KEY=` in .env) as unset.
+const optionalString = z.preprocess(
+  (v) => (typeof v === "string" && v.trim() === "" ? undefined : v),
+  z.string().min(1).optional(),
+);
+
+const serverSchema = z
+  .object({
+    LINE_CHANNEL_ID: z.string().min(1),
+    LINE_CHANNEL_SECRET: z.string().min(1),
+    LINE_CHANNEL_ACCESS_TOKEN: z.string().min(1),
+    SUPABASE_SERVICE_ROLE_KEY: z.string().min(1),
+    SESSION_JWT_SECRET: z.string().min(32, "SESSION_JWT_SECRET must be at least 32 chars"),
+    CRON_SECRET: z.string().min(1),
+    // AI: pick one provider; only that provider's key is required.
+    AI_PROVIDER: z.enum(AI_PROVIDERS).default("gemini"),
+    AI_MODEL: optionalString, // overrides the provider's default model
+    GEMINI_API_KEY: optionalString,
+    ANTHROPIC_API_KEY: optionalString,
+    OPENAI_API_KEY: optionalString,
+  })
+  .superRefine((env, ctx) => {
+    const keyName = AI_KEY_BY_PROVIDER[env.AI_PROVIDER];
+    if (!env[keyName]) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: [keyName],
+        message: `${keyName} is required when AI_PROVIDER=${env.AI_PROVIDER}`,
+      });
+    }
+  });
 
 type EnvSource = Record<string, string | undefined>;
 
