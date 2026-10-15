@@ -96,7 +96,8 @@ async function main() {
     label: "จดรายการ",
     data: "a=compose",
     inputOption: "openKeyboard",
-    fillInText: "",
+    // LINE requires non-empty text. It has no digits, so sending it as-is is never recorded.
+    fillInText: "ชื่อรายการ จำนวนเงิน",
   };
   const liff = (page: string, label: string) => ({
     type: "uri",
