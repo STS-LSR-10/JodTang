@@ -71,6 +71,15 @@ async function main() {
   const liffId = process.env.NEXT_PUBLIC_LIFF_ID;
   if (!token) fail("LINE_CHANNEL_ACCESS_TOKEN is not set (.env.local)");
   if (!liffId) fail("NEXT_PUBLIC_LIFF_ID is not set (.env.local)");
+  // A real token is plain ASCII with no spaces; anything else is usually a leftover placeholder.
+  if (!/^[\x21-\x7E]+$/.test(token)) {
+    fail(
+      "LINE_CHANNEL_ACCESS_TOKEN has spaces or non-ASCII characters — is it still a placeholder?",
+    );
+  }
+  if (!/^[\x21-\x7E]+$/.test(liffId)) {
+    fail("NEXT_PUBLIC_LIFF_ID has spaces or non-ASCII characters — is it still a placeholder?");
+  }
 
   if (args.has("--replace")) {
     const list = (await (await line(token, `${API}/richmenu/list`)).json()) as {
