@@ -15,7 +15,9 @@ export async function POST(request: Request): Promise<Response> {
   let secret: string;
   try {
     secret = getServerEnv().LINE_CHANNEL_SECRET;
-  } catch {
+  } catch (error) {
+    // The message lists variable NAMES only (never values), so it is safe to log.
+    console.error("webhook config error:", error instanceof Error ? error.message : "unknown");
     return new Response("server misconfigured", { status: 500 });
   }
 
