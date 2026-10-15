@@ -47,6 +47,17 @@ const MONTHS = [
   "ธ.ค.",
 ];
 
+/** "ต.ค." */
+export function formatThaiMonthShort(date: Date): string {
+  return MONTHS[bangkokParts(date).month - 1] ?? "";
+}
+
+/** "15 ต.ค." */
+export function formatThaiDayMonth(date: Date): string {
+  const p = bangkokParts(date);
+  return `${p.day} ${MONTHS[p.month - 1]}`;
+}
+
 /** "15 ต.ค. 2569" or "15 ต.ค. 2569 14:30" (Buddhist year, Bangkok time). */
 export function formatThaiDate(date: Date, withTime = false): string {
   const p = bangkokParts(date);
