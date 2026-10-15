@@ -1,0 +1,35 @@
+# dependencies
+node_modules/
+.pnpm-store/
+
+# secrets (keep .env.example only)
+.env
+.env.*
+!.env.example
+
+# next / build
+.next/
+out/
+build/
+next-env.d.ts
+*.tsbuildinfo
+
+# tests
+coverage/
+playwright-report/
+test-results/
+
+# vercel / supabase local
+.vercel/
+supabase/.temp/
+supabase/.branches/
+
+# os / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+npm-debug.log*
+pnpm-debug.log*
