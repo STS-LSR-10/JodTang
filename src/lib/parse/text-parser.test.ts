@@ -163,6 +163,21 @@ describe("parseMessage: rejects", () => {
     expect(r.unparsed).toEqual(["สวัสดี"]);
   });
 
+  it.each([
+    "https://liff.line.me/2012036534-18JOac/summary",
+    "ดูนี่ https://example.com/p/123 ราคา 500",
+    "www.shop.co.th 250",
+    "line.me/R/ti/p/@abc 30",
+  ])("ignores links: %s", (text) => {
+    expect(parseMessage(text, NOW).entries).toHaveLength(0);
+  });
+
+  it("still parses normal text next to a link", () => {
+    const { entries } = parseMessage("กาแฟ 30\nhttps://example.com/1", NOW);
+    expect(entries).toHaveLength(1);
+    expect(entries[0]!.title).toBe("กาแฟ");
+  });
+
   it("ignores very long sentences", () => {
     const text =
       "วันนี้ฉันไปเดินเล่นที่สวนสาธารณะแล้วเจอเพื่อนเก่าที่ไม่ได้เจอกันมานานมากเลยคุยกันนานมากมาย 2 ชั่วโมง";

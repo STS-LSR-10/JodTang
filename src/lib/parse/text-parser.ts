@@ -94,9 +94,13 @@ function isIncomeTitle(title: string): boolean {
   return INCOME_KEYWORDS.some((k) => title.includes(k));
 }
 
+// Links are never transactions (their digits would otherwise be read as amounts).
+const URL_RE = /https?:\/\/|www\.|\b[a-z0-9-]+\.(?:com|net|org|me|co|io|th)\b\/?/i;
+
 function parseLine(segment: string, now: Date): ParsedEntry | null {
   const normalized = normalizeThaiDigits(segment).trim();
   if (!normalized) return null;
+  if (URL_RE.test(normalized)) return null;
 
   const { text, date } = extractDate(normalized, now);
   const amount = findAmount(text);
