@@ -7,7 +7,7 @@
  *   ├────┼────┤  รายรับ / รายจ่าย    │
  *   │หมวด│รายการ│                      │
  *   ├────┼────┼───────────┬──────────┤
- *   │ตั้งค่า│วิธีใช้│ สแกนสลิป │ ชวนเพื่อน │
+ *   │ตั้งค่า│วิธีใช้│ อัปเกรด  │ ชวนเพื่อน │
  *   └────┴────┴───────────┴──────────┘
  */
 export const RICH_MENU_WIDTH = 2500;
@@ -28,7 +28,7 @@ export type TileKey =
   | "settings"
   | "help"
   | "compose"
-  | "slip"
+  | "upgrade"
   | "invite";
 
 export interface Tile {
@@ -69,7 +69,7 @@ export const TILES: Tile[] = [
     label: "จดรายการ",
     bounds: rect(COL_BIG, ROW_Y[0], BIG_W, ROW_H[0] + G + ROW_H[1]),
   },
-  { key: "slip", label: "สแกนสลิป", bounds: rect(COL_BIG, ROW_Y[2], HALF_W, ROW_H[2]) },
+  { key: "upgrade", label: "อัปเกรด", bounds: rect(COL_BIG, ROW_Y[2], HALF_W, ROW_H[2]) },
   {
     key: "invite",
     label: "ชวนเพื่อน",
@@ -142,6 +142,8 @@ const ICONS: Record<string, string> = {
   coin: `<circle r="104" fill="${C.gold}" stroke="${C.goldEdge}" stroke-width="10"/>
     <circle r="78" fill="none" stroke="${C.goldEdge}" stroke-opacity="0.35" stroke-width="8"/>
     <text y="46" text-anchor="middle" font-family="${FONT}" font-size="132" font-weight="800" fill="${C.white}">฿</text>`,
+  crown: `<path d="M-88 50 L-100 -50 L-44 0 L0 -70 L44 0 L100 -50 L88 50 Z" fill="${C.teal}" stroke="${C.teal}" stroke-width="16" stroke-linejoin="round"/>
+    <rect x="-88" y="68" width="176" height="26" rx="13" fill="${C.teal}"/>`,
   edit: `<path d="M64 -18 V68 A32 32 0 0 1 32 100 H-68 A32 32 0 0 1 -100 68 V-32 A32 32 0 0 1 -68 -64 H18" fill="none" stroke="${C.teal}" stroke-width="24" stroke-linecap="round"/>
     <path d="M-18 30 L72 -60" stroke="${C.teal}" stroke-width="44" stroke-linecap="round"/>
     <path d="M52 -80 L92 -40" stroke="${C.white}" stroke-width="10" stroke-linecap="round"/>`,
@@ -200,7 +202,7 @@ export function buildRichMenuSvg(): string {
   };
 
   const big = t("compose");
-  const slip = t("slip");
+  const up = t("upgrade");
 
   const parts: string[] = [
     `<svg xmlns="http://www.w3.org/2000/svg" width="${RICH_MENU_WIDTH}" height="${RICH_MENU_HEIGHT}" viewBox="0 0 ${RICH_MENU_WIDTH} ${RICH_MENU_HEIGHT}">`,
@@ -241,14 +243,13 @@ export function buildRichMenuSvg(): string {
     spark(big.x + big.width - 150, big.y + 130, 46, 0.9),
     spark(big.x + big.width - 280, big.y + 210, 26, 0.7),
 
-    // scan-slip tile (butter yellow)
-    tileBox(slip, "url(#butter)"),
-    `<rect x="${slip.x + 56}" y="${slip.y + 52}" width="236" height="68" rx="34" fill="${C.white}" fill-opacity="0.75"/>`,
-    `<text x="${slip.x + 174}" y="${slip.y + 99}" text-anchor="middle" font-family="${FONT}" font-size="42" font-weight="800" fill="#9A6A08">ฟีเจอร์เด็ด</text>`,
-    `<text x="${slip.x + 56}" y="${slip.y + 222}" font-family="${FONT}" font-size="104" font-weight="900" fill="${C.teal}">สแกน</text>`,
-    `<text x="${slip.x + 56}" y="${slip.y + 320}" font-family="${FONT}" font-size="104" font-weight="900" fill="${C.teal}">สลิป</text>`,
-    icon("qr", slip.x + slip.width - 170, slip.y + 205, 1.05),
-
+    // upgrade tile (butter yellow)
+    tileBox(up, "url(#butter)"),
+    `<rect x="${up.x + 56}" y="${up.y + 52}" width="236" height="68" rx="34" fill="${C.white}" fill-opacity="0.75"/>`,
+    `<text x="${up.x + 174}" y="${up.y + 99}" text-anchor="middle" font-family="${FONT}" font-size="42" font-weight="800" fill="#9A6A08">สุดคุ้ม</text>`,
+    `<text x="${up.x + 56}" y="${up.y + 222}" font-family="${FONT}" font-size="104" font-weight="900" fill="${C.teal}">อัปเกรด</text>`,
+    `<text x="${up.x + 56}" y="${up.y + 320}" font-family="${FONT}" font-size="64" font-weight="800" fill="#9A6A08">Pro · Ultimate</text>`,
+    icon("crown", up.x + up.width - 150, up.y + 140, 0.95),
     // invite tile
     small("invite", C.skyTile, "invite", "ชวนเพื่อน", true),
   ];

@@ -111,7 +111,7 @@ supabase/migrations/0001..0004
 - **Supabase:** ต้องรัน migrations ตามลำดับ `0001` → `0007` (รันซ้ำได้) ผ่าน SQL Editor หรือ `supabase db push`
   - `0004` เพิ่ม `user_settings.budget_mode`, ตาราง `category_overrides`, RPC `analytics_series`
 - **Rich Menu:** `pnpm richmenu --replace` (อ่าน `.env.local`) — เผยแพร่แล้ว 1 ชุดชื่อ `meetang-main` (แบบ 6 ช่องเดิม)
-  ดีไซน์ใหม่ 9 ช่อง (พาสเทลมิ้นต์: จดตังค์/สรุป/วิเคราะห์/หมวด-งบ/รายการ/ตั้งค่า/วิธีใช้งาน/สแกนสลิป/ชวนเพื่อน)
+  ดีไซน์ใหม่ 9 ช่อง (พาสเทลมิ้นต์: จดตังค์/สรุป/วิเคราะห์/หมวด-งบ/รายการ/ตั้งค่า/วิธีใช้งาน/อัปเกรด/ชวนเพื่อน)
   อยู่ใน repo แล้ว **แต่ต้องรัน `--replace` ใหม่** ถึงจะขึ้นใน LINE (ชื่อเมนูใหม่ `jodtang-main`)
   หมายเหตุ: Node หลัง proxy ต้องตั้ง `NODE_USE_ENV_PROXY=1`
 - Repo: `stsmcp101-source/JodTang` (branch `main`) · Vercel deploy อัตโนมัติจาก push

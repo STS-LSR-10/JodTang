@@ -32,6 +32,7 @@ const LIFF_PAGES: Partial<Record<TileKey, string>> = {
   budgets: "budgets",
   transactions: "transactions",
   settings: "settings",
+  upgrade: "upgrade",
 };
 
 const INVITE_TEXT = "มาจดรายรับรายจ่ายง่าย ๆ ในไลน์กับจดตังค์ (JodTang) ด้วยกันนะ";
@@ -126,9 +127,6 @@ async function main() {
       case "help":
         // sends "ช่วยเหลือ" as the user's message; the bot answers with the usage guide
         return { type: "message", label, text: "ช่วยเหลือ" };
-      case "slip":
-        // most Thai slips are screenshots, so open the photo library; the image goes to the chat
-        return { type: "cameraRoll", label };
       case "invite":
         // share text + LIFF link (Bot link "aggressive" prompts non-friends to add the account)
         return {
