@@ -99,6 +99,10 @@ supabase/migrations/0001..0004
   และอย่าใช้ URL เฉพาะ deployment เป็น Webhook URL ให้ใช้โดเมน Production
 - **`NEXT_PUBLIC_*` ตั้งเป็น Sensitive ไม่ได้** (Vercel จะ Save ไม่ได้) — LIFF ID ไม่ใช่ความลับ
 - ตัวแปรใหม่หรือแก้ค่าแล้ว **ต้อง Redeploy** ถึงมีผล
+- **LIFF deep link:** `liff.line.me/<id>/budgets` เปิด Endpoint พร้อม `?liff.state=%2Fbudgets` และ
+  ต้องมีหน้าที่เรียก `liff.init()` ถึงจะพาไปหน้านั้น หน้าแรก (`src/app/page.tsx`) จึงเป็น client page
+  ที่ init LIFF แล้วไป deep link หรือ `/summary` — **อย่าเปลี่ยนเป็น server redirect** (ทิ้ง query)
+  และ Endpoint URL ต้องเป็นราก ไม่ใช่ `/summary`
 - LIFF สร้างได้เฉพาะใน **LINE Login channel** (Messaging API channel เพิ่ม LIFF ไม่ได้แล้ว)
   ตรวจ ID token ด้วย `LINE_LOGIN_CHANNEL_ID`
 - Supabase project เคยมีตาราง `transactions` ของแอปอื่น ทำให้ migration `0001` ล้ม — ตรวจก่อนรันเสมอ
