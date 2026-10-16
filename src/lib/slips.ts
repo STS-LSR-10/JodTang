@@ -16,7 +16,7 @@ import { formatBaht, toSatang } from "@/lib/money";
 import type { SlipImage, SlipOcrProvider } from "@/lib/ocr/provider";
 import { sanitizeSlip } from "@/lib/ocr/slip-schema";
 import { effectivePlan, slipsRemaining } from "@/lib/plan";
-import { insertTransaction, loadCategories, loadMemory, type UserRow } from "@/lib/repo";
+import { insertTransaction, loadCategories, loadMemoryFor, type UserRow } from "@/lib/repo";
 import {
   countSlipsThisMonth,
   findSlipByHash,
@@ -126,7 +126,7 @@ export async function handleSlipImage(
   const title = data.payeeName ?? data.memo ?? "โอนเงิน";
   const [categories, memory] = await Promise.all([
     loadCategories(db, user.id),
-    loadMemory(db, user.id),
+    loadMemoryFor(db, user, now),
   ]);
   const { categoryId } = categorizeByRules({
     title: [data.payeeName, data.memo].filter(Boolean).join(" ") || title,

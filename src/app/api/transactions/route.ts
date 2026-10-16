@@ -7,7 +7,9 @@ import { getServerEnv } from "@/lib/env";
 import { createLineClient } from "@/lib/line/client";
 import { TX_SELECT, toTxDto } from "@/lib/dto";
 import { toSatang } from "@/lib/money";
-import { insertTransaction, loadCategories, loadMemory } from "@/lib/repo";
+import { loadMemoryIfAllowed } from "@/lib/plan-server";
+import { awardActivity } from "@/lib/points";
+import { insertTransaction, loadCategories } from "@/lib/repo";
 import { getAdminClient } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -91,7 +93,7 @@ export async function POST(request: Request): Promise<Response> {
     const db = getAdminClient();
     const [categories, memory] = await Promise.all([
       loadCategories(db, auth.userId),
-      loadMemory(db, auth.userId),
+      loadMemoryIfAllowed(db, auth.userId),
     ]);
 
     let categoryId = body.categoryId ?? null;
@@ -119,6 +121,9 @@ export async function POST(request: Request): Promise<Response> {
       rawText: body.title,
       source: "manual",
     });
+    // The day's point (and a pending referral bonus) for the first entry of the day.
+    await awardActivity(db, auth.userId, new Date());
+
     // Budget alert for entries made in the web app: pushed to the chat (best effort).
     try {
       const alerts = await budgetAlertsFor(db, {

@@ -6,18 +6,24 @@ import {
 } from "@/lib/categorize/overrides";
 import type { MemoryLite } from "@/lib/categorize/rules";
 import { satangToString, toSatang } from "@/lib/money";
+import { can, effectivePlan, type Plan } from "@/lib/plan";
 import type { BudgetCycle, ConfirmStyle, TxType } from "@/lib/types";
 
 export interface UserRow {
   id: string;
   line_user_id: string;
   display_name: string | null;
+  plan: Plan;
+  plan_expires_at: string | null;
 }
 
 export interface SettingsRow {
   budget_cycle: BudgetCycle;
   cycle_start_day: number;
   confirm_style: ConfirmStyle;
+  daily_reminder_enabled: boolean;
+  /** "HH:MM:SS" (Bangkok time) or null */
+  daily_reminder_time: string | null;
 }
 
 export interface TxRow {
@@ -35,6 +41,8 @@ const DEFAULT_SETTINGS: SettingsRow = {
   budget_cycle: "monthly",
   cycle_start_day: 1,
   confirm_style: "full",
+  daily_reminder_enabled: false,
+  daily_reminder_time: null,
 };
 
 const TX_COLUMNS = "id,type,title,amount,category_id,occurred_at,status,slip_id";
@@ -52,7 +60,7 @@ export async function ensureUser(
   lineUserId: string,
   loadProfile: () => Promise<{ displayName?: string; pictureUrl?: string } | null>,
 ): Promise<UserRow> {
-  const select = "id,line_user_id,display_name";
+  const select = "id,line_user_id,display_name,plan,plan_expires_at";
   const found = await db.from("users").select(select).eq("line_user_id", lineUserId).maybeSingle();
   if (found.error) fail("load user", found.error);
   if (found.data) return found.data as UserRow;
@@ -100,7 +108,7 @@ export async function touchProfile(
 export async function getSettings(db: SupabaseClient, userId: string): Promise<SettingsRow> {
   const { data, error } = await db
     .from("user_settings")
-    .select("budget_cycle,cycle_start_day,confirm_style")
+    .select("budget_cycle,cycle_start_day,confirm_style,daily_reminder_enabled,daily_reminder_time")
     .eq("user_id", userId)
     .maybeSingle();
   if (error) fail("load settings", error);
@@ -224,6 +232,16 @@ export async function setBudget(
     });
     if (ins.error) fail("insert budget", ins.error);
   }
+}
+
+/** Learned recipient -> category memory, only for plans that include it (Plus). */
+export async function loadMemoryFor(
+  db: SupabaseClient,
+  user: Pick<UserRow, "id" | "plan" | "plan_expires_at">,
+  now: Date = new Date(),
+): Promise<MemoryLite[]> {
+  if (!can(effectivePlan(user.plan, user.plan_expires_at, now), "merchantMemory")) return [];
+  return loadMemory(db, user.id);
 }
 
 export async function loadMemory(db: SupabaseClient, userId: string): Promise<MemoryLite[]> {

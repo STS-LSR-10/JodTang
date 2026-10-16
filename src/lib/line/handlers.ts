@@ -13,7 +13,7 @@ import {
   getTransaction,
   insertTransaction,
   loadCategories,
-  loadMemory,
+  loadMemoryFor,
   periodSummary,
   txAmountSatang,
   updateTransaction,
@@ -24,12 +24,14 @@ import {
 import { formatThaiDate } from "@/lib/thai-date";
 import type { LineMessage, TxType } from "@/lib/types";
 import type { SlipImage, SlipOcrProvider } from "@/lib/ocr/provider";
+import { can, effectivePlan } from "@/lib/plan";
 import { getSlip, learnMerchant } from "@/lib/slip-repo";
 import { handleSlipImage } from "@/lib/slips";
 import { buildConfirmMessage, buildTypeQuestion } from "./flex";
 import { buildCategoryChooser } from "./slip-flex";
 import {
   COMPOSE_TIP_TEXT,
+  MEMORY_PLUS_HINT_TEXT,
   EDIT_HINT_TEXT,
   EDIT_USAGE_TEXT,
   HELP_TEXT,
@@ -128,7 +130,7 @@ async function saveEntries(
   const [settings, categories, memory] = await Promise.all([
     getSettings(db, user.id),
     loadCategories(db, user.id),
-    loadMemory(db, user.id),
+    loadMemoryFor(db, user, deps.now()),
   ]);
 
   const confirmed: { tx: TxRow; entry: ParsedEntry; categoryId: string | null }[] = [];
@@ -346,7 +348,7 @@ async function handlePostback(
     const [settings, categories, memory] = await Promise.all([
       getSettings(db, user.id),
       loadCategories(db, user.id),
-      loadMemory(db, user.id),
+      loadMemoryFor(db, user, deps.now()),
     ]);
     const { categoryId } = categorizeByRules({ title: tx.title, type, categories, memory });
     const updated = await updateTransaction(db, user.id, id, {
@@ -372,7 +374,7 @@ async function handlePostback(
     const [settings, categories, memory] = await Promise.all([
       getSettings(db, user.id),
       loadCategories(db, user.id),
-      loadMemory(db, user.id),
+      loadMemoryFor(db, user, deps.now()),
     ]);
 
     if (action === "se") {
@@ -391,8 +393,13 @@ async function handlePostback(
       categoryId = picked.id;
       const slip = tx.slip_id ? await getSlip(db, user.id, tx.slip_id) : null;
       if (slip?.payee) {
-        await learnMerchant(db, { userId: user.id, payee: slip.payee, categoryId: picked.id });
-        learned = `จำไว้แล้ว: ${slip.payee} → ${picked.name}`;
+        const plan = effectivePlan(user.plan, user.plan_expires_at, deps.now());
+        if (can(plan, "merchantMemory")) {
+          await learnMerchant(db, { userId: user.id, payee: slip.payee, categoryId: picked.id });
+          learned = `จำไว้แล้ว: ${slip.payee} → ${picked.name}`;
+        } else {
+          learned = MEMORY_PLUS_HINT_TEXT;
+        }
       }
     } else if (categoryId === null) {
       // the guess found nothing: fall back to the rules once more
