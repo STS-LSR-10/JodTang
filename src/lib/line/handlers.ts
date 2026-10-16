@@ -25,21 +25,34 @@ import { formatThaiDate } from "@/lib/thai-date";
 import type { LineMessage, TxType } from "@/lib/types";
 import type { SlipImage, SlipOcrProvider } from "@/lib/ocr/provider";
 import { can, effectivePlan } from "@/lib/plan";
+import {
+  applyReferralCode,
+  awardActivity,
+  currentStreak,
+  recentDailyKeys,
+  redeemable,
+} from "@/lib/points";
 import { getSlip, learnMerchant } from "@/lib/slip-repo";
 import { handleSlipImage } from "@/lib/slips";
 import { buildConfirmMessage, buildTypeQuestion } from "./flex";
 import { buildCategoryChooser } from "./slip-flex";
 import {
   COMPOSE_TIP_TEXT,
-  MEMORY_PLUS_HINT_TEXT,
   EDIT_HINT_TEXT,
   EDIT_USAGE_TEXT,
+  ERROR_TEXT,
   HELP_TEXT,
+  MEMORY_PLUS_HINT_TEXT,
   NOT_FOUND_TEXT,
   NOT_UNDERSTOOD_TEXT,
   NOTHING_TO_DELETE_TEXT,
+  REFERRAL_BONUS_TEXT,
+  REFERRAL_FAIL_TEXT,
+  REFERRAL_OK_TEXT,
+  referralShareText,
   SLIP_CANCELLED_TEXT,
   SLIP_SOON_TEXT,
+  USE_CODE_USAGE_TEXT,
   WELCOME_TEXT,
   text,
 } from "./messages";
@@ -186,7 +199,34 @@ async function saveEntries(
     alerts.push(...(await safeAlerts(deps, user.id, c.tx, c.categoryId)));
   }
   for (const a of alerts) messages.push(text(a));
+  if (confirmed.length > 0) messages.push(...(await awardAndNotify(deps, user.id)));
   return messages;
+}
+
+/**
+ * After an entry is confirmed: the day's point, and the one-time referral bonus on the first
+ * activity of a referred user. Silent unless a bonus was just paid. Never throws.
+ */
+async function awardAndNotify(deps: HandlerDeps, userId: string): Promise<LineMessage[]> {
+  const result = await awardActivity(deps.db, userId, deps.now());
+  return result.referralBonus ? [text(REFERRAL_BONUS_TEXT)] : [];
+}
+
+async function pointsSummaryText(db: SupabaseClient, userId: string, now: Date): Promise<string> {
+  const [row, keys] = await Promise.all([
+    db.from("users").select("points").eq("id", userId).single(),
+    recentDailyKeys(db, userId),
+  ]);
+  const points = (row.data as { points?: number } | null)?.points ?? 0;
+  const streak = currentStreak(keys, now);
+  const { days } = redeemable(points);
+  return [
+    `ตังสะสมของคุณ: ${points} แต้ม`,
+    streak > 0 ? `จดต่อเนื่อง ${streak} วันแล้ว` : "วันนี้จดรายการแรกเพื่อเริ่มสะสมนะ",
+    days > 0
+      ? `แลกเป็นวันใช้ Plus ได้ ${days} วัน (แลกที่หน้าตั้งค่า)`
+      : "สะสมครบแล้วแลกเป็นวันใช้ Plus ได้ที่หน้าตั้งค่านะ",
+  ].join("\n");
 }
 
 /** Budget alerts are best effort: a failure here must never block recording the entry. */
@@ -306,6 +346,23 @@ async function runCommand(
 
     case "edit-latest-usage":
       return [text(EDIT_USAGE_TEXT)];
+
+    case "points":
+      return [text(await pointsSummaryText(db, user.id, deps.now()))];
+
+    case "my-code": {
+      const { data } = await db.from("users").select("referral_code").eq("id", user.id).single();
+      const code = (data as { referral_code?: string } | null)?.referral_code;
+      return [text(code ? referralShareText(code) : ERROR_TEXT)];
+    }
+
+    case "use-code-usage":
+      return [text(USE_CODE_USAGE_TEXT)];
+
+    case "use-code": {
+      const outcome = await applyReferralCode(db, user.id, command.code);
+      return [text(outcome === "ok" ? REFERRAL_OK_TEXT : REFERRAL_FAIL_TEXT[outcome])];
+    }
   }
 }
 
@@ -358,8 +415,13 @@ async function handlePostback(
     });
     if (!updated) return [text(NOT_FOUND_TEXT)];
     const alerts = (await safeAlerts(deps, user.id, updated, categoryId)).map((a) => text(a));
-    if (settings.confirm_style === "off") return [text("จดแล้ว"), ...alerts];
-    return [await confirmCard(updated, categoryId, categories, settings, user, deps), ...alerts];
+    const bonus = await awardAndNotify(deps, user.id);
+    if (settings.confirm_style === "off") return [text("จดแล้ว"), ...alerts, ...bonus];
+    return [
+      await confirmCard(updated, categoryId, categories, settings, user, deps),
+      ...alerts,
+      ...bonus,
+    ];
   }
 
   // ── slip review: confirm / pick category / cancel ──
@@ -419,6 +481,7 @@ async function handlePostback(
     else out.push(await confirmCard(updated, categoryId, categories, settings, user, deps));
     if (learned) out.push(text(learned));
     for (const a of await safeAlerts(deps, user.id, updated, categoryId)) out.push(text(a));
+    out.push(...(await awardAndNotify(deps, user.id)));
     return out;
   }
 

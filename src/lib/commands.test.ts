@@ -19,6 +19,19 @@ describe("parseCommand", () => {
     expect(parseCommand(input)).toEqual(expected);
   });
 
+  it.each([
+    ["ตังสะสม", { kind: "points" }],
+    ["แต้ม", { kind: "points" }],
+    ["รหัสชวน", { kind: "my-code" }],
+    ["ใช้รหัส ABCD1234", { kind: "use-code", code: "ABCD1234" }],
+    ["ใช้รหัส   abcd1234", { kind: "use-code", code: "ABCD1234" }],
+    ["ใช้รหัส", { kind: "use-code-usage" }],
+    ["ใช้รหัส ก", { kind: "use-code-usage" }],
+    ["ใช้รหัส AB", { kind: "use-code-usage" }],
+  ])("%s", (input, expected) => {
+    expect(parseCommand(input)).toEqual(expected);
+  });
+
   it("returns null for transactions", () => {
     expect(parseCommand("กาแฟ 30")).toBeNull();
     expect(parseCommand("สรุปวันนี้ 30")).toBeNull();
