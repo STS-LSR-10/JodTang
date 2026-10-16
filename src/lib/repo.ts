@@ -319,6 +319,60 @@ export async function getLatestConfirmed(
   return (data as TxRow | null) ?? null;
 }
 
+/** Apply a validated column patch (see `planEdit`) to one of the user's live entries. */
+export async function patchTransactionRow(
+  db: SupabaseClient,
+  userId: string,
+  txId: string,
+  row: Record<string, unknown>,
+): Promise<TxRow | null> {
+  const { data, error } = await db
+    .from("transactions")
+    .update(row)
+    .eq("id", txId)
+    .eq("user_id", userId)
+    .eq("status", "confirmed")
+    .select(TX_COLUMNS)
+    .maybeSingle();
+  if (error) fail("patch transaction", error);
+  return (data as TxRow | null) ?? null;
+}
+
+/** The user's confirmed entries among `ids` (others — deleted, foreign, unknown — are dropped). */
+export async function getConfirmedByIds(
+  db: SupabaseClient,
+  userId: string,
+  ids: string[],
+): Promise<TxRow[]> {
+  const { data, error } = await db
+    .from("transactions")
+    .select(TX_COLUMNS)
+    .eq("user_id", userId)
+    .eq("status", "confirmed")
+    .in("id", ids);
+  if (error) fail("load transactions", error);
+  return (data ?? []) as TxRow[];
+}
+
+/** Update many confirmed entries at once; returns how many rows changed. */
+export async function bulkPatchTransactions(
+  db: SupabaseClient,
+  userId: string,
+  ids: string[],
+  row: Record<string, unknown>,
+): Promise<number> {
+  if (ids.length === 0) return 0;
+  const { data, error } = await db
+    .from("transactions")
+    .update(row)
+    .eq("user_id", userId)
+    .eq("status", "confirmed")
+    .in("id", ids)
+    .select("id");
+  if (error) fail("bulk update transactions", error);
+  return (data ?? []).length;
+}
+
 export async function updateTransaction(
   db: SupabaseClient,
   userId: string,
