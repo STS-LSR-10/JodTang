@@ -35,10 +35,9 @@ import {
 } from "@/lib/points";
 import { getSlip, learnMerchant } from "@/lib/slip-repo";
 import { handleSlipImage } from "@/lib/slips";
-import { buildConfirmMessage, buildTypeQuestion } from "./flex";
+import { buildComposeCard, buildConfirmMessage, buildTypeQuestion } from "./flex";
 import { buildCategoryChooser } from "./slip-flex";
 import {
-  COMPOSE_TIP_TEXT,
   EDIT_HINT_TEXT,
   EDIT_USAGE_TEXT,
   ERROR_TEXT,
@@ -399,8 +398,8 @@ async function handlePostback(
 ): Promise<LineMessage[]> {
   const params = new URLSearchParams(data);
   const action = params.get("a");
-  // Rich Menu "จดรายการ": the keyboard is opened by LINE; we just show a short tip.
-  if (action === "compose") return [text(COMPOSE_TIP_TEXT)];
+  // Rich Menu "จดตังค์": answer with the how-to card; its button opens the keyboard (a=compose-go).
+  if (action === "compose") return [buildComposeCard()];
 
   const id = params.get("id");
   if (!action || !id) return [];

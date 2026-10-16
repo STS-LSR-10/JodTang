@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildConfirmMessage, buildTypeQuestion } from "./flex";
+import { buildComposeCard, buildConfirmMessage, buildTypeQuestion } from "./flex";
 import { buildCategoryChooser, buildSlipCard } from "./slip-flex";
 
 const base = {
@@ -82,5 +82,19 @@ describe("flex", () => {
       .items;
     expect(items.map((i) => i.action.label)).toEqual(["รายจ่าย", "รายรับ", "ยกเลิก"]);
     for (const i of items) expect(i.action.data.length).toBeLessThan(300);
+  });
+});
+
+describe("compose card", () => {
+  it("shows the two examples and a button that opens the keyboard without prefilled text", () => {
+    const msg = buildComposeCard();
+    const json = JSON.stringify(msg);
+    expect(msg.type).toBe("flex");
+    expect(json).toContain("ข้าวมันไก่ 50");
+    expect(json).toContain("เงินเดือน 20000");
+    expect(json).toContain("ระบบจะช่วยจดและแยกหมวดหมู่อัตโนมัติทันทีครับ");
+    expect(json).toContain('"inputOption":"openKeyboard"');
+    expect(json).not.toContain("fillInText");
+    expect(msg.altText).toBeTypeOf("string");
   });
 });

@@ -180,3 +180,92 @@ export function buildTypeQuestion(input: {
     },
   };
 }
+
+/**
+ * Card shown when the Rich Menu "จดตังค์" tile is tapped: how to type an entry, plus a button that
+ * opens the keyboard (no text is prefilled, so nothing can be sent by accident).
+ */
+export function buildComposeCard(): LineMessage {
+  const bullet = (t: string) => ({
+    type: "box",
+    layout: "baseline",
+    spacing: "md",
+    contents: [
+      { type: "text", text: "●", size: "xxs", color: "#1ABC9C", flex: 0 },
+      { type: "text", text: t, size: "lg", weight: "bold", color: "#334155", flex: 1 },
+    ],
+  });
+  return {
+    type: "flex",
+    altText: "พิมพ์บอกจดตังค์ได้เลย เช่น ข้าวมันไก่ 50 · เงินเดือน 20000",
+    contents: {
+      type: "bubble",
+      size: "mega",
+      body: {
+        type: "box",
+        layout: "vertical",
+        spacing: "lg",
+        paddingAll: "20px",
+        contents: [
+          {
+            type: "box",
+            layout: "horizontal",
+            spacing: "md",
+            alignItems: "center",
+            contents: [
+              {
+                type: "box",
+                layout: "vertical",
+                width: "44px",
+                height: "44px",
+                cornerRadius: "22px",
+                backgroundColor: COLOR.primarySoft,
+                justifyContent: "center",
+                alignItems: "center",
+                flex: 0,
+                contents: [{ type: "text", text: "✒️", size: "lg", align: "center" }],
+              },
+              {
+                type: "text",
+                text: "พิมพ์บอกจดตังค์ได้เลย เช่น",
+                weight: "bold",
+                size: "md",
+                color: "#334155",
+                wrap: true,
+                flex: 1,
+              },
+            ],
+          },
+          {
+            type: "box",
+            layout: "vertical",
+            spacing: "md",
+            backgroundColor: "#F6F9F8",
+            cornerRadius: "14px",
+            paddingAll: "16px",
+            contents: [bullet("ข้าวมันไก่ 50"), bullet("เงินเดือน 20000")],
+          },
+          {
+            type: "text",
+            text: "ระบบจะช่วยจดและแยกหมวดหมู่อัตโนมัติทันทีครับ ✨",
+            size: "sm",
+            color: COLOR.primary,
+            wrap: true,
+          },
+          {
+            type: "button",
+            style: "primary",
+            color: "#1ABC9C",
+            height: "md",
+            action: {
+              type: "postback",
+              label: "จดเลย",
+              data: "a=compose-go",
+              inputOption: "openKeyboard",
+            },
+          },
+        ],
+      },
+    },
+  };
+}

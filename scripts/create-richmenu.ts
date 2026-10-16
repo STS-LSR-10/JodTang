@@ -111,10 +111,9 @@ async function main() {
   const compose = {
     type: "postback",
     label: "จดรายการ",
+    // Silent postback (no displayText): the bot answers with the how-to card, whose button opens
+    // the keyboard. Nothing is prefilled in the input box.
     data: "a=compose",
-    inputOption: "openKeyboard",
-    // LINE requires non-empty text. It has no digits, so sending it as-is is never recorded.
-    fillInText: "ชื่อรายการ จำนวนเงิน",
   };
   const liffUrl = `https://liff.line.me/${liffId}`;
 
