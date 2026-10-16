@@ -1,7 +1,8 @@
 "use client";
 
-import { Plus, Trash2, X } from "lucide-react";
+import { Plus, Receipt, Trash2, X } from "lucide-react";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { Sheet } from "@/components/liff/sheet";
 import { EmptyState, ErrorState, LoadingBlock, PageHeader } from "@/components/liff/states";
 import { TxItem } from "@/components/liff/tx-item";
 import { useApi, useLiff } from "@/components/liff/liff-provider";
@@ -47,6 +48,7 @@ export default function TransactionsPage() {
   const [extraMore, setExtraMore] = useState<boolean | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
   const [formOpen, setFormOpen] = useState(false);
+  const [slipFor, setSlipFor] = useState<TxDto | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
   const path = useMemo(() => {
@@ -166,14 +168,26 @@ export default function TransactionsPage() {
                   key={tx.id}
                   tx={tx}
                   action={
-                    <button
-                      type="button"
-                      onClick={() => remove(tx)}
-                      aria-label={`ลบ ${tx.title}`}
-                      className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl text-muted"
-                    >
-                      <Trash2 className="h-4 w-4" aria-hidden />
-                    </button>
+                    <div className="flex shrink-0">
+                      {tx.hasSlip ? (
+                        <button
+                          type="button"
+                          onClick={() => setSlipFor(tx)}
+                          aria-label={`ดูสลิป ${tx.title}`}
+                          className="flex h-11 w-11 items-center justify-center rounded-2xl text-primary"
+                        >
+                          <Receipt className="h-4 w-4" aria-hidden />
+                        </button>
+                      ) : null}
+                      <button
+                        type="button"
+                        onClick={() => remove(tx)}
+                        aria-label={`ลบ ${tx.title}`}
+                        className="flex h-11 w-11 items-center justify-center rounded-2xl text-muted"
+                      >
+                        <Trash2 className="h-4 w-4" aria-hidden />
+                      </button>
+                    </div>
                   }
                 />
               ))}
@@ -192,6 +206,8 @@ export default function TransactionsPage() {
         )}
       </div>
 
+      {slipFor ? <SlipSheet tx={slipFor} onClose={() => setSlipFor(null)} /> : null}
+
       {formOpen ? (
         <AddSheet
           onClose={() => setFormOpen(false)}
@@ -203,6 +219,27 @@ export default function TransactionsPage() {
         />
       ) : null}
     </main>
+  );
+}
+
+/** Shows the attached slip. The signed URL lives 60 s, so it is fetched on open, not stored. */
+function SlipSheet({ tx, onClose }: { tx: TxDto; onClose: () => void }) {
+  const slip = useApi<{ url: string }>(`/api/transactions/${tx.id}/slip`);
+  return (
+    <Sheet title={`สลิป: ${tx.title}`} onClose={onClose}>
+      {slip.loading ? (
+        <LoadingBlock rows={2} />
+      ) : slip.error || !slip.data ? (
+        <ErrorState message={slip.error ?? "เปิดสลิปไม่สำเร็จ"} onRetry={slip.reload} />
+      ) : (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={slip.data.url}
+          alt={`สลิปของรายการ ${tx.title}`}
+          className="mx-auto max-h-[70vh] w-full rounded-2xl border border-border object-contain"
+        />
+      )}
+    </Sheet>
   );
 }
 
