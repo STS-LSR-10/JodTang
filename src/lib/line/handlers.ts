@@ -303,6 +303,13 @@ async function confirmCard(
     amountSatang: txAmountSatang(tx),
     occurredAt: new Date(tx.occurred_at),
     cycleTotalSatang: cycleTotal,
+    cycleLabel:
+      settings.budget_cycle === "weekly"
+        ? "รายสัปดาห์"
+        : `รายเดือน (วันที่ ${settings.cycle_start_day})`,
+    logoUrl: process.env.APP_BASE_URL
+      ? `${process.env.APP_BASE_URL.replace(/\/$/, "")}/logo.png`
+      : undefined,
   });
 }
 

@@ -18,13 +18,44 @@ describe("flex", () => {
     expect(msg.type).toBe("flex");
     const json = JSON.stringify(msg);
     expect(json).toContain("#CCFBF1"); // primary-soft header
-    expect(json).toContain("#0F766E"); // primary button
+    expect(json).toContain("จดสำเร็จ");
+    expect(json).toContain("อย่าลืมตรวจสอบรายการที่จดด้วยนะ");
     expect(json).toContain("a=del&id=" + base.txId);
     expect(json).toContain("a=edit&id=" + base.txId);
     expect(json).toContain("line.me/R/share");
     expect(json).toContain("฿30");
     expect(json).toContain("฿1,250");
     expect(msg.altText).toBeTypeOf("string");
+  });
+
+  it("income card is green with a plus sign and its own message", () => {
+    const json = JSON.stringify(
+      buildConfirmMessage({
+        ...base,
+        style: "full",
+        type: "income",
+        title: "เงินเดือนเข้า",
+        categoryName: "เงินเดือน",
+        amountSatang: 3_500_000,
+        cycleTotalSatang: 3_500_000,
+        cycleLabel: "รายเดือน (วันที่ 1)",
+      }),
+    );
+    expect(json).toContain("รายรับ");
+    expect(json).toContain("+฿35,000");
+    expect(json).toContain("เย้! มีเงินเข้ากระเป๋าเพิ่มแล้วนะ");
+    expect(json).toContain("รอบงบ: รายเดือน (วันที่ 1)");
+    expect(json).toContain('"width":"100%"'); // the only entry fills the bar
+  });
+
+  it("adds the logo only when a URL is given", () => {
+    const withLogo = JSON.stringify(
+      buildConfirmMessage({ ...base, style: "full", logoUrl: "https://example.com/logo.png" }),
+    );
+    expect(withLogo).toContain("https://example.com/logo.png");
+    expect(JSON.stringify(buildConfirmMessage({ ...base, style: "full" }))).not.toContain(
+      '"type":"image"',
+    );
   });
 
   it("omits the cycle total when unknown", () => {

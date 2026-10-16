@@ -23,6 +23,10 @@ export interface ConfirmCardInput {
   occurredAt: Date;
   /** Total of this category in the current budget cycle, including this entry. */
   cycleTotalSatang: number | null;
+  /** e.g. "รายเดือน (วันที่ 1)"; shown under the category total. */
+  cycleLabel?: string;
+  /** Public PNG of the logo for the card header (omitted when the app URL is unknown). */
+  logoUrl?: string;
 }
 
 const TYPE_LABEL: Record<TxType, string> = { expense: "รายจ่าย", income: "รายรับ" };
@@ -51,6 +55,20 @@ export function shareText(input: ConfirmCardInput): string {
   return `${input.title} ${sign}฿${formatBaht(input.amountSatang)} (${formatThaiDate(input.occurredAt)}) · จดด้วยจดตังค์`;
 }
 
+const chip = (label: string, bg: string, color: string, action: unknown, width = "40px") => ({
+  type: "box",
+  layout: "vertical",
+  width,
+  height: "36px",
+  cornerRadius: "10px",
+  backgroundColor: bg,
+  justifyContent: "center",
+  alignItems: "center",
+  flex: 0,
+  action,
+  contents: [{ type: "text", text: label, size: "xs", weight: "bold", color, align: "center" }],
+});
+
 export function buildConfirmMessage(input: ConfirmCardInput): LineMessage {
   const amountText = `฿${formatBaht(input.amountSatang)}`;
   const category = input.categoryName ?? "ไม่ระบุหมวด";
@@ -62,26 +80,226 @@ export function buildConfirmMessage(input: ConfirmCardInput): LineMessage {
     };
   }
 
-  const amountColor = input.type === "income" ? COLOR.income : COLOR.expense;
-  const body: unknown[] = [
-    { type: "text", text: input.title, weight: "bold", size: "lg", wrap: true, color: COLOR.text },
-    { type: "text", text: amountText, weight: "bold", size: "xxl", color: amountColor },
-    row("ประเภท", TYPE_LABEL[input.type]),
-    row("หมวด", category),
-    row("วันเวลา", formatThaiDate(input.occurredAt, true)),
+  const income = input.type === "income";
+  const accent = income ? COLOR.income : COLOR.expense;
+  const accentSoft = income ? "#E6F7EF" : "#FDECEC";
+  const total = input.cycleTotalSatang;
+  // This entry's share of the category total in the cycle (a full bar for the first entry).
+  const share =
+    total !== null && total > 0
+      ? Math.min(100, Math.max(4, (input.amountSatang * 100) / total))
+      : 0;
+
+  const header: unknown[] = [
+    {
+      type: "box",
+      layout: "vertical",
+      flex: 1,
+      spacing: "xs",
+      contents: [
+        {
+          type: "box",
+          layout: "horizontal",
+          spacing: "sm",
+          alignItems: "center",
+          contents: [
+            {
+              type: "text",
+              text: "จดสำเร็จ",
+              weight: "bold",
+              size: "xl",
+              color: "#0B5D4F",
+              flex: 0,
+            },
+            {
+              type: "box",
+              layout: "vertical",
+              width: "24px",
+              height: "24px",
+              cornerRadius: "7px",
+              backgroundColor: "#2ECB7A",
+              justifyContent: "center",
+              alignItems: "center",
+              flex: 0,
+              contents: [{ type: "text", text: "✓", size: "sm", color: "#FFFFFF", weight: "bold" }],
+            },
+          ],
+        },
+        {
+          type: "text",
+          text: income ? "เย้! มีเงินเข้ากระเป๋าเพิ่มแล้วนะ" : "อย่าลืมตรวจสอบรายการที่จดด้วยนะ",
+          size: "xs",
+          color: "#3F6B63",
+          wrap: true,
+        },
+      ],
+    },
   ];
-  if (input.cycleTotalSatang !== null) {
+  // LINE only accepts https image URLs (a local http app URL would make the whole card invalid).
+  if (input.logoUrl?.startsWith("https://")) {
+    header.push({
+      type: "image",
+      url: input.logoUrl,
+      size: "64px",
+      aspectMode: "fit",
+      flex: 0,
+    });
+  }
+
+  const body: unknown[] = [
+    {
+      type: "box",
+      layout: "horizontal",
+      spacing: "md",
+      alignItems: "center",
+      contents: [
+        {
+          type: "box",
+          layout: "vertical",
+          backgroundColor: accent,
+          cornerRadius: "14px",
+          paddingTop: "4px",
+          paddingBottom: "4px",
+          paddingStart: "12px",
+          paddingEnd: "12px",
+          flex: 0,
+          contents: [
+            {
+              type: "text",
+              text: TYPE_LABEL[input.type],
+              size: "sm",
+              weight: "bold",
+              color: "#FFFFFF",
+            },
+          ],
+        },
+        {
+          type: "text",
+          text: `- ${category}`,
+          weight: "bold",
+          size: "lg",
+          color: "#14352E",
+          flex: 1,
+        },
+        chip("แชร์", accentSoft, accent, {
+          type: "uri",
+          label: "แชร์",
+          uri: `https://line.me/R/share?text=${encodeURIComponent(shareText(input))}`,
+        }),
+      ],
+    },
+    {
+      type: "text",
+      text: formatThaiDate(input.occurredAt, true),
+      size: "sm",
+      color: COLOR.muted,
+      margin: "md",
+    },
+    {
+      type: "box",
+      layout: "horizontal",
+      spacing: "sm",
+      alignItems: "center",
+      margin: "md",
+      contents: [
+        {
+          type: "text",
+          text: input.title,
+          weight: "bold",
+          size: "lg",
+          color: "#334155",
+          wrap: true,
+          flex: 1,
+        },
+        {
+          type: "text",
+          text: `${income ? "+" : ""}${amountText}`,
+          weight: "bold",
+          size: "lg",
+          color: accent,
+          flex: 0,
+        },
+        chip("แก้", "#EAEEF0", "#334155", {
+          type: "postback",
+          label: "แก้ไข",
+          data: `a=edit&id=${input.txId}`,
+          displayText: "แก้ไข",
+        }),
+        chip("ลบ", accentSoft, COLOR.expense, {
+          type: "postback",
+          label: "ลบ",
+          data: `a=del&id=${input.txId}`,
+          displayText: "ลบรายการ",
+        }),
+      ],
+    },
+  ];
+
+  if (total !== null) {
     body.push(
-      { type: "separator", margin: "md" },
+      { type: "separator", margin: "lg" },
       {
-        type: "text",
-        text: `หมวดนี้ในรอบนี้รวม ฿${formatBaht(input.cycleTotalSatang)}`,
-        size: "xs",
-        color: COLOR.muted,
-        wrap: true,
-        margin: "md",
+        type: "box",
+        layout: "horizontal",
+        spacing: "md",
+        margin: "lg",
+        alignItems: "center",
+        contents: [
+          {
+            type: "text",
+            text: category,
+            weight: "bold",
+            size: "lg",
+            color: "#14352E",
+            wrap: true,
+            flex: 1,
+          },
+          {
+            type: "box",
+            layout: "vertical",
+            flex: 1,
+            spacing: "sm",
+            contents: [
+              {
+                type: "text",
+                text: `฿${formatBaht(total)}`,
+                weight: "bold",
+                size: "lg",
+                color: accent,
+              },
+              {
+                type: "box",
+                layout: "vertical",
+                height: "8px",
+                cornerRadius: "4px",
+                backgroundColor: "#E5EAEE",
+                contents: [
+                  {
+                    type: "box",
+                    layout: "vertical",
+                    width: `${Math.round(share)}%`,
+                    height: "8px",
+                    cornerRadius: "4px",
+                    backgroundColor: accent,
+                    contents: [],
+                  },
+                ],
+              },
+            ],
+          },
+        ],
       },
     );
+    if (input.cycleLabel) {
+      body.push({
+        type: "text",
+        text: `รอบงบ: ${input.cycleLabel}`,
+        size: "xs",
+        color: COLOR.muted,
+        align: "end",
+        margin: "md",
+      });
+    }
   }
 
   return {
@@ -92,71 +310,22 @@ export function buildConfirmMessage(input: ConfirmCardInput): LineMessage {
       size: "mega",
       header: {
         type: "box",
-        layout: "vertical",
+        layout: "horizontal",
+        alignItems: "center",
         backgroundColor: COLOR.primarySoft,
-        paddingAll: "14px",
-        contents: [{ type: "text", text: "จดแล้ว", weight: "bold", color: COLOR.primary }],
+        paddingAll: "18px",
+        contents: header,
       },
       body: {
         type: "box",
         layout: "vertical",
         backgroundColor: COLOR.surface,
-        paddingAll: "16px",
-        spacing: "sm",
+        paddingAll: "18px",
         contents: body,
-      },
-      footer: {
-        type: "box",
-        layout: "vertical",
-        backgroundColor: COLOR.surface,
-        spacing: "sm",
-        contents: [
-          {
-            type: "button",
-            style: "primary",
-            color: COLOR.primary,
-            height: "sm",
-            action: {
-              type: "postback",
-              label: "แก้ไข",
-              data: `a=edit&id=${input.txId}`,
-              displayText: "แก้ไข",
-            },
-          },
-          {
-            type: "box",
-            layout: "horizontal",
-            spacing: "sm",
-            contents: [
-              {
-                type: "button",
-                style: "secondary",
-                height: "sm",
-                action: {
-                  type: "postback",
-                  label: "ลบ",
-                  data: `a=del&id=${input.txId}`,
-                  displayText: "ลบรายการ",
-                },
-              },
-              {
-                type: "button",
-                style: "link",
-                height: "sm",
-                action: {
-                  type: "uri",
-                  label: "ส่งต่อ",
-                  uri: `https://line.me/R/share?text=${encodeURIComponent(shareText(input))}`,
-                },
-              },
-            ],
-          },
-        ],
       },
     },
   };
 }
-
 /** Ask whether an ambiguous entry is income or expense (Quick Reply). */
 export function buildTypeQuestion(input: {
   txId: string;
