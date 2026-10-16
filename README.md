@@ -64,6 +64,24 @@ pnpm lint && pnpm typecheck && pnpm test
 > ต้องรัน migration `supabase/migrations/0004_budget_mode_overrides_analytics.sql`
 > ก่อนใช้โหมดงบ ปรับหมวดมาตรฐาน และกราฟ (ไฟล์รันซ้ำได้)
 
+## สลิป / ใบเสร็จ (OCR)
+
+ส่งรูปสลิปเข้าแชท → บอทอ่านจำนวนเงิน วันที่ ผู้รับ → ส่งการ์ด **ตรวจสลิป** ให้กด
+`ยืนยัน` / `แก้ไขหมวด` / `ยกเลิก` (ยังไม่จดจนกว่าจะยืนยัน)
+
+ตั้งค่า (ครั้งเดียว):
+1. รัน migration `supabase/migrations/0005_slips_bucket.sql` ใน Supabase SQL Editor
+   (สร้าง bucket `slips` แบบ **private** — ผู้ใช้ดูรูปผ่าน signed URL อายุ 60 วินาทีเท่านั้น)
+2. ตั้ง `AI_PROVIDER` (`gemini` | `anthropic` | `openai`) และ API key ของค่ายนั้นใน Vercel
+   (ไม่บังคับ: `AI_MODEL` เพื่อเปลี่ยนโมเดลเริ่มต้น) แล้ว Redeploy
+
+พฤติกรรม:
+- Free อ่านสลิปได้ **30 ใบ/เดือน** (นับตามเดือนปฏิทิน Asia/Bangkok, สลิปที่อ่านไม่ได้ไม่นับ) · Plus ไม่จำกัด
+- กันซ้ำ 2 ชั้น: hash ของรูป (ก่อนเรียก AI จึงไม่เสียค่าใช้จ่าย) และเลขอ้างอิงของสลิป
+- เก็บเลขบัญชีผู้รับแค่ **4 ตัวท้าย** (ทั้งในคอลัมน์และ `ocr_json`)
+- กด `แก้ไขหมวด` แล้วเลือกหมวด → บอทจำ "ผู้รับ → หมวด" ไว้ใช้ครั้งต่อไป (`merchant_memory`)
+- รูปถูกส่งไปยังผู้ให้บริการ AI ที่เลือกเพื่ออ่านข้อความ (ควรระบุใน Privacy Policy)
+
 ## Rich Menu
 
 ```bash
@@ -83,6 +101,7 @@ pnpm richmenu --replace   # สร้างเมนู อัปโหลดภ
 | GET | `/api/summary?scope=cycle\|month\|day` | สรุปรายรับ/จ่าย + รายการล่าสุด |
 | GET/POST | `/api/transactions` | รายการ (กรอง `type,q,from,to,categoryId`) / เพิ่มด้วยมือ |
 | DELETE | `/api/transactions/:id` | ลบ (soft delete) |
+| GET | `/api/transactions/:id/slip` | signed URL (60 วินาที) ของรูปสลิปที่แนบ |
 | GET/PATCH | `/api/settings` | รูปแบบการ์ด, รอบงบ |
 | GET/POST | `/api/categories` | หมวดที่ใช้ได้ (`?all=1` รวมที่ซ่อน) / เพิ่มหมวดของตัวเอง |
 | PATCH/DELETE | `/api/categories/:id` | แก้/ซ่อน/ลบ (หมวดมาตรฐานแก้ได้เฉพาะคำค้น/ซ่อน/ลำดับ) |
@@ -126,4 +145,4 @@ docs           design tokens, เอกสารอื่น ๆ
 ## Roadmap
 
 Phase 0 Setup (✓) → 1 Webhook + จดข้อความ (✓) → 2 LIFF พื้นฐาน (✓) → 3 หมวด/งบ/วิเคราะห์ (✓) →
-4 สลิป OCR → 5 Plus & Extra → 6 Hardening
+4 สลิป OCR (✓) → 5 Plus & Extra → 6 Hardening

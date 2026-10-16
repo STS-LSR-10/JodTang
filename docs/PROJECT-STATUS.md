@@ -72,11 +72,16 @@ supabase/migrations/0001..0004
 | 1 Webhook + จดข้อความ | ✅ | verify signature, dedupe `webhookEventId`, follow/text/postback, parser (49 เคส), categorizer แบบกฎ, การ์ด Flex, `ลบล่าสุด`/`แก้ล่าสุด`/`สรุป…`/`ช่วยเหลือ` |
 | 2 LIFF พื้นฐาน | ✅ | LIFF auth → session JWT 1 ชม., หน้า สรุป/รายการ/ตั้งค่า, แท็บล่าง 5 ปุ่ม, Rich Menu (สร้างและเผยแพร่แล้ว) |
 | 3 หมวด/งบ/วิเคราะห์ | ✅ | CRUD หมวด (+ `category_overrides`), งบรวม/แยกหมวด, แจ้งเตือน 80%/100%, กราฟแท่ง/โดนัท |
-| 4 สลิป OCR | ⏳ ถัดไป | อัปโหลด → Storage → OCR → ยืนยัน, กันสลิปซ้ำ, merchant_memory |
+| 4 สลิป OCR | ✅ (ยังไม่ทดสอบกับสลิปจริง) | LINE Content API → Storage (private) → OCR provider (gemini/anthropic/openai) → sanitize + mask → `pending_confirm` + การ์ดตรวจสลิป, กันซ้ำ hash/ref, โควตา Free 30 ใบ, เรียนรู้ผู้รับ → หมวด, ดูรูปผ่าน signed URL; `lib/plan.ts` เริ่มแล้ว (ยังไม่ gate merchant_memory) |
 | 5 Plus & Extra | ⏳ | จดประจำ, แจ้งเตือนรายวัน (cron), export CSV/XLSX, ตังสะสม/referral, plan gating, payment stub |
 | 6 Hardening | ⏳ | rate limit, logging, e2e (Playwright), ตรวจ RLS, a11y, Lighthouse mobile ≥ 90, เอกสาร deploy/rollback |
 
-ทดสอบอัตโนมัติ: 148 เทสต์ (Vitest) · ตรวจแล้ว lint/typecheck/build ผ่าน
+ทดสอบอัตโนมัติ: 180 เทสต์ (Vitest) · ตรวจแล้ว lint/typecheck/build ผ่าน
+
+**Phase 4 — ต้องทำเองก่อนใช้:** รัน migration `0005` (bucket `slips` private) และตั้ง `AI_PROVIDER` + key
+**ข้อควรรู้:** adapter ของ 3 ค่ายเขียนตามเอกสาร API และทดสอบด้วย mock เท่านั้น ยังไม่เคยยิง API จริง
+(ชื่อโมเดลเริ่มต้นอยู่ใน `src/lib/ocr/provider.ts` เปลี่ยนได้ด้วย `AI_MODEL`)
+`merchant_memory` ตามสเปกเป็นฟีเจอร์ Plus — ตอนนี้ยังทำงานกับทุกแผน รอ gating ใน Phase 5
 
 ## 6) สิ่งที่ตั้งค่าไว้แล้ว (ชื่อตัวแปร ไม่มีค่า)
 
