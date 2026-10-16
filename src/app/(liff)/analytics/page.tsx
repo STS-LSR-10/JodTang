@@ -2,18 +2,8 @@
 
 import { Lock } from "lucide-react";
 import { useState } from "react";
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Cell,
-  Pie,
-  PieChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
+import { CategoryDonutChart, FlowBarChart } from "@/components/liff/lazy-charts";
+import { sliceColor } from "@/components/liff/slice-color";
 import { SavingsPanel } from "@/components/liff/savings-panel";
 import { Segmented } from "@/components/liff/segmented";
 import { EmptyState, ErrorState, LoadingBlock, PageHeader } from "@/components/liff/states";
@@ -37,22 +27,11 @@ interface AnalyticsResponse {
   categoriesTotalSatang: number;
 }
 
-const INCOME = "#059669";
-const EXPENSE = "#E11D48";
-const FALLBACK_COLORS = ["#0F766E", "#0369A1", "#7C3AED", "#D97706", "#475569", "#DB2777"];
-
 const VIEWS: { value: View; label: string }[] = [
   { value: "month", label: "6 เดือน" },
   { value: "week", label: "รายสัปดาห์" },
   { value: "day", label: "รายวัน" },
 ];
-
-const compact = (baht: number) =>
-  baht >= 1_000_000
-    ? `${(baht / 1_000_000).toFixed(1)}M`
-    : baht >= 1000
-      ? `${(baht / 1000).toFixed(baht % 1000 === 0 ? 0 : 1)}k`
-      : String(baht);
 
 export default function AnalyticsPage() {
   const [tab, setTab] = useState<"flow" | "saving">("flow");
@@ -74,6 +53,12 @@ export default function AnalyticsPage() {
   const totalExpense = (data.data?.series ?? []).reduce((s, p) => s + p.expenseSatang, 0);
 
   const cats = data.data?.categories ?? [];
+  const slices = cats.map((c) => ({
+    key: c.categoryId ?? c.name,
+    name: c.name,
+    value: c.totalSatang / 100,
+    color: c.color,
+  }));
   const catTotal = data.data?.categoriesTotalSatang ?? 0;
 
   return (
@@ -126,36 +111,12 @@ export default function AnalyticsPage() {
                     <span className="num font-semibold text-income">
                       รายรับ ฿{formatBaht(totalIncome)}
                     </span>
-                    <span className="num font-semibold" style={{ color: EXPENSE }}>
+                    <span className="num font-semibold text-expense">
                       รายจ่าย ฿{formatBaht(totalExpense)}
                     </span>
                   </div>
                   {hasSeries ? (
-                    <div className="h-56 w-full">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <BarChart
-                          data={chartData}
-                          margin={{ top: 4, right: 4, bottom: 0, left: -12 }}
-                        >
-                          <CartesianGrid vertical={false} strokeOpacity={0.25} />
-                          <XAxis dataKey="label" tickLine={false} axisLine={false} fontSize={11} />
-                          <YAxis
-                            tickLine={false}
-                            axisLine={false}
-                            fontSize={11}
-                            tickFormatter={compact}
-                          />
-                          <Tooltip
-                            formatter={(v, name) => [
-                              `฿${formatBaht(Math.round(Number(v) * 100))}`,
-                              name === "income" ? "รายรับ" : "รายจ่าย",
-                            ]}
-                          />
-                          <Bar dataKey="income" fill={INCOME} radius={[6, 6, 0, 0]} />
-                          <Bar dataKey="expense" fill={EXPENSE} radius={[6, 6, 0, 0]} />
-                        </BarChart>
-                      </ResponsiveContainer>
-                    </div>
+                    <FlowBarChart data={chartData} />
                   ) : (
                     <EmptyState
                       title="ยังไม่มีรายการในช่วงนี้"
@@ -185,30 +146,7 @@ export default function AnalyticsPage() {
                   ) : (
                     <>
                       <div className="relative mx-auto h-48 w-48">
-                        <ResponsiveContainer width="100%" height="100%">
-                          <PieChart>
-                            <Pie
-                              data={cats.map((c) => ({ name: c.name, value: c.totalSatang / 100 }))}
-                              dataKey="value"
-                              nameKey="name"
-                              innerRadius={56}
-                              outerRadius={86}
-                              paddingAngle={2}
-                              stroke="none"
-                            >
-                              {cats.map((c, i) => (
-                                <Cell
-                                  key={c.categoryId ?? c.name}
-                                  fill={
-                                    c.color ??
-                                    FALLBACK_COLORS[i % FALLBACK_COLORS.length] ??
-                                    "#64748B"
-                                  }
-                                />
-                              ))}
-                            </Pie>
-                          </PieChart>
-                        </ResponsiveContainer>
+                        <CategoryDonutChart slices={slices} />
                         <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
                           <span className="text-[11px] text-muted">รวม</span>
                           <span className="num text-base font-bold">฿{formatBaht(catTotal)}</span>
@@ -224,10 +162,7 @@ export default function AnalyticsPage() {
                               aria-hidden
                               className="h-3 w-3 shrink-0 rounded-full"
                               style={{
-                                background:
-                                  c.color ??
-                                  FALLBACK_COLORS[i % FALLBACK_COLORS.length] ??
-                                  "#64748B",
+                                background: sliceColor(c.color, i),
                               }}
                             />
                             <span className="min-w-0 flex-1 truncate">{c.name}</span>
