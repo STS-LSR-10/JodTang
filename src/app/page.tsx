@@ -54,7 +54,7 @@ export default function HomePage() {
   return (
     <main className="mx-auto flex min-h-screen max-w-md flex-col items-center justify-center gap-3 p-6 text-center">
       <Mascot mood="smile" size={96} />
-      <h1 className="text-2xl font-bold text-primary">Mee-Tang (มีตัง)</h1>
+      <h1 className="text-2xl font-bold text-primary">จดตังค์ (JodTang)</h1>
       <p className="text-muted">จดง่าย เห็นเงินชัด</p>
       <p role="status" className="text-sm text-muted">
         กำลังเปิด...

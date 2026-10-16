@@ -10,7 +10,7 @@ const notoSansThai = Noto_Sans_Thai({
 });
 
 export const metadata: Metadata = {
-  title: "Mee-Tang (มีตัง)",
+  title: "จดตังค์ (JodTang)",
   description: "จดง่าย เห็นเงินชัด",
 };
 

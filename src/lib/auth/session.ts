@@ -1,5 +1,6 @@
 import { jwtVerify, SignJWT } from "jose";
 
+// Internal token claims, kept as "meetang" on purpose: renaming would invalidate live sessions.
 const ISSUER = "meetang";
 const AUDIENCE = "meetang-liff";
 export const SESSION_TTL_SECONDS = 60 * 60;

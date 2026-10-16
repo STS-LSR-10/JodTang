@@ -1,4 +1,4 @@
-# Mee-Tang (มีตัง)
+# จดตังค์ (JodTang)
 
 จดง่าย เห็นเงินชัด — ผู้ช่วยจดรายรับรายจ่ายผ่าน LINE Official Account + LIFF
 
@@ -23,7 +23,7 @@ pnpm lint && pnpm typecheck && pnpm test
 ## ตั้งค่า LINE Developers (ทีละขั้น)
 
 1. เข้า <https://developers.line.biz/console/> แล้วล็อกอินด้วยบัญชี LINE
-2. สร้าง **Provider** (เช่น `Mee-Tang`)
+2. สร้าง **Provider** (เช่น `JodTang`)
 3. สร้าง channel ชนิด **Messaging API** (ผูกกับ LINE Official Account)
    - คัดลอก **Channel ID** → `LINE_CHANNEL_ID`
    - แท็บ *Basic settings* → **Channel secret** → `LINE_CHANNEL_SECRET`

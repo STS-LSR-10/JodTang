@@ -1,5 +1,5 @@
 /**
- * Create and publish the Mee-Tang Rich Menu.
+ * Create and publish the JodTang Rich Menu.
  *
  *   pnpm richmenu --dry-run     render assets/richmenu.png only (no network)
  *   pnpm richmenu               create the menu, upload the image, set it as default
@@ -12,6 +12,7 @@ import { dirname, resolve } from "node:path";
 import sharp from "sharp";
 import { buildRichMenuSvg, cellBounds, RICH_MENU_HEIGHT, RICH_MENU_WIDTH } from "./richmenu-design";
 
+// Kept as "meetang-main" on purpose: --replace finds and deletes earlier menus by this name.
 const MENU_NAME = "meetang-main";
 const API = "https://api.line.me/v2/bot";
 const API_DATA = "https://api-data.line.me/v2/bot";

@@ -1,5 +1,5 @@
 # Supabase CLI config for local development (`supabase start`).
-project_id = "meetang"
+project_id = "jodtang"
 
 [api]
 enabled = true

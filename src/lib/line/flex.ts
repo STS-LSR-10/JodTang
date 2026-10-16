@@ -48,7 +48,7 @@ export function row(label: string, value: string) {
 
 export function shareText(input: ConfirmCardInput): string {
   const sign = input.type === "income" ? "+" : "-";
-  return `${input.title} ${sign}฿${formatBaht(input.amountSatang)} (${formatThaiDate(input.occurredAt)}) · จดด้วยมีตัง`;
+  return `${input.title} ${sign}฿${formatBaht(input.amountSatang)} (${formatThaiDate(input.occurredAt)}) · จดด้วยจดตังค์`;
 }
 
 export function buildConfirmMessage(input: ConfirmCardInput): LineMessage {

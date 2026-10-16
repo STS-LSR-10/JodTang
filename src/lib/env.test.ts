@@ -16,7 +16,7 @@ describe("env", () => {
       NEXT_PUBLIC_LIFF_ID: "1234-abcd",
       NEXT_PUBLIC_SUPABASE_URL: "https://x.supabase.co",
       NEXT_PUBLIC_SUPABASE_ANON_KEY: "anon",
-      APP_BASE_URL: "https://meetang.example.com",
+      APP_BASE_URL: "https://jodtang.example.com",
     });
     expect(env.NEXT_PUBLIC_LIFF_ID).toBe("1234-abcd");
   });
