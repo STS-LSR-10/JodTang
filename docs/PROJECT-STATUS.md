@@ -79,6 +79,12 @@ supabase/migrations/0001..0004
 ทดสอบอัตโนมัติ: 180 เทสต์ (Vitest) · ตรวจแล้ว lint/typecheck/build ผ่าน
 
 **Phase 4 — ต้องทำเองก่อนใช้:** รัน migration `0005` (bucket `slips` private) และตั้ง `AI_PROVIDER` + key
+**Fallback chain (`src/lib/ocr/factory.ts`):** `easyslip` → `slip2go` → AI (`AI_PROVIDER` ก่อน แล้วตัวอื่นที่มี key)
+- EasySlip v2 (`POST https://api.easyslip.com/v2/verify/bank`, multipart ฟิลด์ `image`, Bearer) — implement แล้ว
+  จากเอกสารสาธารณะ (ยังไม่เคยยิงด้วย key จริง); รูปต้องไม่เกิน 4 MB และสลิปมีอายุจำกัดตามธนาคาร (7–30 วัน)
+- **Slip2Go ยังไม่ implement:** เอกสาร API อยู่ในแดชบอร์ด (API Connect → วิธีใช้งาน) หลังล็อกอิน
+  ผมเข้าไม่ได้และไม่เดารูปแบบคำขอ — ต้องให้เจ้าของวางเอกสาร/ตัวอย่างคำขอ-คำตอบ แล้วเพิ่ม adapter
+  เป็น `src/lib/ocr/slip2go.ts` และเสียบใน `factory.ts` (ชื่อ `slip2go` ถูกจองไว้ใน `SLIP_READERS` แล้ว)
 **ข้อควรรู้:** adapter ของ 3 ค่ายเขียนตามเอกสาร API และทดสอบด้วย mock เท่านั้น ยังไม่เคยยิง API จริง
 (ชื่อโมเดลเริ่มต้นอยู่ใน `src/lib/ocr/provider.ts` เปลี่ยนได้ด้วย `AI_MODEL`)
 `merchant_memory` ตามสเปกเป็นฟีเจอร์ Plus — ตอนนี้ยังทำงานกับทุกแผน รอ gating ใน Phase 5
