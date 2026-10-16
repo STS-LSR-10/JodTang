@@ -9,6 +9,7 @@ import { can } from "@/lib/plan";
 import { getPlanInfo } from "@/lib/plan-server";
 import { getAdminClient } from "@/lib/supabase/admin";
 import { applyTxFilters } from "@/lib/tx-query";
+import { log } from "@/lib/log";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -81,7 +82,7 @@ export async function GET(request: Request): Promise<Response> {
       },
     });
   } catch (error) {
-    console.error("export failed:", error instanceof Error ? error.message : "unknown error");
+    log.error("export_failed", error);
     return new Response("ส่งออกไม่สำเร็จ ลองใหม่อีกครั้งนะ", {
       status: 500,
       headers: { "Content-Type": "text/plain; charset=utf-8" },

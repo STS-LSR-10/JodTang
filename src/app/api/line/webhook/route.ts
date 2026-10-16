@@ -2,6 +2,7 @@ import { after } from "next/server";
 import { getServerEnv } from "@/lib/env";
 import { processEvents } from "@/lib/line/process";
 import { verifySignature } from "@/lib/line/signature";
+import { log } from "@/lib/log";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -17,7 +18,7 @@ export async function POST(request: Request): Promise<Response> {
     secret = getServerEnv().LINE_CHANNEL_SECRET;
   } catch (error) {
     // The message lists variable NAMES only (never values), so it is safe to log.
-    console.error("webhook config error:", error instanceof Error ? error.message : "unknown");
+    log.error("webhook_config_error", error);
     return new Response("server misconfigured", { status: 500 });
   }
 

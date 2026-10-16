@@ -3,6 +3,7 @@ import { can, effectivePlan, type Plan } from "@/lib/plan";
 import { satangToString, toSatang } from "@/lib/money";
 import { dueRuns, resumeAfter, type Cadence } from "@/lib/recurring";
 import type { TxType } from "@/lib/types";
+import { log } from "@/lib/log";
 
 export interface RuleRow {
   id: string;
@@ -193,10 +194,7 @@ export async function runDueRules(db: SupabaseClient, now: Date): Promise<Recurr
       summary.entriesCreated += runs.length;
     } catch (error) {
       summary.errors += 1;
-      console.error(
-        "recurring rule failed:",
-        error instanceof Error ? error.message : "unknown error",
-      );
+      log.error("recurring_rule_failed", error);
     }
   }
   return summary;

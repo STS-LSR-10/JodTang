@@ -4,6 +4,7 @@ import { bangkokDateKey, currentStreak, recentDailyKeys } from "@/lib/points";
 import { isReminderDue, reminderText } from "@/lib/reminder";
 import { dayRange } from "@/lib/budget-cycle";
 import type { LineMessage } from "@/lib/types";
+import { log } from "@/lib/log";
 
 export interface ReminderRunSummary {
   candidates: number;
@@ -106,7 +107,7 @@ export async function runReminders(
       summary.sent += 1;
     } catch (error) {
       summary.errors += 1;
-      console.error("reminder failed:", error instanceof Error ? error.message : "unknown error");
+      log.error("reminder_failed", error);
     }
   }
   return summary;

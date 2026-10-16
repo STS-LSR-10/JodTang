@@ -1,3 +1,4 @@
+import { log } from "@/lib/log";
 export function json(data: unknown, status = 200): Response {
   return Response.json(data, { status, headers: { "Cache-Control": "no-store" } });
 }
@@ -14,7 +15,7 @@ export async function guard(fn: () => Promise<Response>): Promise<Response> {
   try {
     return await fn();
   } catch (error) {
-    console.error("api error:", error instanceof Error ? error.message : "unknown error");
+    log.error("api_error", error);
     return apiError(SERVER_ERROR_TEXT, 500);
   }
 }

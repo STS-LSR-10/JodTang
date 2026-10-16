@@ -4,6 +4,7 @@ import { getServerEnv } from "@/lib/env";
 import { createLineClient } from "@/lib/line/client";
 import { runReminders } from "@/lib/reminder-run";
 import { getAdminClient } from "@/lib/supabase/admin";
+import { log } from "@/lib/log";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -30,7 +31,7 @@ export async function GET(request: Request): Promise<Response> {
     const summary = await runReminders(getAdminClient(), line.push, new Date());
     return json({ ok: true, ...summary });
   } catch (error) {
-    console.error("cron reminders failed:", error instanceof Error ? error.message : "unknown");
+    log.error("cron_reminders_failed", error);
     return json({ ok: false }, 500);
   }
 }

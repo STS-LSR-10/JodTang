@@ -7,6 +7,7 @@ import {
   REFERRAL_WINDOW_DAYS,
 } from "@/lib/config";
 import { bangkokParts, fromBangkok } from "@/lib/thai-date";
+import { log } from "@/lib/log";
 
 /** "2026-10-16" for the Bangkok calendar day containing `date`. */
 export function bangkokDateKey(date: Date): string {
@@ -73,7 +74,7 @@ export async function awardActivity(
     });
     return { awarded: true, referralBonus: bonus.data === true };
   } catch (error) {
-    console.error("award failed:", error instanceof Error ? error.message : "unknown error");
+    log.error("award_failed", error);
     return none;
   }
 }
