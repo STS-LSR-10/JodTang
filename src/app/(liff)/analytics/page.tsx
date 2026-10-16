@@ -123,7 +123,7 @@ export default function AnalyticsPage() {
                   className="rounded-2xl border border-border bg-surface p-4 shadow-card"
                 >
                   <div className="mb-2 flex items-center justify-between text-xs">
-                    <span className="num font-semibold" style={{ color: INCOME }}>
+                    <span className="num font-semibold text-income">
                       รายรับ ฿{formatBaht(totalIncome)}
                     </span>
                     <span className="num font-semibold" style={{ color: EXPENSE }}>

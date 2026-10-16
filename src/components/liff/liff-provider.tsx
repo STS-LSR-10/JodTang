@@ -35,6 +35,11 @@ export class ApiError extends Error {
 
 const LIFF_ID = process.env.NEXT_PUBLIC_LIFF_ID;
 
+// Test-only switch for the Playwright suite (set at build time, never in production).
+// It only skips the LINE sign-in screen on the client: every /api call still needs a valid
+// server-issued session, so enabling it by mistake grants no access to anything.
+const E2E_MODE = process.env.NEXT_PUBLIC_E2E === "1";
+
 export function LiffProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<Status>("loading");
   const [error, setError] = useState<string | null>(null);
@@ -53,6 +58,10 @@ export function LiffProvider({ children }: { children: ReactNode }) {
   const authenticate = useCallback(async (): Promise<string> => {
     if (inflight.current) return inflight.current;
     const run = (async () => {
+      if (E2E_MODE) {
+        token.current = "e2e-token";
+        return token.current;
+      }
       if (!LIFF_ID) throw new Error("ยังไม่ได้ตั้งค่า LIFF");
       const liff = (await import("@line/liff")).default;
       await liff.init({ liffId: LIFF_ID });

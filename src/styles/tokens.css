@@ -4,7 +4,7 @@
   --primary-soft: #ccfbf1;
   --accent: #f59e0b;
   --expense: #e11d48;
-  --income: #059669;
+  --income: #047857; /* darker than the original #059669 so text on white reaches WCAG AA (4.5:1) */
   --background: #f8fafc;
   --surface: #ffffff;
   --foreground: #0f172a;
