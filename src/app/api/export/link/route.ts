@@ -1,0 +1,35 @@
+import { z } from "zod";
+import { apiError, guard, json } from "@/lib/api";
+import { signExportToken } from "@/lib/auth/export-token";
+import { requireUser } from "@/lib/auth/require-user";
+import { EXPORT_LINK_TTL_SECONDS } from "@/lib/config";
+import { getServerEnv } from "@/lib/env";
+import { txFilterSchema } from "@/lib/tx-query";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
+const bodySchema = txFilterSchema.extend({ format: z.enum(["csv", "xlsx"]) });
+
+/**
+ * POST /api/export/link { format, ...filters } -> { url } valid for two minutes.
+ * The LIFF page opens it in the external browser (in-app browsers cannot download files).
+ */
+export async function POST(request: Request): Promise<Response> {
+  return guard(async () => {
+    const auth = await requireUser(request);
+    if (auth instanceof Response) return auth;
+
+    const parsed = bodySchema.safeParse(await request.json().catch(() => null));
+    if (!parsed.success) return apiError("ตัวเลือกส่งออกไม่ถูกต้อง", 400);
+    const { format, ...filters } = parsed.data;
+
+    const token = await signExportToken(
+      { userId: auth.userId, format, filters },
+      getServerEnv().SESSION_JWT_SECRET,
+    );
+    const url = new URL("/api/export/download", request.url);
+    url.searchParams.set("t", token);
+    return json({ url: url.toString(), expiresIn: EXPORT_LINK_TTL_SECONDS });
+  });
+}

@@ -1,0 +1,61 @@
+import { satangToString } from "@/lib/money";
+import { bangkokParts } from "@/lib/thai-date";
+import type { TxType } from "@/lib/types";
+
+export interface ExportRow {
+  date: Date;
+  type: TxType;
+  title: string;
+  categoryName: string | null;
+  /** Integer satang, always > 0. */
+  amountSatang: number;
+  source: string;
+}
+
+export const TYPE_LABEL: Record<TxType, string> = { expense: "รายจ่าย", income: "รายรับ" };
+
+const SOURCE_LABEL: Record<string, string> = {
+  text: "ข้อความ",
+  slip: "สลิป",
+  manual: "เพิ่มเอง",
+  recurring: "รายการประจำ",
+};
+
+export const sourceLabel = (source: string) => SOURCE_LABEL[source] ?? source;
+
+const two = (n: number) => String(n).padStart(2, "0");
+
+/** "2026-10-15" in Bangkok time (Gregorian, so spreadsheets sort and parse it). */
+export function exportDate(date: Date): string {
+  const p = bangkokParts(date);
+  return `${p.year}-${two(p.month)}-${two(p.day)}`;
+}
+
+/** "14:30" in Bangkok time. */
+export function exportTime(date: Date): string {
+  const p = bangkokParts(date);
+  return `${two(p.hour)}:${two(p.minute)}`;
+}
+
+export const HEADERS = [
+  "วันที่",
+  "เวลา",
+  "ประเภท",
+  "ชื่อรายการ",
+  "หมวด",
+  "จำนวนเงิน (บาท)",
+  "ที่มา",
+] as const;
+
+/** One row as display strings, in HEADERS order. */
+export function rowCells(row: ExportRow): string[] {
+  return [
+    exportDate(row.date),
+    exportTime(row.date),
+    TYPE_LABEL[row.type],
+    row.title,
+    row.categoryName ?? "ไม่ระบุหมวด",
+    satangToString(row.amountSatang),
+    sourceLabel(row.source),
+  ];
+}
