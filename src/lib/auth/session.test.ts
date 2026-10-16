@@ -32,7 +32,7 @@ describe("session", () => {
     const token = await signSession(claims, SECRET, NOW);
     const [h, , s] = token.split(".");
     const forged = Buffer.from(
-      JSON.stringify({ sub: "someone-else", lu: "U999", iss: "meetang", aud: "meetang-liff" }),
+      JSON.stringify({ sub: "someone-else", lu: "U999", iss: "jodtang", aud: "jodtang-liff" }),
     ).toString("base64url");
     expect(await verifySession(`${h}.${forged}.${s}`, SECRET, NOW)).toBeNull();
   });
@@ -47,8 +47,8 @@ describe("session", () => {
     const token = `${enc({ alg: "none", typ: "JWT" })}.${enc({
       sub: claims.userId,
       lu: claims.lineUserId,
-      iss: "meetang",
-      aud: "meetang-liff",
+      iss: "jodtang",
+      aud: "jodtang-liff",
       exp: Math.floor(NOW.getTime() / 1000) + 3600,
     })}.`;
     expect(await verifySession(token, SECRET, NOW)).toBeNull();

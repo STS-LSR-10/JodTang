@@ -3,8 +3,7 @@
 แหล่งความจริงเดียวของดีไซน์ ต้องตรงกับ `src/styles/tokens.css` และ `tailwind.config.ts`
 
 - ชื่อ: **จดตังค์ (JodTang)** (เดิมชื่อ Mee-Tang / มีตัง) · แท็กไลน์: "จดง่าย เห็นเงินชัด"
-- มาสคอต: **น้องตัง** (เหรียญกลมยิ้มเรียบ ใส่หมวกใบเล็ก, flat vector, SVG ทำเอง)
-  - อารมณ์: ยิ้ม, ตกใจ, เชียร์, ง่วง, ขอบคุณ, คิด
+- โลโก้: **จดตังค์ (JodTang)** — ฟองแชทสีกรม + ใบเสร็จสีมิ้นต์ + เหรียญทอง (flat vector, SVG: `public/logo.svg`, คอมโพเนนต์ `src/components/logo.tsx`, ไอคอนเว็บ `src/app/icon.svg`, ต้นฉบับ `assets/brand/jodtang-logo-original.jpg`)
 
 ## สี
 

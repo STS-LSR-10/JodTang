@@ -3,7 +3,7 @@
  *
  *   pnpm richmenu --dry-run     render assets/richmenu.png only (no network)
  *   pnpm richmenu               create the menu, upload the image, set it as default
- *   pnpm richmenu --replace     same, but first delete earlier "meetang-main" menus
+ *   pnpm richmenu --replace     same, but first delete earlier "jodtang-main" / "meetang-main" menus
  *
  * Reads LINE_CHANNEL_ACCESS_TOKEN and NEXT_PUBLIC_LIFF_ID from .env.local (or the environment).
  */
@@ -12,8 +12,9 @@ import { dirname, resolve } from "node:path";
 import sharp from "sharp";
 import { buildRichMenuSvg, cellBounds, RICH_MENU_HEIGHT, RICH_MENU_WIDTH } from "./richmenu-design";
 
-// Kept as "meetang-main" on purpose: --replace finds and deletes earlier menus by this name.
-const MENU_NAME = "meetang-main";
+const MENU_NAME = "jodtang-main";
+// --replace also removes menus published before the rename.
+const REPLACEABLE_NAMES = new Set([MENU_NAME, "meetang-main"]);
 const API = "https://api.line.me/v2/bot";
 const API_DATA = "https://api-data.line.me/v2/bot";
 const IMAGE_PATH = resolve("assets/richmenu.png");
@@ -86,7 +87,7 @@ async function main() {
     const list = (await (await line(token, `${API}/richmenu/list`)).json()) as {
       richmenus: { richMenuId: string; name: string }[];
     };
-    for (const m of list.richmenus.filter((r) => r.name === MENU_NAME)) {
+    for (const m of list.richmenus.filter((r) => REPLACEABLE_NAMES.has(r.name))) {
       await line(token, `${API}/richmenu/${m.richMenuId}`, { method: "DELETE" });
       console.log(`✓ deleted old menu ${m.richMenuId}`);
     }

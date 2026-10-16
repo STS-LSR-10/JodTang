@@ -95,7 +95,7 @@ pnpm lint && pnpm typecheck && pnpm test
 
 ```bash
 pnpm richmenu --dry-run   # สร้างภาพ assets/richmenu.png อย่างเดียว (ไม่ยิงเครือข่าย)
-pnpm richmenu --replace   # สร้างเมนู อัปโหลดภาพ ตั้งเป็นค่าเริ่มต้น (ลบเมนู meetang-main เดิมก่อน)
+pnpm richmenu --replace   # สร้างเมนู อัปโหลดภาพ ตั้งเป็นค่าเริ่มต้น (ลบเมนู jodtang-main และ meetang-main เดิมก่อน)
 ```
 
 สคริปต์อ่าน `LINE_CHANNEL_ACCESS_TOKEN` และ `NEXT_PUBLIC_LIFF_ID` จาก `.env.local`

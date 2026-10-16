@@ -12,16 +12,15 @@
 ผู้ช่วยจดรายรับรายจ่ายผ่าน **LINE Official Account**: พิมพ์ข้อความ (`กาแฟ 30`) หรือส่งสลิป
 ระบบจดและจัดหมวดให้ แล้วดูสรุป/กราฟ/งบ/รายการในหน้า **LIFF** (เว็บในแอป LINE)
 
-- ชื่อ: จดตังค์ (JodTang) — เดิมชื่อ Mee-Tang / มีตัง (เปลี่ยนชื่อแล้วเมื่อ 2026-10) · แท็กไลน์ "จดง่าย เห็นเงินชัด" · มาสคอต "น้องตัง" (SVG ทำเอง)
+- ชื่อ: จดตังค์ (JodTang) — เดิมชื่อ Mee-Tang / มีตัง (เปลี่ยนชื่อแล้วเมื่อ 2026-10) · แท็กไลน์ "จดง่าย เห็นเงินชัด" · โลโก้ฟองแชท+ใบเสร็จ+เหรียญ (SVG ใน `public/logo.svg`) — ไม่มีมาสคอตตัวการ์ตูนแล้ว
 - ภาษา UI/บอท: ไทย · สกุลเงิน THB · timezone Asia/Bangkok · แสดงปี พ.ศ.
 - DB เก็บเวลาเป็น UTC (`timestamptz`)
 
 ### หมายเหตุการเปลี่ยนชื่อเป็น JodTang
 
 - **เปลี่ยนในโค้ดแล้ว:** ชื่อที่แสดง (หน้าเว็บ, ข้อความส่งต่อ "จดด้วยจดตังค์"), `package.json`, `supabase/config.toml`, เอกสาร
-- **คงชื่อเดิมไว้โดยตั้งใจ (ค่าภายใน):** `ISSUER`/`AUDIENCE` = `meetang` ใน `src/lib/auth/session.ts`
-  (เปลี่ยนแล้ว session ที่ออกไปจะใช้ไม่ได้), ชื่อ Rich Menu `meetang-main` (ให้ `--replace` ลบของเก่าได้),
-  คอมเมนต์ใน migration `0001` (ไฟล์ที่รันไปแล้ว ไม่ควรแก้)
+- **ค่าภายในเปลี่ยนเป็น `jodtang` แล้ว:** `ISSUER`/`AUDIENCE` ของ session (ผู้ใช้ที่ล็อกอินอยู่จะถูกให้ล็อกอินใหม่อัตโนมัติ 1 ครั้ง ไม่มีข้อมูลหาย)
+  และชื่อ Rich Menu `jodtang-main` (`pnpm richmenu --replace` ลบทั้งชื่อใหม่และ `meetang-main` เดิม — **ต้องรันใหม่ 1 ครั้ง** เพื่อให้เมนูใน LINE ใช้ชื่อใหม่)
 - **ต้องเปลี่ยนเองข้างนอกโค้ด:** ชื่อ repo GitHub, ชื่อโปรเจกต์ Vercel/Supabase, ชื่อ LINE OA / channel / LIFF
   ถ้าโดเมน Vercel เปลี่ยน ต้องแก้ Webhook URL, LIFF Endpoint URL และ `APP_BASE_URL`
   (ลิงก์ repo ด้านล่างยังเป็นชื่อเดิมจนกว่าจะเปลี่ยนชื่อ repo)
@@ -69,7 +68,7 @@ src/app/api/{auth,me,summary,transactions,categories,budgets,analytics,settings}
 src/app/(liff)/{summary,analytics,budgets,transactions,settings}
 src/lib/{money,thai-date,budget,budget-cycle,budget-alert,series,commands,dto,repo,env,api}.ts
 src/lib/{parse,categorize,line,auth,supabase}/
-src/components/{mascot.tsx, liff/*}
+src/components/{logo.tsx, liff/*}
 scripts/{create-richmenu,richmenu-design}.ts   assets/richmenu.png
 supabase/migrations/0001..0004
 ```
@@ -111,7 +110,7 @@ supabase/migrations/0001..0004
   จะกลายเป็น `/summary/budgets` และขึ้น 404 (Rich Menu พังทุกปุ่ม)
 - **Supabase:** ต้องรัน migrations ตามลำดับ `0001` → `0004` (รันซ้ำได้) ผ่าน SQL Editor หรือ `supabase db push`
   - `0004` เพิ่ม `user_settings.budget_mode`, ตาราง `category_overrides`, RPC `analytics_series`
-- **Rich Menu:** `pnpm richmenu --replace` (อ่าน `.env.local`) — เผยแพร่แล้ว 1 ชุด (`meetang-main`)
+- **Rich Menu:** `pnpm richmenu --replace` (อ่าน `.env.local`) — เผยแพร่แล้ว 1 ชุด (`meetang-main` → ต้องรันใหม่เป็น `jodtang-main`)
 - Repo: `stsmcp101-source/Mee-Tang` (branch `main`) · Vercel deploy อัตโนมัติจาก push
 
 ## 7) บทเรียน / ข้อควรรู้ (เจอมาแล้ว)

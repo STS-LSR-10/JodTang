@@ -1,4 +1,4 @@
--- Mee-Tang: core schema. All timestamps are timestamptz (UTC).
+-- JodTang: core schema. All timestamps are timestamptz (UTC).
 -- Idempotent: safe to run more than once.
 
 create extension if not exists pgcrypto;
