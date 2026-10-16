@@ -178,7 +178,9 @@ pnpm richmenu --replace   # สร้างเมนู อัปโหลดภ
 | GET | `/api/me` | โปรไฟล์/แผน/ตังสะสม |
 | GET | `/api/summary?scope=cycle\|month\|day` | สรุปรายรับ/จ่าย + รายการล่าสุด |
 | GET/POST | `/api/transactions` | รายการ (กรอง `type,q,from,to,categoryId`) / เพิ่มด้วยมือ |
+| PATCH | `/api/transactions/:id` | แก้ไขรายการ (ชื่อ/จำนวน/ประเภท/หมวด/วันเวลา/โน้ต) ส่งเฉพาะที่เปลี่ยน; เปลี่ยนหมวดของรายการจากสลิป (Plus) จะสอนความจำร้านค้า |
 | DELETE | `/api/transactions/:id` | ลบ (soft delete) |
+| POST | `/api/transactions/bulk` | `{action:"delete"\|"move", ids≤100, categoryId?}` → `{updated, skipped}` (ย้ายหมวดข้ามรายการต่างประเภท) |
 | GET | `/api/transactions/:id/slip` | signed URL (60 วินาที) ของรูปสลิปที่แนบ |
 | GET | `/api/me` | แผนที่ใช้อยู่, สิทธิ์แต่ละฟีเจอร์, โควตาสลิป, ตังสะสม, streak, รหัสชวน |
 | POST | `/api/plan/checkout` | เริ่มอัปเกรด (stub: ตอบว่ายังไม่เปิด) |
