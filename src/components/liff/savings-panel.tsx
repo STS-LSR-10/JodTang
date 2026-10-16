@@ -1,0 +1,148 @@
+"use client";
+
+import { useState } from "react";
+import {
+  Bar,
+  CartesianGrid,
+  Cell,
+  ComposedChart,
+  Line,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
+import { useApi } from "@/components/liff/liff-provider";
+import { Segmented } from "@/components/liff/segmented";
+import { EmptyState, ErrorState, LoadingBlock } from "@/components/liff/states";
+import { formatBaht } from "@/lib/money";
+import type { SeriesPoint } from "@/lib/series";
+import { cn } from "@/lib/utils";
+
+type View = "month" | "week" | "day";
+
+interface Response {
+  series: SeriesPoint[];
+  categories: { name: string; totalSatang: number }[];
+}
+
+const INCOME = "#059669";
+const EXPENSE = "#E11D48";
+const LINE = "#0F766E";
+const SAVINGS_CATEGORY = "ออม/ลงทุน";
+
+const VIEWS: { value: View; label: string }[] = [
+  { value: "month", label: "6 เดือน" },
+  { value: "week", label: "รายสัปดาห์" },
+  { value: "day", label: "รายวัน" },
+];
+
+const compact = (baht: number) => {
+  const abs = Math.abs(baht);
+  const sign = baht < 0 ? "-" : "";
+  if (abs >= 1_000_000) return `${sign}${(abs / 1_000_000).toFixed(1)}M`;
+  if (abs >= 1000) return `${sign}${(abs / 1000).toFixed(abs % 1000 === 0 ? 0 : 1)}k`;
+  return `${sign}${abs}`;
+};
+
+/**
+ * Savings view (Plus): money kept per period (income - expense), the running total, how much
+ * of income was kept, and what went to the "ออม/ลงทุน" category this budget cycle.
+ */
+export function SavingsPanel() {
+  const [view, setView] = useState<View>("month");
+  const data = useApi<Response>(`/api/analytics?view=${view}&scope=cycle`);
+
+  const series = data.data?.series ?? [];
+  let running = 0;
+  const points = series.map((p) => {
+    const net = p.incomeSatang - p.expenseSatang;
+    running += net;
+    return { label: p.label, net: net / 100, total: running / 100 };
+  });
+  const totalIncome = series.reduce((s, p) => s + p.incomeSatang, 0);
+  const totalNet = series.reduce((s, p) => s + (p.incomeSatang - p.expenseSatang), 0);
+  const rate = totalIncome > 0 ? Math.round((totalNet * 100) / totalIncome) : null;
+  const invested = data.data?.categories.find((c) => c.name === SAVINGS_CATEGORY)?.totalSatang ?? 0;
+  const hasData = series.some((p) => p.incomeSatang > 0 || p.expenseSatang > 0);
+
+  return (
+    <div className="space-y-4">
+      <Segmented label="ช่วงเวลา" value={view} onChange={setView} options={VIEWS} />
+
+      {data.loading ? (
+        <LoadingBlock rows={3} />
+      ) : data.error ? (
+        <ErrorState message={data.error} onRetry={data.reload} />
+      ) : !hasData ? (
+        <div className="rounded-2xl border border-border bg-surface shadow-card">
+          <EmptyState
+            title="ยังไม่มีข้อมูลพอจะดูเงินออม"
+            hint="จดรายรับและรายจ่ายสักพัก แล้วกราฟเก็บออมจะขึ้นมานะ"
+          />
+        </div>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="rounded-2xl border border-border bg-surface p-4 shadow-card">
+              <p className="text-xs text-muted">เก็บได้ในช่วงนี้</p>
+              <p
+                className={cn(
+                  "num text-lg font-bold",
+                  totalNet < 0 ? "text-expense" : "text-income",
+                )}
+              >
+                ฿{formatBaht(totalNet)}
+              </p>
+            </div>
+            <div className="rounded-2xl border border-border bg-surface p-4 shadow-card">
+              <p className="text-xs text-muted">เก็บได้ % ของรายรับ</p>
+              <p className="num text-lg font-bold">{rate === null ? "-" : `${rate}%`}</p>
+            </div>
+          </div>
+
+          <section
+            aria-label="กราฟเงินเก็บออม"
+            className="rounded-2xl border border-border bg-surface p-4 shadow-card"
+          >
+            <p className="mb-2 text-xs text-muted">
+              แท่ง = เก็บได้ในแต่ละช่วง (รายรับ − รายจ่าย) · เส้น = เก็บสะสม
+            </p>
+            <div className="h-56 w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <ComposedChart data={points} margin={{ top: 4, right: 4, bottom: 0, left: -12 }}>
+                  <CartesianGrid vertical={false} strokeOpacity={0.25} />
+                  <XAxis dataKey="label" tickLine={false} axisLine={false} fontSize={11} />
+                  <YAxis tickLine={false} axisLine={false} fontSize={11} tickFormatter={compact} />
+                  <Tooltip
+                    formatter={(v, name) => [
+                      `฿${formatBaht(Math.round(Number(v) * 100))}`,
+                      name === "net" ? "เก็บได้" : "เก็บสะสม",
+                    ]}
+                  />
+                  <Bar dataKey="net" radius={[6, 6, 0, 0]}>
+                    {points.map((p, i) => (
+                      <Cell key={i} fill={p.net >= 0 ? INCOME : EXPENSE} />
+                    ))}
+                  </Bar>
+                  <Line
+                    type="monotone"
+                    dataKey="total"
+                    stroke={LINE}
+                    strokeWidth={3}
+                    dot={{ r: 3 }}
+                  />
+                </ComposedChart>
+              </ResponsiveContainer>
+            </div>
+          </section>
+
+          <div className="rounded-2xl border border-border bg-surface p-4 shadow-card">
+            <p className="text-xs text-muted">ใส่หมวด &quot;{SAVINGS_CATEGORY}&quot; ในรอบงบนี้</p>
+            <p className="num text-lg font-bold">฿{formatBaht(invested)}</p>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}

@@ -18,6 +18,8 @@ interface LiffContextValue {
   error: string | null;
   /** Authenticated JSON fetch against our own /api (adds the session token, retries once on 401). */
   api: <T>(path: string, init?: RequestInit) => Promise<T>;
+  /** Open a URL in the phone's own browser (the LINE in-app browser cannot download files). */
+  openExternal: (url: string) => Promise<void>;
 }
 
 const LiffContext = createContext<LiffContextValue | null>(null);
@@ -125,7 +127,23 @@ export function LiffProvider({ children }: { children: ReactNode }) {
     [authenticate],
   );
 
-  const value = useMemo(() => ({ status, error, api }), [status, error, api]);
+  const openExternal = useCallback(async (url: string) => {
+    try {
+      const liff = (await import("@line/liff")).default;
+      if (liff.isInClient()) {
+        liff.openWindow({ url, external: true });
+        return;
+      }
+    } catch {
+      // fall through to a normal window
+    }
+    window.open(url, "_blank", "noopener");
+  }, []);
+
+  const value = useMemo(
+    () => ({ status, error, api, openExternal }),
+    [status, error, api, openExternal],
+  );
   return <LiffContext.Provider value={value}>{children}</LiffContext.Provider>;
 }
 
@@ -156,7 +174,13 @@ export function useApi<T>(path: string | null): ApiState<T> {
       setLoading(false);
       return;
     }
-    if (status !== "ready" || path === null) return;
+    if (path === null) {
+      // nothing to fetch (e.g. a locked section): not loading, no data
+      setData(null);
+      setLoading(false);
+      return;
+    }
+    if (status !== "ready") return;
     let cancelled = false;
     setLoading(true);
     setError(null);

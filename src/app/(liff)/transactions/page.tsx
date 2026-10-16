@@ -1,6 +1,6 @@
 "use client";
 
-import { Plus, Receipt, Trash2, X } from "lucide-react";
+import { Download, Plus, Receipt, Trash2, X } from "lucide-react";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Sheet } from "@/components/liff/sheet";
 import { EmptyState, ErrorState, LoadingBlock, PageHeader } from "@/components/liff/states";
@@ -49,6 +49,7 @@ export default function TransactionsPage() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [formOpen, setFormOpen] = useState(false);
   const [slipFor, setSlipFor] = useState<TxDto | null>(null);
+  const [exportOpen, setExportOpen] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
 
   const path = useMemo(() => {
@@ -98,13 +99,23 @@ export default function TransactionsPage() {
       <PageHeader
         title="รายการ"
         right={
-          <button
-            type="button"
-            onClick={() => setFormOpen(true)}
-            className="flex h-11 items-center gap-1 rounded-2xl bg-primary px-4 text-sm font-semibold text-surface"
-          >
-            <Plus className="h-4 w-4" aria-hidden /> เพิ่ม
-          </button>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => setExportOpen(true)}
+              aria-label="ส่งออกไฟล์"
+              className="flex h-11 w-11 items-center justify-center rounded-2xl border border-border bg-surface text-primary"
+            >
+              <Download className="h-4 w-4" aria-hidden />
+            </button>
+            <button
+              type="button"
+              onClick={() => setFormOpen(true)}
+              className="flex h-11 items-center gap-1 rounded-2xl bg-primary px-4 text-sm font-semibold text-surface"
+            >
+              <Plus className="h-4 w-4" aria-hidden /> เพิ่ม
+            </button>
+          </div>
         }
       />
 
@@ -207,6 +218,13 @@ export default function TransactionsPage() {
 
       {slipFor ? <SlipSheet tx={slipFor} onClose={() => setSlipFor(null)} /> : null}
 
+      {exportOpen ? (
+        <ExportSheet
+          filters={{ type: type === "all" ? undefined : type, q: q || undefined }}
+          onClose={() => setExportOpen(false)}
+        />
+      ) : null}
+
       {formOpen ? (
         <AddSheet
           onClose={() => setFormOpen(false)}
@@ -218,6 +236,77 @@ export default function TransactionsPage() {
         />
       ) : null}
     </main>
+  );
+}
+
+/**
+ * Export what the list currently shows. The file link is opened in the phone's own browser
+ * because the LINE in-app browser cannot download files.
+ */
+function ExportSheet({
+  filters,
+  onClose,
+}: {
+  filters: { type?: "expense" | "income"; q?: string };
+  onClose: () => void;
+}) {
+  const { api, openExternal } = useLiff();
+  const me = useApi<{ features: Record<string, boolean> }>("/api/me");
+  const [busy, setBusy] = useState<"csv" | "xlsx" | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const advanced = me.data?.features.advancedExport === true;
+
+  async function start(format: "csv" | "xlsx") {
+    setBusy(format);
+    setError(null);
+    try {
+      const res = await api<{ url: string }>("/api/export/link", {
+        method: "POST",
+        body: JSON.stringify({ format, ...filters }),
+      });
+      await openExternal(res.url);
+      onClose();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "ส่งออกไม่สำเร็จ");
+      setBusy(null);
+    }
+  }
+
+  return (
+    <Sheet title="ส่งออกไฟล์" onClose={onClose}>
+      <div className="space-y-3">
+        <p className="text-sm text-muted">
+          ส่งออกตามตัวกรองที่เลือกอยู่ (สูงสุด 5,000 แถว)
+          ไฟล์จะเปิดในเบราว์เซอร์ของเครื่องเพื่อดาวน์โหลด ลิงก์ใช้ได้ 2 นาที
+        </p>
+        <button
+          type="button"
+          disabled={busy !== null}
+          onClick={() => start("csv")}
+          className="h-12 w-full rounded-2xl border border-primary text-base font-semibold text-primary disabled:opacity-60"
+        >
+          {busy === "csv" ? "กำลังเตรียมไฟล์..." : "ดาวน์โหลด CSV"}
+        </button>
+        <button
+          type="button"
+          disabled={busy !== null}
+          onClick={() => start("xlsx")}
+          className="h-12 w-full rounded-2xl bg-primary text-base font-semibold text-surface disabled:opacity-60"
+        >
+          {busy === "xlsx" ? "กำลังเตรียมไฟล์..." : "ดาวน์โหลด Excel (.xlsx)"}
+        </button>
+        <p className="text-xs text-muted">
+          {advanced
+            ? "แผน Plus: ไฟล์ Excel มีชีตสรุปตามหมวดและสรุปรายเดือนเพิ่มให้ด้วย"
+            : "แผน Plus: ไฟล์ Excel จะมีชีตสรุปตามหมวดและสรุปรายเดือนเพิ่มให้"}
+        </p>
+        {error ? (
+          <p role="alert" className="text-sm text-expense">
+            {error}
+          </p>
+        ) : null}
+      </div>
+    </Sheet>
   );
 }
 

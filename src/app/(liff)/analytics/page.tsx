@@ -14,11 +14,12 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { SavingsPanel } from "@/components/liff/savings-panel";
+import { Segmented } from "@/components/liff/segmented";
 import { EmptyState, ErrorState, LoadingBlock, PageHeader } from "@/components/liff/states";
 import { useApi } from "@/components/liff/liff-provider";
 import { formatBaht } from "@/lib/money";
 import type { SeriesPoint } from "@/lib/series";
-import { cn } from "@/lib/utils";
 
 type View = "month" | "week" | "day";
 type Scope = "cycle" | "all";
@@ -46,40 +47,6 @@ const VIEWS: { value: View; label: string }[] = [
   { value: "day", label: "รายวัน" },
 ];
 
-function Segmented<T extends string>({
-  label,
-  options,
-  value,
-  onChange,
-}: {
-  label: string;
-  options: { value: T; label: string }[];
-  value: T;
-  onChange: (v: T) => void;
-}) {
-  return (
-    <div role="tablist" aria-label={label} className="flex gap-2">
-      {options.map((o) => (
-        <button
-          key={o.value}
-          role="tab"
-          type="button"
-          aria-selected={value === o.value}
-          onClick={() => onChange(o.value)}
-          className={cn(
-            "h-10 flex-1 rounded-2xl border text-sm font-medium",
-            value === o.value
-              ? "border-primary bg-primary-soft text-primary"
-              : "border-border bg-surface text-muted",
-          )}
-        >
-          {o.label}
-        </button>
-      ))}
-    </div>
-  );
-}
-
 const compact = (baht: number) =>
   baht >= 1_000_000
     ? `${(baht / 1_000_000).toFixed(1)}M`
@@ -91,6 +58,8 @@ export default function AnalyticsPage() {
   const [tab, setTab] = useState<"flow" | "saving">("flow");
   const [view, setView] = useState<View>("month");
   const [scope, setScope] = useState<Scope>("cycle");
+  const me = useApi<{ features: Record<string, boolean> }>("/api/me");
+  const savingsUnlocked = me.data?.features.savingsChart === true;
   const data = useApi<AnalyticsResponse>(
     tab === "flow" ? `/api/analytics?view=${view}&scope=${scope}` : null,
   );
@@ -122,17 +91,23 @@ export default function AnalyticsPage() {
         />
 
         {tab === "saving" ? (
-          <div className="rounded-2xl border border-border bg-surface shadow-card">
-            <EmptyState
-              title="กราฟเก็บออมสำหรับแผน Plus"
-              hint="เร็ว ๆ นี้จะดูเงินออมสะสมและเป้าหมายได้ที่นี่"
-              action={
-                <span className="mt-2 inline-flex items-center gap-1 rounded-full bg-primary-soft px-3 py-1 text-xs font-semibold text-primary">
-                  <Lock className="h-3 w-3" aria-hidden /> Plus
-                </span>
-              }
-            />
-          </div>
+          me.loading ? (
+            <LoadingBlock rows={3} />
+          ) : savingsUnlocked ? (
+            <SavingsPanel />
+          ) : (
+            <div className="rounded-2xl border border-border bg-surface shadow-card">
+              <EmptyState
+                title="กราฟเก็บออมสำหรับแผน Plus"
+                hint="ดูเงินเก็บสะสมและอัตราการออม · แลกวัน Plus ด้วยตังสะสมได้ที่หน้าตั้งค่า"
+                action={
+                  <span className="mt-2 inline-flex items-center gap-1 rounded-full bg-primary-soft px-3 py-1 text-xs font-semibold text-primary">
+                    <Lock className="h-3 w-3" aria-hidden /> Plus
+                  </span>
+                }
+              />
+            </div>
+          )
         ) : (
           <>
             <Segmented label="ช่วงเวลา" value={view} onChange={setView} options={VIEWS} />

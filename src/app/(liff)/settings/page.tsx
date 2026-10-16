@@ -1,22 +1,15 @@
 "use client";
 
 import { useState } from "react";
-import { ErrorState, LoadingBlock, PageHeader } from "@/components/liff/states";
 import { useApi, useLiff } from "@/components/liff/liff-provider";
+import { MemoryCard } from "@/components/liff/settings/memory-card";
+import { PlanCard } from "@/components/liff/settings/plan-card";
+import { ReferralCard } from "@/components/liff/settings/referral-card";
+import { ReminderCard } from "@/components/liff/settings/reminder-card";
+import { RecurringCard } from "@/components/liff/settings/recurring-card";
+import { cardClass, type Me, type Settings } from "@/components/liff/settings/types";
+import { ErrorState, LoadingBlock, PageHeader } from "@/components/liff/states";
 import { cn } from "@/lib/utils";
-
-interface Settings {
-  confirm_style: "full" | "short" | "off";
-  budget_cycle: "monthly" | "weekly";
-  cycle_start_day: number;
-}
-
-interface Me {
-  displayName: string | null;
-  pictureUrl: string | null;
-  plan: "free" | "plus";
-  points: number;
-}
 
 const CONFIRM_OPTIONS: { value: Settings["confirm_style"]; label: string; hint: string }[] = [
   { value: "full", label: "เต็ม", hint: "การ์ดพร้อมปุ่มแก้ไข/ลบ" },
@@ -62,42 +55,28 @@ export default function SettingsPage() {
     }
   }
 
+  const loading = settings.loading || me.loading;
+  const error = settings.error ?? me.error;
+
   return (
     <main>
       <PageHeader title="ตั้งค่า" />
       <div className="space-y-4 px-4 pb-4">
-        {settings.loading ? (
+        {loading ? (
           <LoadingBlock rows={4} />
-        ) : settings.error || !current ? (
-          <ErrorState message={settings.error ?? "โหลดไม่สำเร็จ"} onRetry={settings.reload} />
+        ) : error || !current || !me.data ? (
+          <ErrorState
+            message={error ?? "โหลดไม่สำเร็จ"}
+            onRetry={() => {
+              settings.reload();
+              me.reload();
+            }}
+          />
         ) : (
           <>
-            <section className="flex items-center gap-3 rounded-2xl border border-border bg-surface p-4 shadow-card">
-              {me.data?.pictureUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={me.data.pictureUrl}
-                  alt=""
-                  width={48}
-                  height={48}
-                  className="h-12 w-12 rounded-full border border-border object-cover"
-                />
-              ) : (
-                <div className="h-12 w-12 rounded-full bg-primary-soft" aria-hidden />
-              )}
-              <div className="min-w-0 flex-1">
-                <p className="truncate font-semibold">{me.data?.displayName ?? "ผู้ใช้"}</p>
-                <p className="text-xs text-muted">
-                  แผน{" "}
-                  <span className="rounded-full bg-primary-soft px-2 py-0.5 font-semibold text-primary">
-                    {me.data?.plan === "plus" ? "Plus" : "Free"}
-                  </span>{" "}
-                  · ตังสะสม <span className="num">{me.data?.points ?? 0}</span>
-                </p>
-              </div>
-            </section>
+            <PlanCard me={me.data} onChanged={me.reload} />
 
-            <section className="space-y-2 rounded-2xl border border-border bg-surface p-4 shadow-card">
+            <section className={cardClass}>
               <h2 className="font-semibold">การ์ดยืนยันหลังจด</h2>
               <div className="grid grid-cols-3 gap-2" role="radiogroup" aria-label="รูปแบบการ์ด">
                 {CONFIRM_OPTIONS.map((o) => (
@@ -122,7 +101,7 @@ export default function SettingsPage() {
               </div>
             </section>
 
-            <section className="space-y-3 rounded-2xl border border-border bg-surface p-4 shadow-card">
+            <section className={cardClass}>
               <h2 className="font-semibold">รอบงบ</h2>
               <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="ชนิดรอบงบ">
                 {CYCLE_OPTIONS.map((o) => (
@@ -165,7 +144,21 @@ export default function SettingsPage() {
               )}
             </section>
 
-            <section className="rounded-2xl border border-border bg-surface p-4 text-sm shadow-card">
+            {notice ? (
+              <p
+                role="status"
+                className="rounded-2xl bg-primary-soft px-4 py-2 text-sm text-primary"
+              >
+                {notice}
+              </p>
+            ) : null}
+
+            <ReminderCard me={me.data} settings={current} onSaved={setOverride} />
+            <RecurringCard me={me.data} />
+            <MemoryCard me={me.data} />
+            <ReferralCard me={me.data} onChanged={me.reload} />
+
+            <section className={`${cardClass} text-sm`}>
               <dl className="space-y-2">
                 <div className="flex justify-between">
                   <dt className="text-muted">ภาษา</dt>
@@ -181,15 +174,6 @@ export default function SettingsPage() {
                 </div>
               </dl>
             </section>
-
-            {notice ? (
-              <p
-                role="status"
-                className="rounded-2xl bg-primary-soft px-4 py-2 text-sm text-primary"
-              >
-                {notice}
-              </p>
-            ) : null}
           </>
         )}
       </div>
