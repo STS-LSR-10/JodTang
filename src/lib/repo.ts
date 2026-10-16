@@ -28,6 +28,7 @@ export interface TxRow {
   category_id: string | null;
   occurred_at: string;
   status: "confirmed" | "pending_confirm" | "deleted";
+  slip_id: string | null;
 }
 
 const DEFAULT_SETTINGS: SettingsRow = {
@@ -36,7 +37,7 @@ const DEFAULT_SETTINGS: SettingsRow = {
   confirm_style: "full",
 };
 
-const TX_COLUMNS = "id,type,title,amount,category_id,occurred_at,status";
+const TX_COLUMNS = "id,type,title,amount,category_id,occurred_at,status,slip_id";
 
 function fail(context: string, error: { message: string }): never {
   throw new Error(`${context}: ${error.message}`);
@@ -245,7 +246,8 @@ export async function insertTransaction(
     occurredAt: Date;
     status: "confirmed" | "pending_confirm";
     rawText: string;
-    source?: "text" | "manual";
+    source?: "text" | "manual" | "slip";
+    slipId?: string;
   },
 ): Promise<TxRow> {
   const { data, error } = await db
@@ -260,6 +262,7 @@ export async function insertTransaction(
       source: input.source ?? "text",
       status: input.status,
       raw_text: input.rawText,
+      slip_id: input.slipId ?? null,
     })
     .select(TX_COLUMNS)
     .single();

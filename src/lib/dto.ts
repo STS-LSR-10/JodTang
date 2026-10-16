@@ -13,10 +13,12 @@ export interface TxDto {
   categoryName: string | null;
   categoryIcon: string | null;
   categoryColor: string | null;
+  /** A slip image is attached (view it via /api/transactions/:id/slip). */
+  hasSlip: boolean;
 }
 
 export const TX_SELECT =
-  "id,type,title,amount,occurred_at,source,category_id,categories(name,icon,color)";
+  "id,type,title,amount,occurred_at,source,category_id,slip_id,categories(name,icon,color)";
 
 interface TxJoinRow {
   id: string;
@@ -26,6 +28,7 @@ interface TxJoinRow {
   occurred_at: string;
   source: string;
   category_id: string | null;
+  slip_id?: string | null;
   // PostgREST returns a single object for a to-one embed, but be lenient.
   categories: CategoryEmbed | CategoryEmbed[] | null;
 }
@@ -49,5 +52,6 @@ export function toTxDto(row: TxJoinRow): TxDto {
     categoryName: cat?.name ?? null,
     categoryIcon: cat?.icon ?? null,
     categoryColor: cat?.color ?? null,
+    hasSlip: Boolean(row.slip_id),
   };
 }

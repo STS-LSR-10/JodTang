@@ -23,7 +23,11 @@ import {
 } from "@/lib/repo";
 import { formatThaiDate } from "@/lib/thai-date";
 import type { LineMessage, TxType } from "@/lib/types";
+import type { SlipImage, SlipOcrProvider } from "@/lib/ocr/provider";
+import { getSlip, learnMerchant } from "@/lib/slip-repo";
+import { handleSlipImage } from "@/lib/slips";
 import { buildConfirmMessage, buildTypeQuestion } from "./flex";
+import { buildCategoryChooser } from "./slip-flex";
 import {
   COMPOSE_TIP_TEXT,
   EDIT_HINT_TEXT,
@@ -32,6 +36,7 @@ import {
   NOT_FOUND_TEXT,
   NOT_UNDERSTOOD_TEXT,
   NOTHING_TO_DELETE_TEXT,
+  SLIP_CANCELLED_TEXT,
   SLIP_SOON_TEXT,
   WELCOME_TEXT,
   text,
@@ -42,7 +47,7 @@ export interface LineEvent {
   webhookEventId?: string;
   replyToken?: string;
   source?: { type: string; userId?: string };
-  message?: { type: string; text?: string };
+  message?: { type: string; id?: string; text?: string };
   postback?: { data: string };
 }
 
@@ -51,6 +56,11 @@ export interface HandlerDeps {
   reply: (replyToken: string, messages: LineMessage[]) => Promise<void>;
   getProfile: (lineUserId: string) => Promise<{ displayName?: string; pictureUrl?: string } | null>;
   now: () => Date;
+  /** Slip reading (Phase 4). Absent -> image messages get a "coming soon" reply. */
+  slip?: {
+    fetchImage: (messageId: string) => Promise<SlipImage>;
+    ocr: SlipOcrProvider;
+  };
 }
 
 const MAX_REPLY_MESSAGES = 5;
@@ -76,7 +86,18 @@ export async function handleEvent(event: LineEvent, deps: HandlerDeps): Promise<
       if (event.message?.type === "text" && event.message.text !== undefined) {
         await reply(await handleText(event.message.text, user, deps));
       } else if (event.message?.type === "image") {
-        await reply([text(SLIP_SOON_TEXT)]);
+        const { slip } = deps;
+        if (slip && event.message.id) {
+          await reply(
+            await handleSlipImage(
+              { db: deps.db, now: deps.now, fetchImage: slip.fetchImage, ocr: slip.ocr },
+              user,
+              event.message.id,
+            ),
+          );
+        } else {
+          await reply([text(SLIP_SOON_TEXT)]);
+        }
       }
       return;
     case "postback":
@@ -337,6 +358,61 @@ async function handlePostback(
     const alerts = (await safeAlerts(deps, user.id, updated, categoryId)).map((a) => text(a));
     if (settings.confirm_style === "off") return [text("จดแล้ว"), ...alerts];
     return [await confirmCard(updated, categoryId, categories, settings, user, deps), ...alerts];
+  }
+
+  // ── slip review: confirm / pick category / cancel ──
+  if (action === "sc" || action === "se" || action === "sk" || action === "sx") {
+    if (tx.status !== "pending_confirm") return [text(NOT_FOUND_TEXT)];
+
+    if (action === "sx") {
+      await updateTransaction(db, user.id, id, { status: "deleted" });
+      return [text(SLIP_CANCELLED_TEXT)];
+    }
+
+    const [settings, categories, memory] = await Promise.all([
+      getSettings(db, user.id),
+      loadCategories(db, user.id),
+      loadMemory(db, user.id),
+    ]);
+
+    if (action === "se") {
+      const choices = categories
+        .filter((c) => c.type === tx.type && !c.is_hidden)
+        .sort((a, b) => a.sort_order - b.sort_order)
+        .map((c) => ({ id: c.id, name: c.name }));
+      return [buildCategoryChooser(id, choices)];
+    }
+
+    let categoryId = tx.category_id;
+    let learned: string | null = null;
+    if (action === "sk") {
+      const picked = categories.find((c) => c.id === params.get("c") && c.type === tx.type);
+      if (!picked) return [text(NOT_FOUND_TEXT)];
+      categoryId = picked.id;
+      const slip = tx.slip_id ? await getSlip(db, user.id, tx.slip_id) : null;
+      if (slip?.payee) {
+        await learnMerchant(db, { userId: user.id, payee: slip.payee, categoryId: picked.id });
+        learned = `จำไว้แล้ว: ${slip.payee} → ${picked.name}`;
+      }
+    } else if (categoryId === null) {
+      // the guess found nothing: fall back to the rules once more
+      categoryId = categorizeByRules({
+        title: tx.title,
+        type: tx.type,
+        categories,
+        memory,
+      }).categoryId;
+    }
+
+    const updated = await updateTransaction(db, user.id, id, { categoryId, status: "confirmed" });
+    if (!updated) return [text(NOT_FOUND_TEXT)];
+
+    const out: LineMessage[] = [];
+    if (settings.confirm_style === "off") out.push(text("จดแล้ว"));
+    else out.push(await confirmCard(updated, categoryId, categories, settings, user, deps));
+    if (learned) out.push(text(learned));
+    for (const a of await safeAlerts(deps, user.id, updated, categoryId)) out.push(text(a));
+    return out;
   }
 
   return [];

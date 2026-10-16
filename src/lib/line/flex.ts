@@ -3,7 +3,7 @@ import { formatThaiDate } from "@/lib/thai-date";
 import type { ConfirmStyle, LineMessage, TxType } from "@/lib/types";
 
 // Design tokens (see docs/design-tokens.md)
-const COLOR = {
+export const COLOR = {
   primary: "#0F766E",
   primarySoft: "#CCFBF1",
   expense: "#E11D48",
@@ -27,7 +27,7 @@ export interface ConfirmCardInput {
 
 const TYPE_LABEL: Record<TxType, string> = { expense: "รายจ่าย", income: "รายรับ" };
 
-function row(label: string, value: string) {
+export function row(label: string, value: string) {
   return {
     type: "box",
     layout: "horizontal",

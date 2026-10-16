@@ -1,7 +1,9 @@
 import { getServerEnv } from "@/lib/env";
+import { createSlipOcrProvider } from "@/lib/ocr/provider";
 import { claimEvent, releaseEvent } from "@/lib/repo";
 import { getAdminClient } from "@/lib/supabase/admin";
 import { createLineClient } from "./client";
+import { fetchLineImage } from "./content";
 import { handleEvent, type HandlerDeps, type LineEvent } from "./handlers";
 import { ERROR_TEXT, text } from "./messages";
 
@@ -34,11 +36,28 @@ export async function processEvents(rawEvents: unknown[]): Promise<void> {
     return;
   }
 
+  const apiKey = {
+    gemini: env.GEMINI_API_KEY,
+    anthropic: env.ANTHROPIC_API_KEY,
+    openai: env.OPENAI_API_KEY,
+  }[env.AI_PROVIDER];
+
   const deps: HandlerDeps = {
     db,
     reply: line.reply,
     getProfile: line.getProfile,
     now: () => new Date(),
+    // getServerEnv() already guarantees the selected provider's key exists.
+    slip: apiKey
+      ? {
+          fetchImage: (messageId) => fetchLineImage(env.LINE_CHANNEL_ACCESS_TOKEN, messageId),
+          ocr: createSlipOcrProvider({
+            provider: env.AI_PROVIDER,
+            model: env.AI_MODEL,
+            apiKey,
+          }),
+        }
+      : undefined,
   };
 
   for (const raw of rawEvents) {
