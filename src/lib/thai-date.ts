@@ -47,6 +47,29 @@ const MONTHS = [
   "ธ.ค.",
 ];
 
+const two = (n: number) => String(n).padStart(2, "0");
+
+/** Value for `<input type="datetime-local">`: "2026-10-15T14:30" in Bangkok time. */
+export function toBangkokInputValue(date: Date): string {
+  const p = bangkokParts(date);
+  return `${p.year}-${two(p.month)}-${two(p.day)}T${two(p.hour)}:${two(p.minute)}`;
+}
+
+/** Inverse of `toBangkokInputValue`; null when malformed or not a real date/time. */
+export function fromBangkokInputValue(value: string): Date | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/.exec(value.trim());
+  if (!m) return null;
+  const [year, month, day, hour, minute] = m.slice(1).map(Number) as [
+    number,
+    number,
+    number,
+    number,
+    number,
+  ];
+  if (!isValidYmd(year, month, day) || hour > 23 || minute > 59) return null;
+  return fromBangkok(year, month, day, hour, minute);
+}
+
 /** "ต.ค." */
 export function formatThaiMonthShort(date: Date): string {
   return MONTHS[bangkokParts(date).month - 1] ?? "";
