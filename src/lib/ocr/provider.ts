@@ -20,7 +20,9 @@ export interface AiConfig {
 }
 
 export const DEFAULT_MODELS: Record<AiProviderName, string> = {
-  gemini: "gemini-2.5-flash",
+  // gemini-2.5-flash is "legacy, limited access" for new accounts; 3.5 flash-lite is stable
+  // and has a free tier. Override with AI_MODEL.
+  gemini: "gemini-3.5-flash-lite",
   anthropic: "claude-sonnet-5-5",
   openai: "gpt-4o-mini",
 };

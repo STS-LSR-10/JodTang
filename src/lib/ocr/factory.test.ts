@@ -40,7 +40,7 @@ describe("buildSlipReader", () => {
     });
     expect(built.active).toEqual(["easyslip", "gemini", "openai"]);
     expect(built.skipped).toEqual(["slip2go", "anthropic"]);
-    expect(built.reader.name).toBe("easyslip > gemini:gemini-2.5-flash > openai:gpt-4o-mini");
+    expect(built.reader.name).toBe("easyslip > gemini:gemini-3.5-flash-lite > openai:gpt-4o-mini");
   });
 
   it("works with just an AI key", () => {
