@@ -10,7 +10,13 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import sharp from "sharp";
-import { buildRichMenuSvg, cellBounds, RICH_MENU_HEIGHT, RICH_MENU_WIDTH } from "./richmenu-design";
+import {
+  buildRichMenuSvg,
+  RICH_MENU_HEIGHT,
+  RICH_MENU_WIDTH,
+  TILES,
+  type TileKey,
+} from "./richmenu-design";
 
 const MENU_NAME = "jodtang-main";
 // --replace also removes menus published before the rename.
@@ -19,8 +25,16 @@ const API = "https://api.line.me/v2/bot";
 const API_DATA = "https://api-data.line.me/v2/bot";
 const IMAGE_PATH = resolve("assets/richmenu.png");
 
-// Cell order matches CELLS in richmenu-design.ts
-const LIFF_PAGES = ["summary", "analytics", "transactions", "budgets", "settings"] as const;
+// Tiles that open a LIFF page: tile key -> path (LIFF appends it to the endpoint URL)
+const LIFF_PAGES: Partial<Record<TileKey, string>> = {
+  summary: "summary",
+  analytics: "analytics",
+  budgets: "budgets",
+  transactions: "transactions",
+  settings: "settings",
+};
+
+const INVITE_TEXT = "มาจดรายรับรายจ่ายง่าย ๆ ในไลน์กับจดตังค์ (JodTang) ด้วยกันนะ";
 
 function fail(message: string): never {
   console.error(`✗ ${message}`);
@@ -101,20 +115,36 @@ async function main() {
     // LINE requires non-empty text. It has no digits, so sending it as-is is never recorded.
     fillInText: "ชื่อรายการ จำนวนเงิน",
   };
-  const liff = (page: string, label: string) => ({
-    type: "uri",
-    label,
-    uri: `https://liff.line.me/${liffId}/${page}`,
-  });
-  const labels = ["สรุป", "วิเคราะห์", "รายการ", "หมวด/งบ", "ตั้งค่า"];
+  const liffUrl = `https://liff.line.me/${liffId}`;
 
-  const areas = [
-    { bounds: cellBounds(0), action: compose },
-    ...LIFF_PAGES.map((page, i) => ({
-      bounds: cellBounds(i + 1),
-      action: liff(page, labels[i] ?? page),
-    })),
-  ];
+  const actionFor = (key: TileKey, label: string): Record<string, unknown> => {
+    const page = LIFF_PAGES[key];
+    if (page) return { type: "uri", label, uri: `${liffUrl}/${page}` };
+    switch (key) {
+      case "compose":
+        return compose;
+      case "help":
+        // sends "ช่วยเหลือ" as the user's message; the bot answers with the usage guide
+        return { type: "message", label, text: "ช่วยเหลือ" };
+      case "slip":
+        // most Thai slips are screenshots, so open the photo library; the image goes to the chat
+        return { type: "cameraRoll", label };
+      case "invite":
+        // share text + LIFF link (Bot link "aggressive" prompts non-friends to add the account)
+        return {
+          type: "uri",
+          label,
+          uri: `https://line.me/R/share?text=${encodeURIComponent(`${INVITE_TEXT}\n${liffUrl}`)}`,
+        };
+      default:
+        return { type: "uri", label, uri: `${liffUrl}/summary` };
+    }
+  };
+
+  const areas = TILES.map((tile) => ({
+    bounds: tile.bounds,
+    action: actionFor(tile.key, tile.label),
+  }));
 
   const created = (await (
     await line(token, `${API}/richmenu`, {
