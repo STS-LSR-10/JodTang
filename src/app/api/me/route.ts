@@ -9,7 +9,7 @@ import {
   slipsRemaining,
   type Feature,
 } from "@/lib/plan";
-import { getPaymentProvider } from "@/lib/payments/stub";
+import { getPaymentProvider } from "@/lib/payments";
 import { currentStreak, recentDailyKeys, redeemable } from "@/lib/points";
 import { countSlipsThisMonth } from "@/lib/slip-repo";
 import { getAdminClient } from "@/lib/supabase/admin";
@@ -35,7 +35,9 @@ export async function GET(request: Request): Promise<Response> {
     const db = getAdminClient();
     const { data, error } = await db
       .from("users")
-      .select("display_name,picture_url,plan,plan_expires_at,points,referral_code,referred_by")
+      .select(
+        "display_name,picture_url,plan,plan_expires_at,points,referral_code,referred_by,stripe_customer_id,stripe_subscription_id",
+      )
       .eq("id", auth.userId)
       .single();
     if (error) throw new Error(`load me: ${error.message}`);
@@ -66,7 +68,13 @@ export async function GET(request: Request): Promise<Response> {
       referralCode: data.referral_code,
       referred: Boolean(data.referred_by),
       limits: { recurringRules: MAX_RECURRING_RULES },
-      payments: { available: getPaymentProvider().available, history: payments },
+      payments: {
+        available: getPaymentProvider().available,
+        history: payments,
+        // paid by card before: the billing portal can be opened
+        canManage: Boolean(data.stripe_customer_id),
+        autoRenew: Boolean(data.stripe_subscription_id) && plan !== "free",
+      },
     });
   });
 }

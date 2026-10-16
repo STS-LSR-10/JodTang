@@ -1,4 +1,4 @@
-﻿import { z } from "zod";
+import { z } from "zod";
 
 const publicSchema = z.object({
   NEXT_PUBLIC_LIFF_ID: z.string().min(1),
@@ -95,4 +95,24 @@ export function getServerEnv(source: EnvSource = process.env): ServerEnv {
     throw new Error("getServerEnv() must not be called in the browser");
   }
   return parse(serverSchema, source, "server");
+}
+
+export interface StripeEnv {
+  secretKey: string;
+  webhookSecret: string;
+  baseUrl: string;
+}
+
+/**
+ * Stripe settings, or null when payments are not configured (the app then shows "not open yet").
+ * Both keys and the public base URL are needed. Server only.
+ */
+export function getStripeEnv(source: EnvSource = process.env): StripeEnv | null {
+  const secretKey = source.STRIPE_SECRET_KEY?.trim();
+  const webhookSecret = source.STRIPE_WEBHOOK_SECRET?.trim();
+  const baseUrl = source.APP_BASE_URL?.trim();
+  if (!secretKey || !webhookSecret || !baseUrl) return null;
+  if (!/^(sk|rk)_(test|live)_/.test(secretKey)) return null;
+  if (!webhookSecret.startsWith("whsec_")) return null;
+  return { secretKey, webhookSecret, baseUrl };
 }

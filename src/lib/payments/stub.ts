@@ -3,11 +3,14 @@ import type { PaymentProvider } from "./provider";
 export const PAYMENTS_UNAVAILABLE_TEXT =
   "ยังไม่เปิดให้ชำระเงิน ตอนนี้แลกวันใช้ Professional ด้วยตังสะสมได้ที่หน้าตั้งค่านะ";
 
-/** Placeholder until a real provider (Stripe / PromptPay) is connected. */
+/** Used until the Stripe keys are set (see src/lib/payments/index.ts). */
 export const stubPaymentProvider: PaymentProvider = {
   name: "stub",
   available: false,
   async createCheckout() {
+    return { status: "unavailable", message: PAYMENTS_UNAVAILABLE_TEXT };
+  },
+  async createPortal() {
     return { status: "unavailable", message: PAYMENTS_UNAVAILABLE_TEXT };
   },
   async listPayments() {
@@ -17,7 +20,3 @@ export const stubPaymentProvider: PaymentProvider = {
     return { handled: false };
   },
 };
-
-export function getPaymentProvider() {
-  return stubPaymentProvider;
-}
