@@ -23,7 +23,7 @@
   และชื่อ Rich Menu `jodtang-main` (`pnpm richmenu --replace` ลบทั้งชื่อใหม่และ `meetang-main` เดิม — **ต้องรันใหม่ 1 ครั้ง** เพื่อให้เมนูใน LINE ใช้ชื่อใหม่)
 - **ต้องเปลี่ยนเองข้างนอกโค้ด:** ชื่อ repo GitHub, ชื่อโปรเจกต์ Vercel/Supabase, ชื่อ LINE OA / channel / LIFF
   ถ้าโดเมน Vercel เปลี่ยน ต้องแก้ Webhook URL, LIFF Endpoint URL และ `APP_BASE_URL`
-  (ลิงก์ repo ด้านล่างยังเป็นชื่อเดิมจนกว่าจะเปลี่ยนชื่อ repo)
+  (repo เปลี่ยนชื่อเป็น JodTang แล้ว)
 
 ## 2) ข้อกำหนดที่ต้องยึด (สำคัญ)
 
@@ -111,7 +111,7 @@ supabase/migrations/0001..0004
 - **Supabase:** ต้องรัน migrations ตามลำดับ `0001` → `0004` (รันซ้ำได้) ผ่าน SQL Editor หรือ `supabase db push`
   - `0004` เพิ่ม `user_settings.budget_mode`, ตาราง `category_overrides`, RPC `analytics_series`
 - **Rich Menu:** `pnpm richmenu --replace` (อ่าน `.env.local`) — เผยแพร่แล้ว 1 ชุด (`meetang-main` → ต้องรันใหม่เป็น `jodtang-main`)
-- Repo: `stsmcp101-source/Mee-Tang` (branch `main`) · Vercel deploy อัตโนมัติจาก push
+- Repo: `stsmcp101-source/JodTang` (branch `main`) · Vercel deploy อัตโนมัติจาก push
 
 ## 7) บทเรียน / ข้อควรรู้ (เจอมาแล้ว)
 
