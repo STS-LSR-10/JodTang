@@ -151,7 +151,6 @@ export default function TransactionsPage() {
         ) : items.length === 0 ? (
           <div className="rounded-2xl border border-border bg-surface shadow-card">
             <EmptyState
-              mood={q || type !== "all" ? "thinking" : "smile"}
               title={q || type !== "all" ? "ไม่พบรายการที่ค้นหา" : "ยังไม่มีรายการ"}
               hint={
                 q || type !== "all"

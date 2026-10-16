@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Mascot, type MascotMood } from "@/components/mascot";
+import { Logo } from "@/components/logo";
 import { cn } from "@/lib/utils";
 
 export function Skeleton({ className }: { className?: string }) {
@@ -17,19 +17,17 @@ export function LoadingBlock({ rows = 3 }: { rows?: number }) {
 }
 
 export function EmptyState({
-  mood = "smile",
   title,
   hint,
   action,
 }: {
-  mood?: MascotMood;
   title: string;
   hint?: string;
   action?: ReactNode;
 }) {
   return (
     <div className="flex flex-col items-center gap-2 px-6 py-10 text-center">
-      <Mascot mood={mood} size={96} />
+      <Logo size={88} />
       <p className="text-base font-semibold">{title}</p>
       {hint ? <p className="text-sm text-muted">{hint}</p> : null}
       {action}
@@ -40,7 +38,7 @@ export function EmptyState({
 export function ErrorState({ message, onRetry }: { message: string; onRetry?: () => void }) {
   return (
     <div role="alert" className="flex flex-col items-center gap-2 px-6 py-10 text-center">
-      <Mascot mood="surprised" size={88} />
+      <Logo size={72} />
       <p className="text-base font-semibold">เกิดข้อผิดพลาด</p>
       <p className="text-sm text-muted">{message}</p>
       {onRetry ? (

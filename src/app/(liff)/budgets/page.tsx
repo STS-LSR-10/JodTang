@@ -189,11 +189,7 @@ export default function BudgetsPage() {
 
             {list.length === 0 ? (
               <div className="rounded-2xl border border-border bg-surface shadow-card">
-                <EmptyState
-                  mood="thinking"
-                  title="ยังไม่มีหมวด"
-                  hint="กด “เพิ่มหมวด” เพื่อสร้างหมวดของคุณเอง"
-                />
+                <EmptyState title="ยังไม่มีหมวด" hint="กด “เพิ่มหมวด” เพื่อสร้างหมวดของคุณเอง" />
               </div>
             ) : (
               <ul className="divide-y divide-border rounded-2xl border border-border bg-surface shadow-card">

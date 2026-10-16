@@ -111,7 +111,6 @@ export default function SummaryPage() {
               {summary.data.recent.length === 0 ? (
                 <div className="rounded-2xl border border-border bg-surface shadow-card">
                   <EmptyState
-                    mood="smile"
                     title="ยังไม่มีรายการเลย"
                     hint={'ลองพิมพ์ "กาแฟ 30" ในแชท หรือกดเพิ่มที่หน้ารายการได้เลย'}
                   />

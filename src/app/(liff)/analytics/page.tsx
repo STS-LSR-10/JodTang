@@ -124,7 +124,6 @@ export default function AnalyticsPage() {
         {tab === "saving" ? (
           <div className="rounded-2xl border border-border bg-surface shadow-card">
             <EmptyState
-              mood="thinking"
               title="กราฟเก็บออมสำหรับแผน Plus"
               hint="เร็ว ๆ นี้จะดูเงินออมสะสมและเป้าหมายได้ที่นี่"
               action={
@@ -184,7 +183,6 @@ export default function AnalyticsPage() {
                     </div>
                   ) : (
                     <EmptyState
-                      mood="smile"
                       title="ยังไม่มีรายการในช่วงนี้"
                       hint={'ลองจดรายการสักอัน เช่น "กาแฟ 30" แล้วกราฟจะขึ้นมา'}
                     />
@@ -208,7 +206,7 @@ export default function AnalyticsPage() {
                     ]}
                   />
                   {cats.length === 0 ? (
-                    <EmptyState mood="thinking" title="ยังไม่มีรายจ่าย" />
+                    <EmptyState title="ยังไม่มีรายจ่าย" />
                   ) : (
                     <>
                       <div className="relative mx-auto h-48 w-48">
