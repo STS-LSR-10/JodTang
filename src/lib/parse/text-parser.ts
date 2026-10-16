@@ -57,6 +57,7 @@ export const INCOME_KEYWORDS = [
   "คืนเงิน",
 ];
 
+/** Phrases that look like income but are money going out. Checked first. */
 const EXPENSE_OVERRIDES = [
   "ดอกเบี้ยจ่าย",
   "จ่ายดอกเบี้ย",
@@ -66,6 +67,28 @@ const EXPENSE_OVERRIDES = [
   "ขอคืนเงิน",
 ];
 
+/** Verbs that mean money going out, wherever they appear. */
+const EXPENSE_VERBS = [
+  "ซื้อ",
+  "จ่าย",
+  "ชำระ",
+  "ผ่อน",
+  "โอนให้",
+  "โอนไป",
+  "ให้ยืม",
+  "ยืมเงิน",
+  "เสียค่า",
+  "เสียเงิน",
+  "เติมเงิน",
+  "บริจาค",
+  "ทำบุญ",
+];
+
+/**
+ * "ได้ …" / "รับ …" at the start of a word: money received ("ได้เงิน", "รับค่าขนม").
+ * Not when followed by a word that makes it something else ("รับประทาน", "ได้ซื้อ").
+ */
+const GENERIC_INCOME_RE = /(?:^|\s)(?:ได้|รับ)(?!ประทาน|รอง|ผิดชอบ|ส่ง|ซื้อ|จ่าย|ชำระ|ผ่อน|ไป|ไม่)/;
 const AMOUNT_RE =
   /([+\-−–])?\s*(฿)?\s*(\d(?:[\d,]*\d)?(?:\.\d+)?)\s*(k(?![a-z])|พัน|หมื่น|แสน|ล้าน)?\s*(บาท|฿|บ\.|baht|thb)?/gi;
 
@@ -117,11 +140,30 @@ function cleanTitle(text: string): string {
     .trim();
 }
 
-function isIncomeTitle(title: string): boolean {
-  if (EXPENSE_OVERRIDES.some((k) => title.includes(k))) return false;
-  return INCOME_KEYWORDS.some((k) => title.includes(k));
-}
+/**
+ * Income / expense by the earliest cue in the title: "รับจ้างซื้อของ" is income (รับ first),
+ * "ซื้อหวยที่ได้เงิน" is expense (ซื้อ first). Returns the confidence of the guess, or null when
+ * nothing in the title says (the caller then defaults to expense).
+ */
+function titleCue(title: string): { type: TxType; confidence: number } | null {
+  if (EXPENSE_OVERRIDES.some((k) => title.includes(k))) return { type: "expense", confidence: 0.9 };
 
+  const firstIndex = (words: string[]) => {
+    const hits = words.map((w) => title.indexOf(w)).filter((i) => i >= 0);
+    return hits.length > 0 ? Math.min(...hits) : -1;
+  };
+  const keyword = firstIndex(INCOME_KEYWORDS);
+  const generic = GENERIC_INCOME_RE.exec(title);
+  const genericIdx = generic ? generic.index + (generic[0].startsWith(" ") ? 1 : 0) : -1;
+  const expense = firstIndex(EXPENSE_VERBS);
+
+  const incomeIdx = [keyword, genericIdx].filter((i) => i >= 0);
+  if (incomeIdx.length === 0) return null;
+  const income = Math.min(...incomeIdx);
+  if (expense >= 0 && expense < income) return { type: "expense", confidence: 0.9 };
+  // a listed phrase is surer than the generic ได้/รับ verbs
+  return { type: "income", confidence: keyword >= 0 && keyword <= income ? 0.95 : 0.85 };
+}
 // Links are never transactions (their digits would otherwise be read as amounts).
 const URL_RE = /https?:\/\/|www\.|\b[a-z0-9-]+\.(?:com|net|org|me|co|io|th)\b\/?/i;
 
@@ -139,6 +181,7 @@ function parseLine(segment: string, now: Date): ParsedEntry | null {
   );
   if (title.length > MAX_TITLE_LENGTH) return null;
 
+  const cue = title ? titleCue(title) : null;
   let type: TxType;
   let confidence: number;
   if (amount.sign === "+") {
@@ -147,9 +190,9 @@ function parseLine(segment: string, now: Date): ParsedEntry | null {
   } else if (amount.sign === "-") {
     type = "expense";
     confidence = title ? 1 : 0.85;
-  } else if (title && isIncomeTitle(title)) {
-    type = "income";
-    confidence = 0.95;
+  } else if (cue) {
+    type = cue.type;
+    confidence = cue.confidence;
   } else {
     type = "expense";
     confidence = title ? 0.9 : 0.5;
