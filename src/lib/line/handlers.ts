@@ -25,6 +25,7 @@ import { formatThaiDate } from "@/lib/thai-date";
 import type { LineMessage, TxType } from "@/lib/types";
 import type { SlipImage, SlipOcrProvider } from "@/lib/ocr/provider";
 import { can, effectivePlan } from "@/lib/plan";
+import { LIMITS, type LimitRule, type RateLimitResult } from "@/lib/rate-limit";
 import {
   applyReferralCode,
   awardActivity,
@@ -52,10 +53,12 @@ import {
   referralShareText,
   SLIP_CANCELLED_TEXT,
   SLIP_SOON_TEXT,
+  TOO_MANY_MESSAGES_TEXT,
   USE_CODE_USAGE_TEXT,
   WELCOME_TEXT,
   text,
 } from "./messages";
+import { log } from "@/lib/log";
 
 export interface LineEvent {
   type: string;
@@ -71,6 +74,8 @@ export interface HandlerDeps {
   reply: (replyToken: string, messages: LineMessage[]) => Promise<void>;
   getProfile: (lineUserId: string) => Promise<{ displayName?: string; pictureUrl?: string } | null>;
   now: () => Date;
+  /** Per-user rate limiter (absent in tests -> no limiting). */
+  limit?: (bucket: string, subject: string, rule: LimitRule) => Promise<RateLimitResult>;
   /** Slip reading (Phase 4). Absent -> image messages get a "coming soon" reply. */
   slip?: {
     fetchImage: (messageId: string) => Promise<SlipImage>;
@@ -85,6 +90,25 @@ export async function handleEvent(event: LineEvent, deps: HandlerDeps): Promise<
   const lineUserId = event.source?.userId;
   // 1:1 chats only for now.
   if (!lineUserId || event.source?.type !== "user") return;
+
+  // Spam / cost guard, before any database or paid-API work. Over the limit we answer once
+  // (on the first excess hit of the window) and then stay quiet instead of flooding the chat.
+  if (deps.limit && (event.type === "message" || event.type === "postback")) {
+    const isImage = event.message?.type === "image";
+    const [bucket, rule] =
+      event.type === "postback"
+        ? (["postback", LIMITS.postback] as const)
+        : isImage
+          ? (["chat_image", LIMITS.chatImage] as const)
+          : (["chat", LIMITS.chat] as const);
+    const result = await deps.limit(bucket, lineUserId, rule);
+    if (!result.allowed) {
+      if (result.hits === result.limit + 1 && event.replyToken) {
+        await deps.reply(event.replyToken, [text(TOO_MANY_MESSAGES_TEXT)]);
+      }
+      return;
+    }
+  }
 
   const user = await ensureUser(deps.db, lineUserId, () => deps.getProfile(lineUserId));
   const reply = async (messages: LineMessage[]) => {
@@ -246,7 +270,7 @@ async function safeAlerts(
       now: deps.now(),
     });
   } catch (error) {
-    console.error("budget alert failed:", error instanceof Error ? error.message : "unknown error");
+    log.error("budget_alert_failed", error);
     return [];
   }
 }

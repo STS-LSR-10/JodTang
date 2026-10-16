@@ -77,6 +77,9 @@ export const COMPOSE_TIP_TEXT = [
   'พิมพ์ "ช่วยเหลือ" เพื่อดูวิธีใช้ทั้งหมดนะ',
 ].join("\n");
 
+export const TOO_MANY_MESSAGES_TEXT =
+  "ส่งมาเร็วไปนิดนะ รอสักครู่แล้วค่อยส่งต่อ ข้อความช่วงนี้อาจไม่ได้ถูกจด";
+
 export const ERROR_TEXT = "ขออภัย ระบบสะดุดชั่วคราว ลองส่งใหม่อีกครั้งในอีกสักครู่นะ";
 
 export const NOTHING_TO_DELETE_TEXT = "ยังไม่มีรายการให้ลบนะ";

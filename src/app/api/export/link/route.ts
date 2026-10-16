@@ -4,6 +4,8 @@ import { signExportToken } from "@/lib/auth/export-token";
 import { requireUser } from "@/lib/auth/require-user";
 import { EXPORT_LINK_TTL_SECONDS } from "@/lib/config";
 import { getServerEnv } from "@/lib/env";
+import { LIMITS, limitOr429 } from "@/lib/rate-limit";
+import { getAdminClient } from "@/lib/supabase/admin";
 import { txFilterSchema } from "@/lib/tx-query";
 
 export const runtime = "nodejs";
@@ -19,6 +21,14 @@ export async function POST(request: Request): Promise<Response> {
   return guard(async () => {
     const auth = await requireUser(request);
     if (auth instanceof Response) return auth;
+
+    const limited = await limitOr429(
+      getAdminClient(),
+      "export_link",
+      auth.userId,
+      LIMITS.exportLink,
+    );
+    if (limited) return limited;
 
     const parsed = bodySchema.safeParse(await request.json().catch(() => null));
     if (!parsed.success) return apiError("ตัวเลือกส่งออกไม่ถูกต้อง", 400);

@@ -10,8 +10,10 @@ import { toSatang } from "@/lib/money";
 import { loadMemoryIfAllowed } from "@/lib/plan-server";
 import { awardActivity } from "@/lib/points";
 import { insertTransaction, loadCategories } from "@/lib/repo";
+import { LIMITS, limitOr429 } from "@/lib/rate-limit";
 import { getAdminClient } from "@/lib/supabase/admin";
 import { applyTxFilters, txFilterSchema } from "@/lib/tx-query";
+import { log } from "@/lib/log";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -72,6 +74,9 @@ export async function POST(request: Request): Promise<Response> {
     const auth = await requireUser(request);
     if (auth instanceof Response) return auth;
 
+    const limited = await limitOr429(getAdminClient(), "write", auth.userId, LIMITS.write);
+    if (limited) return limited;
+
     const parsed = createSchema.safeParse(await request.json().catch(() => null));
     if (!parsed.success) return apiError("กรอกข้อมูลไม่ครบหรือไม่ถูกต้อง", 400);
     const body = parsed.data;
@@ -131,7 +136,7 @@ export async function POST(request: Request): Promise<Response> {
         );
       }
     } catch (error) {
-      console.error("budget alert failed:", error instanceof Error ? error.message : "unknown");
+      log.error("budget_alert_failed", error);
     }
     return json({ id: tx.id }, 201);
   });

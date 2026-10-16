@@ -1,11 +1,13 @@
 import { getServerEnv } from "@/lib/env";
 import { buildSlipReader } from "@/lib/ocr/factory";
+import { rateLimit } from "@/lib/rate-limit";
 import { claimEvent, releaseEvent } from "@/lib/repo";
 import { getAdminClient } from "@/lib/supabase/admin";
 import { createLineClient } from "./client";
 import { fetchLineImage } from "./content";
 import { handleEvent, type HandlerDeps, type LineEvent } from "./handlers";
 import { ERROR_TEXT, text } from "./messages";
+import { log } from "@/lib/log";
 
 function isLineEvent(value: unknown): value is LineEvent {
   return (
@@ -27,7 +29,7 @@ export async function processEvents(rawEvents: unknown[]): Promise<void> {
     db = getAdminClient();
   } catch (error) {
     // Config problem: still tell the user something went wrong instead of staying silent.
-    console.error("line setup failed:", error instanceof Error ? error.message : "unknown error");
+    log.error("line_setup_failed", error);
     for (const raw of rawEvents) {
       if (isLineEvent(raw) && raw.replyToken) {
         await line.reply(raw.replyToken, [text(ERROR_TEXT)]).catch(() => undefined);
@@ -43,10 +45,11 @@ export async function processEvents(rawEvents: unknown[]): Promise<void> {
     reply: line.reply,
     getProfile: line.getProfile,
     now: () => new Date(),
+    limit: (bucket, subject, rule) => rateLimit(db, bucket, subject, rule),
     slip: {
       fetchImage: (messageId) => fetchLineImage(env.LINE_CHANNEL_ACCESS_TOKEN, messageId),
       ocr: buildSlipReader(env, {
-        onSkip: (name, reason) => console.warn(`slip reader skipped: ${name}: ${reason}`),
+        onSkip: (name, reason) => log.warn("slip_reader_skipped", { reader: name, reason }),
       }).reader,
     },
   };
@@ -63,7 +66,7 @@ export async function processEvents(rawEvents: unknown[]): Promise<void> {
         throw error;
       }
     } catch (error) {
-      console.error("line event failed:", error instanceof Error ? error.message : "unknown error");
+      log.error("line_event_failed", error);
       if (raw.replyToken) {
         await line.reply(raw.replyToken, [text(ERROR_TEXT)]).catch(() => undefined);
       }

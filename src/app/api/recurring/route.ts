@@ -8,6 +8,7 @@ import { requireFeature } from "@/lib/plan-server";
 import { describeRule, firstRunAt } from "@/lib/recurring";
 import { countRules, insertRule, listRules } from "@/lib/recurring-repo";
 import { loadCategories } from "@/lib/repo";
+import { LIMITS, limitOr429 } from "@/lib/rate-limit";
 import { getAdminClient } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -87,6 +88,9 @@ export async function POST(request: Request): Promise<Response> {
     const db = getAdminClient();
     const locked = await requireFeature(db, auth.userId, "recurring");
     if (locked) return locked;
+
+    const limited = await limitOr429(db, "write", auth.userId, LIMITS.write);
+    if (limited) return limited;
 
     const parsed = createSchema.safeParse(await request.json().catch(() => null));
     if (!parsed.success) return apiError("กรอกข้อมูลรายการประจำให้ครบและถูกต้องนะ", 400);
