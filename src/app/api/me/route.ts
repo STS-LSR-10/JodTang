@@ -1,7 +1,14 @@
 import { guard, json } from "@/lib/api";
 import { requireUser } from "@/lib/auth/require-user";
 import { MAX_RECURRING_RULES, POINTS_PER_PLUS_DAY } from "@/lib/config";
-import { can, effectivePlan, FREE_SLIP_LIMIT, slipsRemaining, type Feature } from "@/lib/plan";
+import {
+  can,
+  effectivePlan,
+  FREE_SLIP_LIMIT,
+  isPaidPlan,
+  slipsRemaining,
+  type Feature,
+} from "@/lib/plan";
 import { getPaymentProvider } from "@/lib/payments/stub";
 import { currentStreak, recentDailyKeys, redeemable } from "@/lib/points";
 import { countSlipsThisMonth } from "@/lib/slip-repo";
@@ -44,13 +51,13 @@ export async function GET(request: Request): Promise<Response> {
     return json({
       displayName: data.display_name,
       pictureUrl: data.picture_url,
-      // the plan in force now (an expired Plus reads as "free")
+      // the plan in force now (an expired paid plan reads as "free")
       plan,
       planExpiresAt: data.plan_expires_at,
       features: Object.fromEntries(FEATURES.map((f) => [f, can(plan, f)])),
       slips: {
         used: slipsUsed,
-        limit: plan === "plus" ? null : FREE_SLIP_LIMIT,
+        limit: isPaidPlan(plan) ? null : FREE_SLIP_LIMIT,
         remaining: slipsRemaining(plan, slipsUsed),
       },
       points: data.points,

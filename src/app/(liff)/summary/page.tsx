@@ -22,7 +22,7 @@ interface SummaryResponse {
 interface MeResponse {
   displayName: string | null;
   pictureUrl: string | null;
-  plan: "free" | "plus";
+  plan: "free" | "plus" | "ultimate";
 }
 
 export default function SummaryPage() {

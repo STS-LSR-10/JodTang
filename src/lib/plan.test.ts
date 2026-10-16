@@ -12,6 +12,12 @@ describe("effectivePlan", () => {
     expect(effectivePlan("plus", null, NOW)).toBe("plus");
   });
 
+  it("ultimate keeps its tier while valid and falls back to free once expired", () => {
+    expect(effectivePlan("ultimate", null, NOW)).toBe("ultimate");
+    expect(effectivePlan("ultimate", "2026-11-01T00:00:00Z", NOW)).toBe("ultimate");
+    expect(effectivePlan("ultimate", "2026-10-01T00:00:00Z", NOW)).toBe("free");
+  });
+
   it("an expired plus falls back to free", () => {
     expect(effectivePlan("plus", "2026-10-01T00:00:00Z", NOW)).toBe("free");
   });
@@ -31,6 +37,11 @@ describe("limits", () => {
 
   it("plus is unlimited", () => {
     expect(slipsRemaining("plus", 500)).toBeNull();
+  });
+
+  it("ultimate is unlimited and has every paid feature", () => {
+    expect(slipsRemaining("ultimate", 500)).toBeNull();
+    expect(can("ultimate", "savingsChart")).toBe(true);
   });
 
   it("feature flags", () => {

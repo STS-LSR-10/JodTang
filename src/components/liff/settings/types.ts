@@ -2,8 +2,8 @@
 export interface Me {
   displayName: string | null;
   pictureUrl: string | null;
-  /** The plan in force now (an expired Plus reads as "free"). */
-  plan: "free" | "plus";
+  /** The plan in force now (an expired paid plan reads as "free"). */
+  plan: "free" | "plus" | "ultimate";
   planExpiresAt: string | null;
   features: Record<string, boolean>;
   slips: { used: number; limit: number | null; remaining: number | null };

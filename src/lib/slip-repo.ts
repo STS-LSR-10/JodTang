@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { normalizeText } from "@/lib/categorize/rules";
 import { satangToString } from "@/lib/money";
+import type { Plan } from "@/lib/plan";
 import { fromBangkok, bangkokParts } from "@/lib/thai-date";
 import type { SlipData } from "@/lib/ocr/slip-schema";
 
@@ -21,14 +22,14 @@ export interface SlipRow {
 export async function getUserPlanRow(
   db: SupabaseClient,
   userId: string,
-): Promise<{ plan: "free" | "plus"; plan_expires_at: string | null }> {
+): Promise<{ plan: Plan; plan_expires_at: string | null }> {
   const { data, error } = await db
     .from("users")
     .select("plan,plan_expires_at")
     .eq("id", userId)
     .single();
   if (error) fail("load plan", error);
-  return data as { plan: "free" | "plus"; plan_expires_at: string | null };
+  return data as { plan: Plan; plan_expires_at: string | null };
 }
 
 /** Slips this user has sent in the current Bangkok calendar month (counts toward the Free quota). */

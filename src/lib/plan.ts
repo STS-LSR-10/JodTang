@@ -1,8 +1,17 @@
 /**
- * Single place for plan limits and feature flags (Free vs Plus).
- * Payments are a stub for now; plan_expires_at is also how redeemed points grant Plus days.
+ * Single place for plan limits and feature flags (Free / Professional / Ultimate).
+ * Payments are a stub for now; plan_expires_at is also how redeemed points grant Professional days.
+ *
+ * The stored id "plus" is the Professional tier (kept so no data has to be migrated); show
+ * `PLAN_LABEL[plan]` to people, never the id.
  */
-export type Plan = "free" | "plus";
+export type Plan = "free" | "plus" | "ultimate";
+
+export const PLAN_LABEL: Record<Plan, string> = {
+  free: "Free",
+  plus: "Professional",
+  ultimate: "Ultimate",
+};
 
 export const FREE_SLIP_LIMIT = 30;
 
@@ -15,7 +24,8 @@ export type Feature =
   | "dailyReminder"
   | "advancedExport";
 
-const PLUS_ONLY: Record<Feature, boolean> = {
+/** Every feature built so far is part of Professional, and so of Ultimate above it. */
+const PAID_ONLY: Record<Feature, boolean> = {
   unlimitedSlips: true,
   savingsChart: true,
   recurring: true,
@@ -25,21 +35,29 @@ const PLUS_ONLY: Record<Feature, boolean> = {
   advancedExport: true,
 };
 
+export function isPaidPlan(plan: Plan): boolean {
+  return plan !== "free";
+}
+
 /**
- * The plan in force right now. A future `plan_expires_at` means Plus (paid or redeemed days);
- * a past one means the Plus period ended and the user is back on Free.
+ * The plan in force right now. A future `plan_expires_at` means a paid plan (the stored tier, or
+ * Professional for redeemed days on a free row); a past one means the period ended and the user is
+ * back on Free.
  */
 export function effectivePlan(
   plan: Plan,
   planExpiresAt: string | Date | null | undefined,
   now: Date = new Date(),
 ): Plan {
-  if (planExpiresAt) return new Date(planExpiresAt).getTime() > now.getTime() ? "plus" : "free";
+  if (planExpiresAt) {
+    if (new Date(planExpiresAt).getTime() <= now.getTime()) return "free";
+    return plan === "free" ? "plus" : plan;
+  }
   return plan;
 }
 
 export function can(plan: Plan, feature: Feature): boolean {
-  return PLUS_ONLY[feature] ? plan === "plus" : true;
+  return PAID_ONLY[feature] ? isPaidPlan(plan) : true;
 }
 
 /** Slips still allowed this month, or null when unlimited. */

@@ -8,8 +8,8 @@
  */
 export interface CheckoutRequest {
   userId: string;
-  plan: "plus";
-  /** Subscription length. */
+  plan: "plus" | "ultimate";
+  /** Subscription length (1 = monthly, 12 = yearly). */
   months: number;
 }
 

@@ -1,7 +1,7 @@
 import type { PaymentProvider } from "./provider";
 
 export const PAYMENTS_UNAVAILABLE_TEXT =
-  "ยังไม่เปิดให้ชำระเงิน ตอนนี้แลกวันใช้ Plus ด้วยตังสะสมได้ที่หน้าตั้งค่านะ";
+  "ยังไม่เปิดให้ชำระเงิน ตอนนี้แลกวันใช้ Professional ด้วยตังสะสมได้ที่หน้าตั้งค่านะ";
 
 /** Placeholder until a real provider (Stripe / PromptPay) is connected. */
 export const stubPaymentProvider: PaymentProvider = {
