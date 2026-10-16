@@ -82,10 +82,10 @@ supabase/migrations/0001..0004
 | 2 LIFF พื้นฐาน | ✅ | LIFF auth → session JWT 1 ชม., หน้า สรุป/รายการ/ตั้งค่า, แท็บล่าง 5 ปุ่ม, Rich Menu (สร้างและเผยแพร่แล้ว) |
 | 3 หมวด/งบ/วิเคราะห์ | ✅ | CRUD หมวด (+ `category_overrides`), งบรวม/แยกหมวด, แจ้งเตือน 80%/100%, กราฟแท่ง/โดนัท |
 | 4 สลิป OCR | ✅ (ยังไม่ทดสอบกับสลิปจริง) | LINE Content API → Storage (private) → OCR provider (gemini/anthropic/openai) → sanitize + mask → `pending_confirm` + การ์ดตรวจสลิป, กันซ้ำ hash/ref, โควตา Free 30 ใบ, เรียนรู้ผู้รับ → หมวด, ดูรูปผ่าน signed URL; `lib/plan.ts` เริ่มแล้ว (ยังไม่ gate merchant_memory) |
-| 5 Plus & Extra | ⏳ | จดประจำ, แจ้งเตือนรายวัน (cron), export CSV/XLSX, ตังสะสม/referral, plan gating, payment stub |
+| 5 Plus & Extra | ✅ (ยังไม่ทดสอบบนระบบจริง) | จดประจำ (Plus) + cron, เตือนรายวัน (Plus) + cron, ส่งออก CSV/XLSX ผ่านลิงก์ 2 นาที, ตังสะสม/streak/แลกวัน Plus, ชวนเพื่อน, plan gating ฝั่ง server, payment stub, กราฟเก็บออม (Plus), หน้าจัดการความจำผู้รับ (Plus) |
 | 6 Hardening | ⏳ | rate limit, logging, e2e (Playwright), ตรวจ RLS, a11y, Lighthouse mobile ≥ 90, เอกสาร deploy/rollback |
 
-ทดสอบอัตโนมัติ: 180 เทสต์ (Vitest) · ตรวจแล้ว lint/typecheck/build ผ่าน
+ทดสอบอัตโนมัติ: 286 เทสต์ (Vitest) · ตรวจแล้ว lint/typecheck/build ผ่าน
 
 **Phase 4 — ต้องทำเองก่อนใช้:** รัน migration `0005` (bucket `slips` private) และตั้ง `AI_PROVIDER` + key
 **Fallback chain (`src/lib/ocr/factory.ts`):** `easyslip` → `slip2go` → AI (`AI_PROVIDER` ก่อน แล้วตัวอื่นที่มี key)
@@ -115,6 +115,16 @@ supabase/migrations/0001..0004
   อยู่ใน repo แล้ว **แต่ต้องรัน `--replace` ใหม่** ถึงจะขึ้นใน LINE (ชื่อเมนูใหม่ `jodtang-main`)
   หมายเหตุ: Node หลัง proxy ต้องตั้ง `NODE_USE_ENV_PROXY=1`
 - Repo: `stsmcp101-source/JodTang` (branch `main`) · Vercel deploy อัตโนมัติจาก push
+
+**Phase 5 — ต้องทำเองก่อนใช้:**
+1. รัน migration `0006` ใน Supabase (ฟังก์ชัน `award_points`, `redeem_points`, `apply_referral`, `grant_referral_bonus` — เรียกได้เฉพาะ service role)
+2. GitHub → Settings → Secrets → Actions: ตั้ง `APP_BASE_URL` และ `CRON_SECRET` (ค่าเดียวกับ Vercel) ให้ workflow `cron.yml` เรียกตัวเตือนรายชั่วโมง
+   (Vercel Hobby รัน cron ได้วันละครั้ง: `vercel.json` มีเฉพาะจดรายการประจำ 00:00 เวลาไทย)
+3. ทดสอบ Plus: `update users set plan_expires_at = now() + interval '7 days' where line_user_id = '...'`
+
+**กติกาที่ตีความจากสเปก (แก้ได้ที่ `src/lib/config.ts`):** +1 แต้ม/วันที่จด (ไม่ใช่ต่อรายการ — กันปั่นแต้ม),
+10 แต้ม = 1 วัน Plus, ชวนเพื่อนได้ +10 ทั้งสองฝ่ายเมื่อเพื่อนจดรายการแรก (ใช้รหัสได้ใน 14 วันแรก)
+`merchant_memory` ถูก gate เป็น Plus แล้ว (Free ไม่เรียนรู้/ไม่ใช้) · หลายบัญชี/ช่องทางชำระ (Plus) **ยังไม่ทำ**
 
 ## 7) บทเรียน / ข้อควรรู้ (เจอมาแล้ว)
 

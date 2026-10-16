@@ -91,6 +91,53 @@ pnpm lint && pnpm typecheck && pnpm test
 - กด `แก้ไขหมวด` แล้วเลือกหมวด → บอทจำ "ผู้รับ → หมวด" ไว้ใช้ครั้งต่อไป (`merchant_memory`)
 - รูปถูกส่งไปยังผู้ให้บริการ AI ที่เลือกเพื่ออ่านข้อความ (ควรระบุใน Privacy Policy)
 
+## แผน Free / Plus, ตังสะสม, จดประจำ, เตือน, ส่งออก (Phase 5)
+
+> ต้องรัน migration `supabase/migrations/0006_points_referral_reminders.sql` ใน Supabase ก่อน (รันซ้ำได้)
+
+| ฟีเจอร์ | Free | Plus |
+|---|---|---|
+| จดข้อความ, สรุป, รายการ, หมวด/งบ, กราฟรายรับรายจ่าย | ✅ | ✅ |
+| อ่านสลิป | 30 ใบ/เดือน | ไม่จำกัด |
+| ส่งออก CSV และ Excel | ✅ | ✅ + ชีตสรุปตามหมวด/รายเดือน |
+| กราฟเก็บออม, รายการประจำ, เตือนจดประจำวัน, จำผู้รับ → หมวด | – | ✅ |
+
+- **เช็คสิทธิ์จากที่เดียว:** `src/lib/plan.ts` (ฝั่ง API ใช้ `requireFeature` ใน `src/lib/plan-server.ts` จึงบังคับจริง ไม่ใช่แค่ซ่อนปุ่ม)
+- **ชำระเงินเป็น stub:** `src/lib/payments/` มี interface (`PaymentProvider`) พร้อมต่อ Stripe/PromptPay แต่ตอนนี้ปุ่มอัปเกรดตอบว่า "ยังไม่เปิดให้ชำระเงิน"
+- **ทดสอบแผน Plus:** ให้ตัวเองเป็น Plus ชั่วคราวใน Supabase SQL Editor
+  ```sql
+  update users set plan_expires_at = now() + interval '7 days'
+  where line_user_id = '<LINE user id ของคุณ>';
+  ```
+  (หรือสะสมแต้มแล้วแลกที่หน้าตั้งค่า)
+
+**ตังสะสม / ชวนเพื่อน** — อัตราทั้งหมดอยู่ที่ `src/lib/config.ts`
+- ได้ 1 แต้มต่อวันที่จดอย่างน้อย 1 รายการ (วันละครั้ง กันปั่นแต้ม) · 10 แต้มแลก Plus ได้ 1 วัน
+- ชวนเพื่อน: เพื่อนพิมพ์ `ใช้รหัส <รหัส>` (หรือกรอกที่หน้าตั้งค่า) ภายใน 14 วันแรก
+  พอเพื่อนจดรายการแรก ทั้งสองฝ่ายได้ +10 แต้ม
+- คำสั่งในแชท: `ตังสะสม` · `รหัสชวน` · `ใช้รหัส ABCD1234`
+
+**รายการประจำ (Plus)** — รายวัน/สัปดาห์/เดือน (วันที่ 29–31 ใช้วันสุดท้ายของเดือนสั้น)
+สร้างรายการให้ทุกวัน 00:00 เวลาไทย ถ้าระบบหยุดไปหลายวันจะจดย้อนให้ครบ (สูงสุด 12 ครั้งต่อกฎ)
+ถ้า Plus หมด กฎจะหยุดรอ (ไม่ลบ) และกลับมาทำงานเมื่อได้ Plus อีก
+
+**เตือนจดประจำวัน (Plus)** — ส่งข้อความเตือนถ้าวันนั้นยังไม่จด ตามเวลาที่ผู้ใช้ตั้ง วันละครั้ง
+(ใช้โควตา push ของ OA)
+
+**ตั้งเวลา (cron)** — endpoint ป้องกันด้วย `Authorization: Bearer <CRON_SECRET>`
+| งาน | endpoint | ตัวเรียก |
+|---|---|---|
+| จดรายการประจำ | `/api/cron/recurring` | Vercel Cron วันละครั้ง (`vercel.json`) |
+| เตือนรายวัน | `/api/cron/reminders` | GitHub Actions ทุกชั่วโมง (`.github/workflows/cron.yml`) |
+
+Vercel แผน Hobby รัน cron ได้วันละครั้งเท่านั้น (ตั้งรายชั่วโมงแล้ว deploy จะล้ม) จึงให้ GitHub Actions เรียกตัวเตือน
+ตั้งที่ GitHub → Settings → Secrets and variables → Actions: `APP_BASE_URL` (เช่น `https://jod-tang.vercel.app`) และ `CRON_SECRET` (ค่าเดียวกับใน Vercel)
+ถ้าใช้แผน Pro สามารถย้ายตัวเตือนเข้า `vercel.json` แล้วลบ workflow ได้
+
+**ส่งออก** — ที่หน้ารายการ กดไอคอนดาวน์โหลด เลือก CSV หรือ Excel ตามตัวกรองที่เลือกอยู่ (สูงสุด 5,000 แถว)
+ลิงก์ดาวน์โหลดมีอายุ 2 นาทีและเปิดในเบราว์เซอร์ของเครื่อง (เบราว์เซอร์ในแอป LINE ดาวน์โหลดไฟล์ไม่ได้)
+CSV ใส่ BOM ให้ Excel อ่านภาษาไทยถูกต้อง และกัน formula injection
+
 ## Rich Menu
 
 ```bash
@@ -120,6 +167,15 @@ pnpm richmenu --replace   # สร้างเมนู อัปโหลดภ
 | GET/POST | `/api/transactions` | รายการ (กรอง `type,q,from,to,categoryId`) / เพิ่มด้วยมือ |
 | DELETE | `/api/transactions/:id` | ลบ (soft delete) |
 | GET | `/api/transactions/:id/slip` | signed URL (60 วินาที) ของรูปสลิปที่แนบ |
+| GET | `/api/me` | แผนที่ใช้อยู่, สิทธิ์แต่ละฟีเจอร์, โควตาสลิป, ตังสะสม, streak, รหัสชวน |
+| POST | `/api/plan/checkout` | เริ่มอัปเกรด (stub: ตอบว่ายังไม่เปิด) |
+| POST | `/api/points/redeem` | แลกตังสะสมเป็นวันใช้ Plus |
+| POST | `/api/referral` | ใช้รหัสชวนเพื่อน |
+| GET/POST | `/api/recurring` · PATCH/DELETE `/api/recurring/:id` | รายการประจำ (สร้าง/เริ่มต่อ = Plus) |
+| GET/DELETE | `/api/memory` · `/api/memory/:id` | ที่บอทจำไว้ ผู้รับ → หมวด (Plus) |
+| POST | `/api/export/link` | ขอลิงก์ดาวน์โหลด CSV/XLSX (2 นาที) |
+| GET | `/api/export/download?t=` | ไฟล์ส่งออก (ยืนยันด้วย token ในลิงก์) |
+| GET | `/api/cron/recurring` · `/api/cron/reminders` | cron (ต้องมี `Authorization: Bearer <CRON_SECRET>`) |
 | GET/PATCH | `/api/settings` | รูปแบบการ์ด, รอบงบ |
 | GET/POST | `/api/categories` | หมวดที่ใช้ได้ (`?all=1` รวมที่ซ่อน) / เพิ่มหมวดของตัวเอง |
 | PATCH/DELETE | `/api/categories/:id` | แก้/ซ่อน/ลบ (หมวดมาตรฐานแก้ได้เฉพาะคำค้น/ซ่อน/ลำดับ) |
@@ -163,4 +219,4 @@ docs           design tokens, เอกสารอื่น ๆ
 ## Roadmap
 
 Phase 0 Setup (✓) → 1 Webhook + จดข้อความ (✓) → 2 LIFF พื้นฐาน (✓) → 3 หมวด/งบ/วิเคราะห์ (✓) →
-4 สลิป OCR (✓) → 5 Plus & Extra → 6 Hardening
+4 สลิป OCR (✓) → 5 Plus & Extra (✓) → 6 Hardening
