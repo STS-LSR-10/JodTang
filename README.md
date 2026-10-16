@@ -30,7 +30,7 @@ pnpm lint && pnpm typecheck && pnpm test
    - แท็บ *Messaging API* → ออก **Channel access token (long-lived)** → `LINE_CHANNEL_ACCESS_TOKEN`
    - ปิด *Auto-reply messages* และ *Greeting messages* ใน LINE Official Account Manager (บอทตอบเอง)
 4. สร้าง channel ชนิด **LINE Login** ใน Provider เดียวกัน → แท็บ *LIFF* → **Add**
-   - Size: `Full`, Endpoint URL: `https://<โดเมนของคุณ>/summary`
+   - Size: `Full`, Endpoint URL: `https://<โดเมนของคุณ>` (ราก ไม่ต่อ path — ดูหมายเหตุด้านล่าง)
    - Scope: `profile`, `openid`
    - คัดลอก **LIFF ID** → `NEXT_PUBLIC_LIFF_ID`
 5. ตั้ง **Webhook URL** ที่แท็บ *Messaging API* เป็น `https://<โดเมน>/api/line/webhook` แล้วเปิด *Use webhook* และกด *Verify*
@@ -44,7 +44,9 @@ pnpm lint && pnpm typecheck && pnpm test
 ## LIFF (หน้าเว็บในแอป LINE)
 
 1. ใน LINE Login channel → แท็บ **LIFF** → **Add**
-   - Endpoint URL: `https://<โดเมน>/summary`
+   - Endpoint URL: `https://<โดเมน>` (ราก)
+     LIFF จะต่อ path จาก `liff.line.me/<LIFF_ID>/<path>` ไปท้าย Endpoint URL
+     ถ้าตั้ง Endpoint เป็น `/summary` ลิงก์ `/budgets` จะกลายเป็น `/summary/budgets` และขึ้น 404
    - Scope: `profile`, `openid` · Size: `Full`
 2. ตั้งค่าใน Vercel (แล้ว Redeploy):
    - `NEXT_PUBLIC_LIFF_ID` = LIFF ID

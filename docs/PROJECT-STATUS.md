@@ -85,7 +85,9 @@ supabase/migrations/0001..0004
   `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `SESSION_JWT_SECRET` (≥ 32 ตัว),
   `CRON_SECRET`, `AI_PROVIDER` + key ของค่ายที่เลือก, `APP_BASE_URL`
 - **LINE:** Messaging API channel (webhook → `<โดเมน>/api/line/webhook`) และ LINE Login channel
-  ที่เป็นเจ้าของ LIFF (Endpoint `<โดเมน>/summary`, scope `profile` + `openid`) — **ต้องอยู่ Provider เดียวกัน**
+  ที่เป็นเจ้าของ LIFF (Endpoint = **ราก** `<โดเมน>` ไม่ต่อ path, scope `profile` + `openid`)
+  — **ต้องอยู่ Provider เดียวกัน** · ถ้า Endpoint ต่อ `/summary` ลิงก์ `liff.line.me/<id>/budgets`
+  จะกลายเป็น `/summary/budgets` และขึ้น 404 (Rich Menu พังทุกปุ่ม)
 - **Supabase:** ต้องรัน migrations ตามลำดับ `0001` → `0004` (รันซ้ำได้) ผ่าน SQL Editor หรือ `supabase db push`
   - `0004` เพิ่ม `user_settings.budget_mode`, ตาราง `category_overrides`, RPC `analytics_series`
 - **Rich Menu:** `pnpm richmenu --replace` (อ่าน `.env.local`) — เผยแพร่แล้ว 1 ชุด (`meetang-main`)
