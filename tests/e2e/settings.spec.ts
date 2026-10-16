@@ -21,7 +21,7 @@ test.describe("settings page (360px)", () => {
     await expect(page.getByText("สมชาย ทดสอบ")).toBeVisible();
     await expect(page.getByRole("progressbar", { name: "โควตาสลิปเดือนนี้" })).toBeVisible();
     await expect(page.getByText("12 / 30")).toBeVisible();
-    await expect(page.getByText("สำหรับแผน Plus").first()).toBeVisible();
+    await expect(page.getByText("สำหรับแผน Professional").first()).toBeVisible();
     await expect(page.getByRole("switch", { name: "เปิดเตือนจดประจำวัน" })).toBeDisabled();
     await expect(page.getByRole("button", { name: "เพิ่ม" })).toBeDisabled();
     await expectNoHorizontalScroll(page);

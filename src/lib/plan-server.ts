@@ -24,7 +24,7 @@ export async function getPlanInfo(
 }
 
 export const PLUS_ONLY_MESSAGE =
-  "ฟีเจอร์นี้สำหรับแผน Plus ใช้ตังสะสมแลกวัน Plus ได้ที่หน้าตั้งค่านะ";
+  "ฟีเจอร์นี้สำหรับแผน Professional ใช้ตังสะสมแลกวัน Professional ได้ที่หน้าตั้งค่านะ";
 
 /**
  * Server-side feature gate for API routes (the UI hides things too, but this is the real check).

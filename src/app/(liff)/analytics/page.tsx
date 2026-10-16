@@ -71,7 +71,7 @@ export default function AnalyticsPage() {
           onChange={setTab}
           options={[
             { value: "flow", label: "รายรับรายจ่าย" },
-            { value: "saving", label: "เก็บออม · Plus" },
+            { value: "saving", label: "เก็บออม · Pro" },
           ]}
         />
 
@@ -83,11 +83,11 @@ export default function AnalyticsPage() {
           ) : (
             <div className="rounded-2xl border border-border bg-surface shadow-card">
               <EmptyState
-                title="กราฟเก็บออมสำหรับแผน Plus"
-                hint="ดูเงินเก็บสะสมและอัตราการออม · แลกวัน Plus ด้วยตังสะสมได้ที่หน้าตั้งค่า"
+                title="กราฟเก็บออมสำหรับแผน Professional"
+                hint="ดูเงินเก็บสะสมและอัตราการออม · แลกวัน Professional ด้วยตังสะสมได้ที่หน้าตั้งค่า"
                 action={
                   <span className="mt-2 inline-flex items-center gap-1 rounded-full bg-primary-soft px-3 py-1 text-xs font-semibold text-primary">
-                    <Lock className="h-3 w-3" aria-hidden /> Plus
+                    <Lock className="h-3 w-3" aria-hidden /> Pro
                   </span>
                 }
               />

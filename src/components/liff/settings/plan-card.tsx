@@ -1,8 +1,10 @@
 "use client";
 
 import { Flame, Sparkles } from "lucide-react";
+import Link from "next/link";
 import { useState } from "react";
 import { useLiff } from "@/components/liff/liff-provider";
+import { PLAN_LABEL } from "@/lib/plan";
 import { formatThaiDate } from "@/lib/thai-date";
 import { cn } from "@/lib/utils";
 import { cardClass, type Me } from "./types";
@@ -13,7 +15,7 @@ export function PlanCard({ me, onChanged }: { me: Me; onChanged: () => void }) {
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
 
-  const plus = me.plan === "plus";
+  const plus = me.plan !== "free"; // any paid tier
   const maxDays = Math.min(me.redeem.days, 365);
   const slipPct =
     me.slips.limit && me.slips.limit > 0
@@ -25,28 +27,11 @@ export function PlanCard({ me, onChanged }: { me: Me; onChanged: () => void }) {
     setNotice(null);
     try {
       await api("/api/points/redeem", { method: "POST", body: JSON.stringify({ days }) });
-      setNotice(`แลกแล้ว +${days} วัน Plus`);
+      setNotice(`แลกแล้ว +${days} วัน Professional`);
       setDays(1);
       onChanged();
     } catch (e) {
       setNotice(e instanceof Error ? e.message : "แลกไม่สำเร็จ");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function upgrade() {
-    setBusy(true);
-    setNotice(null);
-    try {
-      const res = await api<{ available: boolean; message?: string; url?: string }>(
-        "/api/plan/checkout",
-        { method: "POST", body: JSON.stringify({ months: 1 }) },
-      );
-      if (res.available && res.url) window.location.href = res.url;
-      else setNotice(res.message ?? "ยังไม่เปิดให้ชำระเงิน");
-    } catch (e) {
-      setNotice(e instanceof Error ? e.message : "ทำรายการไม่สำเร็จ");
     } finally {
       setBusy(false);
     }
@@ -77,7 +62,7 @@ export function PlanCard({ me, onChanged }: { me: Me; onChanged: () => void }) {
                 plus ? "bg-accent/20 text-foreground" : "bg-primary-soft text-primary",
               )}
             >
-              {plus ? "Plus" : "Free"}
+              {PLAN_LABEL[me.plan]}
             </span>
             {plus && me.planExpiresAt ? (
               <> · ใช้ได้ถึง {formatThaiDate(new Date(me.planExpiresAt))}</>
@@ -126,7 +111,7 @@ export function PlanCard({ me, onChanged }: { me: Me; onChanged: () => void }) {
       </div>
 
       <div className="space-y-2">
-        <p className="text-sm font-semibold">แลกเป็นวันใช้ Plus</p>
+        <p className="text-sm font-semibold">แลกเป็นวันใช้ Professional</p>
         {maxDays > 0 ? (
           <div className="flex items-center gap-2">
             <select
@@ -157,15 +142,13 @@ export function PlanCard({ me, onChanged }: { me: Me; onChanged: () => void }) {
         )}
       </div>
 
-      {!plus ? (
-        <button
-          type="button"
-          onClick={upgrade}
-          disabled={busy}
-          className="h-11 w-full rounded-2xl border border-primary text-sm font-semibold text-primary disabled:opacity-60"
+      {me.plan !== "ultimate" ? (
+        <Link
+          href="/upgrade"
+          className="flex h-11 w-full items-center justify-center rounded-2xl border border-primary text-sm font-semibold text-primary"
         >
-          อัปเกรดเป็น Plus
-        </button>
+          {plus ? "ดูแผน Ultimate" : "ดูแผนอัปเกรด"}
+        </Link>
       ) : null}
 
       <p className="text-xs text-muted">

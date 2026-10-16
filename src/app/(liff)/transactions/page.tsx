@@ -452,8 +452,8 @@ function ExportSheet({
         </button>
         <p className="text-xs text-muted">
           {advanced
-            ? "แผน Plus: ไฟล์ Excel มีชีตสรุปตามหมวดและสรุปรายเดือนเพิ่มให้ด้วย"
-            : "แผน Plus: ไฟล์ Excel จะมีชีตสรุปตามหมวดและสรุปรายเดือนเพิ่มให้"}
+            ? "แผน Professional: ไฟล์ Excel มีชีตสรุปตามหมวดและสรุปรายเดือนเพิ่มให้ด้วย"
+            : "แผน Professional: ไฟล์ Excel จะมีชีตสรุปตามหมวดและสรุปรายเดือนเพิ่มให้"}
         </p>
         {error ? (
           <p role="alert" className="text-sm text-expense">

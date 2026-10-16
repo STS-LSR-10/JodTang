@@ -77,7 +77,7 @@ test.describe("analytics page (360px)", () => {
     await mockApi(page, { "GET /api/analytics": ANALYTICS, "GET /api/me": ME_FREE });
     await page.goto("/analytics");
     await page.getByRole("tab", { name: /เก็บออม/ }).click();
-    await expect(page.getByText("กราฟเก็บออมสำหรับแผน Plus")).toBeVisible();
+    await expect(page.getByText("กราฟเก็บออมสำหรับแผน Professional")).toBeVisible();
 
     const plus = await page.context().newPage();
     await mockApi(plus, { "GET /api/analytics": ANALYTICS, "GET /api/me": ME_PLUS });

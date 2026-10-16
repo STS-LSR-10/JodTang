@@ -66,7 +66,7 @@ export function referralShareText(code: string): string {
 }
 
 export const MEMORY_PLUS_HINT_TEXT =
-  "จดหมวดนี้ให้แล้วนะ การจำผู้รับ → หมวดอัตโนมัติเป็นฟีเจอร์ของแผน Plus (แลกวัน Plus ด้วยตังสะสมได้ที่หน้าตั้งค่า)";
+  "จดหมวดนี้ให้แล้วนะ การจำผู้รับ → หมวดอัตโนมัติเป็นฟีเจอร์ของแผน Professional (แลกวัน Professional ด้วยตังสะสมได้ที่หน้าตั้งค่า)";
 
 export const SLIP_SOON_TEXT =
   'ฟีเจอร์อ่านสลิปกำลังจะมาเร็ว ๆ นี้ ตอนนี้พิมพ์จดได้เลย เช่น "ค่าไฟ 1200" นะ';

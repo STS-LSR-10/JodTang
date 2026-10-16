@@ -1,13 +1,17 @@
 import { Lock } from "lucide-react";
+import Link from "next/link";
 
-/** Shown inside a section whose feature needs Plus. */
+/** Shown inside a section whose feature needs a paid plan (Professional or above). */
 export function PlusLock({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex items-start gap-2 rounded-2xl bg-primary-soft px-3 py-2 text-sm text-primary">
       <Lock className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
       <p>
-        <span className="font-semibold">สำหรับแผน Plus</span> · {children} (แลกวัน Plus
-        ด้วยตังสะสมได้ที่การ์ดแผนด้านบน)
+        <span className="font-semibold">สำหรับแผน Professional</span> · {children}{" "}
+        <Link href="/upgrade" className="font-semibold underline">
+          ดูแผนอัปเกรด
+        </Link>{" "}
+        หรือแลกวันใช้ด้วยตังสะสมที่การ์ดแผนด้านบน
       </p>
     </div>
   );
