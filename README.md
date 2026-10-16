@@ -82,7 +82,7 @@ pnpm lint && pnpm typecheck && pnpm test
 - EasySlip ใช้ได้กับ **สลิปโอนเงินที่มี QR** (ได้ค่าที่ธนาคารยืนยันและกันสลิปปลอม) ส่วนใบเสร็จร้านค้า
   หรือรูปที่ QR ไม่ชัด จะตกไปให้ AI อ่าน
 - ถ้า AI ตอบชัดเจนว่า "ไม่ใช่สลิป" จะหยุดทันที ไม่ไล่เรียกเจ้าที่เหลือ (ไม่เสียค่าเรียกซ้ำ)
-- ดูว่าเจ้าไหนถูกข้ามได้ใน Vercel Logs: `slip reader skipped: <ชื่อ>: <สถานะ>`
+- ดูว่าเจ้าไหนถูกข้ามได้ใน Vercel Logs: event `slip_reader_skipped` (มีชื่อเจ้าและสถานะ ไม่มีข้อมูลสลิป)
 
 พฤติกรรม:
 - Free อ่านสลิปได้ **30 ใบ/เดือน** (นับตามเดือนปฏิทิน Asia/Bangkok, สลิปที่อ่านไม่ได้ไม่นับ) · Plus ไม่จำกัด
@@ -137,6 +137,19 @@ Vercel แผน Hobby รัน cron ได้วันละครั้งเ
 **ส่งออก** — ที่หน้ารายการ กดไอคอนดาวน์โหลด เลือก CSV หรือ Excel ตามตัวกรองที่เลือกอยู่ (สูงสุด 5,000 แถว)
 ลิงก์ดาวน์โหลดมีอายุ 2 นาทีและเปิดในเบราว์เซอร์ของเครื่อง (เบราว์เซอร์ในแอป LINE ดาวน์โหลดไฟล์ไม่ได้)
 CSV ใส่ BOM ให้ Excel อ่านภาษาไทยถูกต้อง และกัน formula injection
+
+## ความปลอดภัยและคุณภาพ (Phase 6)
+
+> ต้องรัน migration `supabase/migrations/0007_rate_limits.sql` (ถ้ายังไม่รัน ตัวจำกัดอัตราจะ "ปล่อยผ่าน" และบันทึก `rate_limit_unavailable`)
+
+- **Rate limit** (ตาราง Postgres): แชท 30 ข้อความ/นาที/คน, รูป 10/นาที, ปุ่ม 60/นาที, ล็อกอินต่อ IP 30/นาที, ส่งออก/แลกแต้ม/ลบข้อมูลจำกัดแยก — ปรับที่ `LIMITS` ใน `src/lib/rate-limit.ts`
+- **Logging ปลอดข้อมูลส่วนบุคคล:** ใช้ `log` จาก `src/lib/log.ts` (ไม่มีข้อความแชท/ชื่อ/จำนวนเงิน/เลขบัญชี/user id)
+- **ลบข้อมูลทั้งหมด:** หน้าตั้งค่า → 2 ขั้น + พิมพ์ข้อความยืนยัน ลบทั้งฐานข้อมูลและรูปสลิป
+- **Privacy Policy / Terms:** `/privacy`, `/terms` (ฉบับร่าง ควรให้ผู้เชี่ยวชาญตรวจ; ตั้ง `NEXT_PUBLIC_CONTACT_EMAIL` ให้แสดงช่องทางติดต่อ)
+- **Security headers:** nosniff, frame deny, referrer policy, HSTS, permissions policy (CSP ยังไม่เปิด — ดู [docs/DEPLOY.md](docs/DEPLOY.md))
+- **ทดสอบ:** `pnpm test` (รวมทดสอบ migration + RLS + ฟังก์ชัน SQL บน Postgres จริง), `pnpm e2e` (Playwright + axe ที่ 360px)
+  และ `supabase/tests/rls_check.sql` ให้รันใน Supabase SQL Editor หลังรัน migration ทุกครั้ง
+- **Deploy / Rollback / แก้ปัญหา:** [docs/DEPLOY.md](docs/DEPLOY.md)
 
 ## Rich Menu
 
@@ -219,4 +232,4 @@ docs           design tokens, เอกสารอื่น ๆ
 ## Roadmap
 
 Phase 0 Setup (✓) → 1 Webhook + จดข้อความ (✓) → 2 LIFF พื้นฐาน (✓) → 3 หมวด/งบ/วิเคราะห์ (✓) →
-4 สลิป OCR (✓) → 5 Plus & Extra (✓) → 6 Hardening
+4 สลิป OCR (✓) → 5 Plus & Extra (✓) → 6 Hardening (✓)

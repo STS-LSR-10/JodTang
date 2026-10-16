@@ -83,9 +83,9 @@ supabase/migrations/0001..0004
 | 3 หมวด/งบ/วิเคราะห์ | ✅ | CRUD หมวด (+ `category_overrides`), งบรวม/แยกหมวด, แจ้งเตือน 80%/100%, กราฟแท่ง/โดนัท |
 | 4 สลิป OCR | ✅ (ยังไม่ทดสอบกับสลิปจริง) | LINE Content API → Storage (private) → OCR provider (gemini/anthropic/openai) → sanitize + mask → `pending_confirm` + การ์ดตรวจสลิป, กันซ้ำ hash/ref, โควตา Free 30 ใบ, เรียนรู้ผู้รับ → หมวด, ดูรูปผ่าน signed URL; `lib/plan.ts` เริ่มแล้ว (ยังไม่ gate merchant_memory) |
 | 5 Plus & Extra | ✅ (ยังไม่ทดสอบบนระบบจริง) | จดประจำ (Plus) + cron, เตือนรายวัน (Plus) + cron, ส่งออก CSV/XLSX ผ่านลิงก์ 2 นาที, ตังสะสม/streak/แลกวัน Plus, ชวนเพื่อน, plan gating ฝั่ง server, payment stub, กราฟเก็บออม (Plus), หน้าจัดการความจำผู้รับ (Plus) |
-| 6 Hardening | ⏳ | rate limit, logging, e2e (Playwright), ตรวจ RLS, a11y, Lighthouse mobile ≥ 90, เอกสาร deploy/rollback |
+| 6 Hardening | ✅ (ยังไม่ได้ทดสอบกับ LINE/Supabase จริง) | rate limit (Postgres, migration 0007), logger ปลอด PII, ลบข้อมูลทั้งหมด 2 ขั้น, Privacy/Terms (ร่าง), security headers, Playwright + axe 26 เคส, ทดสอบ migration/RLS/ฟังก์ชัน SQL บน Postgres จริง (PGlite) + `supabase/tests/rls_check.sql`, Lighthouse หน้าสาธารณะ 99–100, กราฟโหลดแบบ lazy, `docs/DEPLOY.md` |
 
-ทดสอบอัตโนมัติ: 286 เทสต์ (Vitest) · ตรวจแล้ว lint/typecheck/build ผ่าน
+ทดสอบอัตโนมัติ: 338 เทสต์ (Vitest: unit + DB) + 26 เคส e2e (Playwright) · ตรวจแล้ว lint/typecheck/build ผ่าน
 
 **Phase 4 — ต้องทำเองก่อนใช้:** รัน migration `0005` (bucket `slips` private) และตั้ง `AI_PROVIDER` + key
 **Fallback chain (`src/lib/ocr/factory.ts`):** `easyslip` → `slip2go` → AI (`AI_PROVIDER` ก่อน แล้วตัวอื่นที่มี key)
@@ -108,7 +108,7 @@ supabase/migrations/0001..0004
   ที่เป็นเจ้าของ LIFF (Endpoint = **ราก** `<โดเมน>` ไม่ต่อ path, scope `profile` + `openid`)
   — **ต้องอยู่ Provider เดียวกัน** · ถ้า Endpoint ต่อ `/summary` ลิงก์ `liff.line.me/<id>/budgets`
   จะกลายเป็น `/summary/budgets` และขึ้น 404 (Rich Menu พังทุกปุ่ม)
-- **Supabase:** ต้องรัน migrations ตามลำดับ `0001` → `0004` (รันซ้ำได้) ผ่าน SQL Editor หรือ `supabase db push`
+- **Supabase:** ต้องรัน migrations ตามลำดับ `0001` → `0007` (รันซ้ำได้) ผ่าน SQL Editor หรือ `supabase db push`
   - `0004` เพิ่ม `user_settings.budget_mode`, ตาราง `category_overrides`, RPC `analytics_series`
 - **Rich Menu:** `pnpm richmenu --replace` (อ่าน `.env.local`) — เผยแพร่แล้ว 1 ชุดชื่อ `meetang-main` (แบบ 6 ช่องเดิม)
   ดีไซน์ใหม่ 9 ช่อง (พาสเทลมิ้นต์: จดตังค์/สรุป/วิเคราะห์/หมวด-งบ/รายการ/ตั้งค่า/วิธีใช้งาน/สแกนสลิป/ชวนเพื่อน)
@@ -155,22 +155,22 @@ supabase/migrations/0001..0004
 
 ## 8) ข้อจำกัดที่ยังค้าง
 
-- ยังไม่ได้ทดสอบ LIFF ทุกหน้าที่ 360px ด้วยตาจริง/Lighthouse (หน้า วิเคราะห์ ~229 kB เพราะ Recharts)
+- **ยังไม่ได้ทดสอบบนระบบจริง** ทั้ง Phase 4–6 (LINE/Supabase/cron/EasySlip/AI): logic และ SQL ถูกทดสอบด้วย unit + Postgres จำลอง (PGlite) + e2e ที่ mock API
+  ข้อมูลจริงอาจเจอกรณีที่ชุดทดสอบไม่ครอบคลุม — ไล่ตามชุดทดสอบใน README/สรุปแต่ละ Phase
+- หน้า LIFF วัด Lighthouse อัตโนมัติไม่ได้ (ต้องล็อกอิน LINE) — วัดได้เฉพาะ `/privacy`, `/terms` (99–100); ตรวจ LIFF ด้วยมือถือจริง
 - ปุ่ม "แก้ไข" ในการ์ดแชทแก้ได้เฉพาะรายการล่าสุดผ่านข้อความ; หน้า รายการ ยังไม่มีแก้ไขรายการ/เลือกหลายรายการ/ย้ายหมวด
-- ยังไม่มี: ลบข้อมูลทั้งหมด (2 ขั้น), Privacy Policy/Terms, `lib/plan.ts`, rate limit, e2e,
-  LLM categorizer (ชั้นที่ 3 ของ chain), ตังสะสม/streak, จดประจำ, ส่งออก
-- แท็บ "เก็บออม" ในหน้า วิเคราะห์ เป็นหน้าล็อก Plus เท่านั้น
+- **หลายบัญชี/ช่องทางชำระ (Plus)** ยังไม่ทำ · LLM categorizer (ชั้นที่ 3 ของ chain) ยังไม่ทำ
+- **CSP** ยังไม่เปิด · ไม่มีระบบ alert อัตโนมัติ · Privacy/Terms เป็นฉบับร่าง (ดู `docs/DEPLOY.md` ข้อ 9)
+- **Slip2Go** ยังไม่ implement (รอเอกสาร API)
 - Keyword แบบ substring อาจจัดผิดบ้าง (เช่น "ชา" ใน "ชาร์จ")
+- ระบบชำระเงินเป็น stub (ยังไม่เปิดให้จ่ายเงิน)
 
-## 9) Phase 4 — สิ่งที่ต้องตัดสินใจ/เตรียมก่อนเริ่ม
+## 9) การทดสอบและการปล่อยงาน
 
-1. **ค่ายโมเดลอ่านสลิป** (`AI_PROVIDER`): ค่าเริ่มต้น Gemini; ควรทำชุดสลิปทดสอบเล็ก ๆ เทียบคุณภาพภาษาไทย
-2. **Supabase Storage:** ต้องสร้าง bucket `slips` แบบ **private** (เจ้าของสร้างเองหรือผ่าน migration/SQL)
-3. **โควตา Free 30 ใบ/เดือน:** นับเฉพาะสลิปที่ OCR สำเร็จ (ที่ล้มไม่นับ) รีเซ็ตตามเดือนปฏิทิน Asia/Bangkok
-4. flow ที่วางไว้: LINE Content API → Storage (private) → OCR (structured output + Zod, ตรวจ amount > 0 /
-   วันที่ไม่อยู่อนาคต, mask เลขบัญชีเหลือ 4 ตัวท้ายทั้งใน `ocr_json`) → `pending_confirm` + การ์ด
-   ยืนยัน/แก้ไข/ยกเลิก → กันซ้ำด้วย `slip_ref` + `image_sha256` (unique ต่อผู้ใช้) → เรียนรู้ผู้รับ → หมวด
-
+- `pnpm lint && pnpm typecheck && pnpm test` — unit + `tests/db` (รันทุก migration สองรอบบน Postgres จริงที่จำลอง Supabase และรัน `supabase/tests/rls_check.sql`)
+- `pnpm e2e` — Playwright + axe ที่ 360px (build ด้วย `NEXT_PUBLIC_E2E=1` เฉพาะตอนทดสอบ; ห้ามตั้งใน production)
+- **Phase 6 — ต้องทำเองก่อนใช้:** รัน migration `0007` แล้วรัน `rls_check.sql` ใน SQL Editor (ต้องจบด้วย `RLS checks passed`)
+- ขั้นตอน deploy / rollback / rotate secret / แก้ปัญหา: [DEPLOY.md](DEPLOY.md)
 ## 10) คำสั่งที่ใช้บ่อย
 
 ```bash
