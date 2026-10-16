@@ -11,6 +11,7 @@ import { loadMemoryIfAllowed } from "@/lib/plan-server";
 import { awardActivity } from "@/lib/points";
 import { insertTransaction, loadCategories } from "@/lib/repo";
 import { getAdminClient } from "@/lib/supabase/admin";
+import { applyTxFilters, txFilterSchema } from "@/lib/tx-query";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -18,12 +19,7 @@ export const dynamic = "force-dynamic";
 const MAX_LIMIT = 100;
 const DEFAULT_LIMIT = 50;
 
-const listSchema = z.object({
-  type: z.enum(["expense", "income"]).optional(),
-  from: z.string().datetime({ offset: true }).optional(),
-  to: z.string().datetime({ offset: true }).optional(),
-  categoryId: z.string().uuid().optional(),
-  q: z.string().trim().max(60).optional(),
+const listSchema = txFilterSchema.extend({
   limit: z.coerce.number().int().min(1).max(MAX_LIMIT).default(DEFAULT_LIMIT),
   offset: z.coerce.number().int().min(0).default(0),
 });
@@ -39,23 +35,16 @@ export async function GET(request: Request): Promise<Response> {
     if (!parsed.success) return apiError("ตัวกรองไม่ถูกต้อง", 400);
     const f = parsed.data;
 
-    let query = getAdminClient()
-      .from("transactions")
-      .select(TX_SELECT)
-      .eq("user_id", auth.userId)
-      .eq("status", "confirmed")
+    const query = applyTxFilters(
+      getAdminClient()
+        .from("transactions")
+        .select(TX_SELECT)
+        .eq("user_id", auth.userId)
+        .eq("status", "confirmed"),
+      f,
+    )
       .order("occurred_at", { ascending: false })
       .range(f.offset, f.offset + f.limit); // one extra row tells us if there is a next page
-
-    if (f.type) query = query.eq("type", f.type);
-    if (f.from) query = query.gte("occurred_at", f.from);
-    if (f.to) query = query.lt("occurred_at", f.to);
-    if (f.categoryId) query = query.eq("category_id", f.categoryId);
-    if (f.q) {
-      // strip LIKE wildcards so user text is matched literally
-      const term = f.q.replace(/[%_\\]/g, " ").trim();
-      if (term) query = query.ilike("title", `%${term}%`);
-    }
 
     const { data, error } = await query;
     if (error) throw new Error(`list transactions: ${error.message}`);
