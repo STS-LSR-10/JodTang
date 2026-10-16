@@ -35,7 +35,7 @@ GitHub Actions (รายชั่วโมง) ──► /api/cron/reminders �
 1. **Supabase:** รัน migration ตามลำดับใน SQL Editor หรือ `supabase db push`
    `0001_schema` → `0002_rls` → `0003_seed_and_functions` → `0004_budget_mode_overrides_analytics` →
    `0005_slips_bucket` → `0006_points_referral_reminders` → `0007_rate_limits`
-   (ทุกไฟล์รันซ้ำได้) แล้วรัน [supabase/tests/rls_check.sql](../supabase/tests/rls_check.sql) ต้องจบด้วย `RLS checks passed`
+   (ทุกไฟล์รันซ้ำได้) แล้วรัน [supabase/tests/rls_check.sql](../supabase/tests/rls_check.sql) (คัดลอกทั้งไฟล์ไปวางแล้ว Run) ผ่านเมื่อผลลัพธ์สุดท้ายขึ้นคอลัมน์ `result` = `RLS checks passed` (ถ้าล้มจะขึ้น error ที่ระบุตาราง/ข้อที่ผิด; ไม่ทิ้งข้อมูลทดสอบไม่ว่าผลเป็นอย่างไร)
 2. **LINE Developers:** Messaging API channel (ปิด Auto-reply/Greeting) + LINE Login channel + LIFF
    (Endpoint = **ราก** ของเว็บ) — ดูรายละเอียดใน [README](../README.md)
 3. **Vercel:** import repo, ปิด Deployment Protection, ตั้ง env ตามตารางด้านบน, Redeploy

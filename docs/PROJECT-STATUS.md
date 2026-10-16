@@ -169,7 +169,7 @@ supabase/migrations/0001..0004
 
 - `pnpm lint && pnpm typecheck && pnpm test` — unit + `tests/db` (รันทุก migration สองรอบบน Postgres จริงที่จำลอง Supabase และรัน `supabase/tests/rls_check.sql`)
 - `pnpm e2e` — Playwright + axe ที่ 360px (build ด้วย `NEXT_PUBLIC_E2E=1` เฉพาะตอนทดสอบ; ห้ามตั้งใน production)
-- **Phase 6 — ต้องทำเองก่อนใช้:** รัน migration `0007` แล้วรัน `rls_check.sql` ใน SQL Editor (ต้องจบด้วย `RLS checks passed`)
+- **Phase 6 — ต้องทำเองก่อนใช้:** รัน migration `0007` แล้วรัน `rls_check.sql` ใน SQL Editor (ผลลัพธ์สุดท้าย `result = RLS checks passed`)
 - ขั้นตอน deploy / rollback / rotate secret / แก้ปัญหา: [DEPLOY.md](DEPLOY.md)
 ## 10) คำสั่งที่ใช้บ่อย
 

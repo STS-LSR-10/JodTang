@@ -398,36 +398,72 @@ describe("deleting a user (erase-my-data)", () => {
 });
 
 describe("row level security (supabase/tests/rls_check.sql)", () => {
+  const script = () =>
+    readFileSync(join(process.cwd(), "supabase", "tests", "rls_check.sql"), "utf8");
+  const leftovers = async (d: PGlite) =>
+    (
+      await one<{ n: number }>(
+        d,
+        "select count(*)::int as n from users where line_user_id like 'rls-test-%'",
+      )
+    ).n;
+
   it("passes: users are isolated, plan/points are server-only, server tables are hidden", async () => {
-    const script = readFileSync(join(process.cwd(), "supabase", "tests", "rls_check.sql"), "utf8");
-    const notices: string[] = [];
     const rlsDb = await newDb();
-    // PGlite surfaces RAISE NOTICE through the optional onNotice hook when supported
     try {
-      await rlsDb.exec(script);
+      const results = await rlsDb.exec(script());
+      // the last statement is the visible result the SQL Editor shows
+      expect(results.at(-1)?.rows[0]).toEqual({ result: "RLS checks passed" });
+      expect(await leftovers(rlsDb)).toBe(0); // nothing is kept
     } finally {
       await rlsDb.close();
     }
-    expect(notices).toEqual([]); // reaching this line means no check raised an exception
+  }, 60_000);
+
+  it("works as separate statements too (the SQL Editor may run them one by one)", async () => {
+    const rlsDb = await newDb();
+    try {
+      // run the single DO block first, then the final SELECT, as two separate statements
+      const full = script();
+      const at = full.indexOf("select 'RLS checks passed'");
+      await rlsDb.exec(full.slice(0, at));
+      expect(await leftovers(rlsDb)).toBe(0);
+      const r = await rlsDb.query(full.slice(at));
+      expect(r.rows[0]).toEqual({ result: "RLS checks passed" });
+    } finally {
+      await rlsDb.close();
+    }
   }, 60_000);
 
   it("detects a leak: if a table loses RLS the script fails", async () => {
-    const script = readFileSync(join(process.cwd(), "supabase", "tests", "rls_check.sql"), "utf8");
     const broken = await newDb();
     try {
       await broken.exec("alter table transactions disable row level security");
-      await expect(broken.exec(script)).rejects.toThrow(/RLS is DISABLED on public\.transactions/);
+      await expect(broken.exec(script())).rejects.toThrow(
+        /RLS is DISABLED on public\.transactions/,
+      );
+      expect(await leftovers(broken)).toBe(0);
     } finally {
       await broken.close();
     }
   }, 60_000);
 
-  it("detects a leak: a permissive policy on transactions is caught", async () => {
-    const script = readFileSync(join(process.cwd(), "supabase", "tests", "rls_check.sql"), "utf8");
+  it("detects a leak: a permissive policy on transactions is caught and leaves no data behind", async () => {
     const broken = await newDb();
     try {
       await broken.exec("create policy leak on transactions for select using (true)");
-      await expect(broken.exec(script)).rejects.toThrow(/can READ another user|leaks/);
+      await expect(broken.exec(script())).rejects.toThrow(/can READ another user|leaks/);
+      expect(await leftovers(broken)).toBe(0);
+    } finally {
+      await broken.close();
+    }
+  }, 60_000);
+
+  it("detects a user being able to upgrade their own plan", async () => {
+    const broken = await newDb();
+    try {
+      await broken.exec("create policy self_update on users for update using (id = auth.uid())");
+      await expect(broken.exec(script())).rejects.toThrow(/can UPDATE their own users row/);
     } finally {
       await broken.close();
     }
