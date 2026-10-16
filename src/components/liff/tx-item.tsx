@@ -4,15 +4,22 @@ import { formatBaht } from "@/lib/money";
 import { formatThaiDate } from "@/lib/thai-date";
 import { cn } from "@/lib/utils";
 
-export function TxItem({ tx, action }: { tx: TxDto; action?: ReactNode }) {
+export function TxItem({
+  tx,
+  action,
+  leading,
+  onOpen,
+}: {
+  tx: TxDto;
+  action?: ReactNode;
+  /** Shown before the color bar (e.g. a selection checkbox). */
+  leading?: ReactNode;
+  /** When set, the title and amount become a button (e.g. to edit the entry). */
+  onOpen?: () => void;
+}) {
   const income = tx.type === "income";
-  return (
-    <li className="flex items-center gap-3 px-4 py-3">
-      <span
-        aria-hidden
-        className="h-10 w-1.5 shrink-0 rounded-full"
-        style={{ background: tx.categoryColor ?? (income ? "#059669" : "#E11D48") }}
-      />
+  const body = (
+    <>
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-semibold">{tx.title}</p>
         <p className="truncate text-xs text-muted">
@@ -22,6 +29,28 @@ export function TxItem({ tx, action }: { tx: TxDto; action?: ReactNode }) {
       <p className={cn("num shrink-0 text-sm font-bold", income ? "text-income" : "text-expense")}>
         {income ? "+" : "-"}฿{formatBaht(tx.amountSatang)}
       </p>
+    </>
+  );
+  return (
+    <li className="flex items-center gap-3 px-4 py-3">
+      {leading}
+      <span
+        aria-hidden
+        className="h-10 w-1.5 shrink-0 rounded-full"
+        style={{ background: tx.categoryColor ?? (income ? "#059669" : "#E11D48") }}
+      />
+      {onOpen ? (
+        <button
+          type="button"
+          onClick={onOpen}
+          aria-label={`แก้ไข ${tx.title}`}
+          className="flex min-h-11 min-w-0 flex-1 items-center gap-3 text-left"
+        >
+          {body}
+        </button>
+      ) : (
+        <div className="flex min-w-0 flex-1 items-center gap-3">{body}</div>
+      )}
       {action}
     </li>
   );

@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Route } from "@playwright/test";
 import {
   expectNoHorizontalScroll,
   expectNoSeriousA11yViolations,
@@ -101,6 +101,121 @@ test.describe("transactions page (360px)", () => {
     await mockApi(page, { "GET /api/transactions": LIST, "GET /api/me": ME_FREE });
     await page.goto("/transactions");
     await expect(page.getByText("น้ำมัน")).toBeVisible();
+    await expectNoSeriousA11yViolations(page);
+  });
+
+  test("editing sends only the changed fields", async ({ page }) => {
+    const bodies: unknown[] = [];
+    await mockApi(page, {
+      "GET /api/transactions": LIST,
+      "GET /api/categories": CATEGORIES,
+      "GET /api/me": ME_FREE,
+      "PATCH /api/transactions/11111111-1111-1111-1111-111111111111": (route: Route) => {
+        bodies.push(route.request().postDataJSON());
+        return { ok: true };
+      },
+    });
+    await page.goto("/transactions");
+    await page.getByRole("button", { name: "แก้ไข กาแฟ" }).click();
+
+    const dialog = page.getByRole("dialog", { name: "แก้ไขรายการ" });
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByLabel("ชื่อรายการ")).toHaveValue("กาแฟ");
+    await expect(dialog.getByLabel("จำนวนเงิน")).toHaveValue("30.00");
+    await expectNoHorizontalScroll(page);
+
+    await dialog.getByLabel("จำนวนเงิน").fill("45.50");
+    await dialog.getByRole("button", { name: "บันทึก" }).click();
+    await expect.poll(() => bodies.length).toBe(1);
+    expect(bodies[0]).toEqual({ amount: "45.50" });
+    await expect(page.getByText("บันทึกแล้ว")).toBeVisible();
+  });
+
+  test("edit sheet validates before sending", async ({ page }) => {
+    const { seen } = await mockApi(page, {
+      "GET /api/transactions": LIST,
+      "GET /api/categories": CATEGORIES,
+      "GET /api/me": ME_FREE,
+    });
+    await page.goto("/transactions");
+    await page.getByRole("button", { name: "แก้ไข กาแฟ" }).click();
+    const dialog = page.getByRole("dialog", { name: "แก้ไขรายการ" });
+
+    await dialog.getByLabel("จำนวนเงิน").fill("0");
+    await dialog.getByRole("button", { name: "บันทึก" }).click();
+    await expect(page.getByRole("alert").filter({ hasText: "จำนวนเงินไม่ถูกต้อง" })).toBeVisible();
+    expect(seen.some((s) => s.startsWith("PATCH"))).toBe(false);
+  });
+
+  test("select mode: choose two entries and delete them in one call", async ({ page }) => {
+    const bodies: unknown[] = [];
+    await mockApi(page, {
+      "GET /api/transactions": LIST,
+      "GET /api/me": ME_FREE,
+      "POST /api/transactions/bulk": (route: Route) => {
+        bodies.push(route.request().postDataJSON());
+        return { updated: 2, skipped: 0 };
+      },
+    });
+    page.once("dialog", (d) => void d.accept());
+    await page.goto("/transactions");
+    await page.getByRole("button", { name: "เลือก", exact: true }).click();
+
+    const bar = page.getByRole("region", { name: "จัดการรายการที่เลือก" });
+    await expect(bar.getByRole("button", { name: "ลบ" })).toBeDisabled();
+    await page.getByRole("checkbox", { name: "เลือก กาแฟ" }).check();
+    await page.getByRole("checkbox", { name: "เลือก น้ำมัน" }).check();
+    await expect(bar.getByText("เลือกแล้ว 2 รายการ")).toBeVisible();
+    await expectNoHorizontalScroll(page);
+
+    await bar.getByRole("button", { name: "ลบ" }).click();
+    await expect.poll(() => bodies.length).toBe(1);
+    expect(bodies[0]).toEqual({
+      action: "delete",
+      ids: ["11111111-1111-1111-1111-111111111111", "22222222-2222-2222-2222-222222222222"],
+    });
+    await expect(page.getByText("ลบแล้ว 2 รายการ")).toBeVisible();
+    await expect(page.getByRole("region", { name: "จัดการรายการที่เลือก" })).toHaveCount(0);
+  });
+
+  test("select mode: move the selection to another category", async ({ page }) => {
+    const bodies: unknown[] = [];
+    await mockApi(page, {
+      "GET /api/transactions": LIST,
+      "GET /api/categories": {
+        items: [
+          { id: "c1", type: "expense", name: "อาหาร" },
+          { id: "c2", type: "income", name: "เงินเดือน" },
+        ],
+      },
+      "GET /api/me": ME_FREE,
+      "POST /api/transactions/bulk": (route: Route) => {
+        bodies.push(route.request().postDataJSON());
+        return { updated: 1, skipped: 1 };
+      },
+    });
+    await page.goto("/transactions");
+    await page.getByRole("button", { name: "เลือก", exact: true }).click();
+    await page.getByRole("checkbox", { name: "เลือก กาแฟ" }).check();
+    await page.getByRole("checkbox", { name: "เลือก น้ำมัน" }).check();
+    await page.getByRole("button", { name: "ย้ายหมวด", exact: true }).click();
+
+    const dialog = page.getByRole("dialog", { name: /ย้ายหมวด 2 รายการ/ });
+    await expect(dialog).toBeVisible();
+    await expectNoSeriousA11yViolations(page);
+    await dialog.getByLabel("หมวดปลายทาง").selectOption({ label: "อาหาร" });
+    await dialog.getByRole("button", { name: "ย้ายหมวด" }).click();
+
+    await expect.poll(() => bodies.length).toBe(1);
+    expect(bodies[0]).toMatchObject({ action: "move", categoryId: "c1" });
+    await expect(page.getByText("ย้ายหมวดแล้ว 1 รายการ (ข้าม 1)")).toBeVisible();
+  });
+
+  test("select mode has no serious accessibility violations", async ({ page }) => {
+    await mockApi(page, { "GET /api/transactions": LIST, "GET /api/me": ME_FREE });
+    await page.goto("/transactions");
+    await page.getByRole("button", { name: "เลือก", exact: true }).click();
+    await page.getByRole("checkbox", { name: "เลือก กาแฟ" }).check();
     await expectNoSeriousA11yViolations(page);
   });
 });

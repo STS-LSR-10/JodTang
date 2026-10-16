@@ -1,13 +1,16 @@
 "use client";
 
-import { Download, Plus, Receipt, Trash2, X } from "lucide-react";
+import { CheckSquare, Download, FolderInput, Plus, Receipt, Trash2, X } from "lucide-react";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Sheet } from "@/components/liff/sheet";
 import { EmptyState, ErrorState, LoadingBlock, PageHeader } from "@/components/liff/states";
 import { TxItem } from "@/components/liff/tx-item";
 import { useApi, useLiff } from "@/components/liff/liff-provider";
 import type { TxDto } from "@/lib/dto";
+import { satangToString } from "@/lib/money";
 import { normalizeThaiDigits } from "@/lib/parse/thai-number";
+import { fromBangkokInputValue, toBangkokInputValue } from "@/lib/thai-date";
+import { MAX_BULK, MAX_NOTE, MAX_TITLE } from "@/lib/tx-edit";
 import { cn } from "@/lib/utils";
 
 type TypeFilter = "all" | "expense" | "income";
@@ -19,6 +22,11 @@ interface ListResponse {
 
 interface CategoriesResponse {
   items: { id: string; type: "expense" | "income"; name: string }[];
+}
+
+interface BulkResponse {
+  updated: number;
+  skipped: number;
 }
 
 const PAGE_SIZE = 30;
@@ -51,6 +59,11 @@ export default function TransactionsPage() {
   const [slipFor, setSlipFor] = useState<TxDto | null>(null);
   const [exportOpen, setExportOpen] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [editFor, setEditFor] = useState<TxDto | null>(null);
+  const [selecting, setSelecting] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [moveOpen, setMoveOpen] = useState(false);
+  const [bulkBusy, setBulkBusy] = useState(false);
 
   const path = useMemo(() => {
     const p = new URLSearchParams({ limit: String(PAGE_SIZE) });
@@ -83,6 +96,63 @@ export default function TransactionsPage() {
     }
   }
 
+  function stopSelecting() {
+    setSelecting(false);
+    setSelected(new Set());
+    setMoveOpen(false);
+  }
+
+  function toggle(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else if (next.size < MAX_BULK) next.add(id);
+      return next;
+    });
+  }
+
+  function bulkMessage(res: BulkResponse, done: string): string {
+    return res.skipped > 0
+      ? `${done} ${res.updated} รายการ (ข้าม ${res.skipped})`
+      : `${done} ${res.updated} รายการ`;
+  }
+
+  async function bulkDelete() {
+    if (!window.confirm(`ลบ ${selected.size} รายการที่เลือกใช่ไหม?`)) return;
+    setBulkBusy(true);
+    try {
+      const res = await api<BulkResponse>("/api/transactions/bulk", {
+        method: "POST",
+        body: JSON.stringify({ action: "delete", ids: [...selected] }),
+      });
+      setNotice(bulkMessage(res, "ลบแล้ว"));
+      stopSelecting();
+      list.reload();
+    } catch (e) {
+      setNotice(e instanceof Error ? e.message : "ลบไม่สำเร็จ");
+    } finally {
+      setBulkBusy(false);
+    }
+  }
+
+  async function bulkMove(categoryId: string) {
+    setBulkBusy(true);
+    try {
+      const res = await api<BulkResponse>("/api/transactions/bulk", {
+        method: "POST",
+        body: JSON.stringify({ action: "move", ids: [...selected], categoryId }),
+      });
+      setNotice(bulkMessage(res, "ย้ายหมวดแล้ว"));
+      stopSelecting();
+      list.reload();
+    } catch (e) {
+      setNotice(e instanceof Error ? e.message : "ย้ายหมวดไม่สำเร็จ");
+      setMoveOpen(false);
+    } finally {
+      setBulkBusy(false);
+    }
+  }
+
   async function remove(tx: TxDto) {
     if (!window.confirm(`ลบ "${tx.title}" ใช่ไหม?`)) return;
     try {
@@ -100,8 +170,27 @@ export default function TransactionsPage() {
         title="รายการ"
         right={
           <div className="flex gap-2">
+            {selecting ? (
+              <button
+                type="button"
+                onClick={stopSelecting}
+                className="flex h-11 items-center rounded-2xl border border-border bg-surface px-4 text-sm font-semibold"
+              >
+                ยกเลิก
+              </button>
+            ) : null}
+            {!selecting && items.length > 0 ? (
+              <button
+                type="button"
+                onClick={() => setSelecting(true)}
+                className="flex h-11 items-center gap-1 rounded-2xl border border-border bg-surface px-3 text-sm font-semibold text-primary"
+              >
+                <CheckSquare className="h-4 w-4" aria-hidden /> เลือก
+              </button>
+            ) : null}
             <button
               type="button"
+              hidden={selecting}
               onClick={() => setExportOpen(true)}
               aria-label="ส่งออกไฟล์"
               className="flex h-11 w-11 items-center justify-center rounded-2xl border border-border bg-surface text-primary"
@@ -110,6 +199,7 @@ export default function TransactionsPage() {
             </button>
             <button
               type="button"
+              hidden={selecting}
               onClick={() => setFormOpen(true)}
               className="flex h-11 items-center gap-1 rounded-2xl bg-primary px-4 text-sm font-semibold text-surface"
             >
@@ -119,7 +209,7 @@ export default function TransactionsPage() {
         }
       />
 
-      <div className="space-y-3 px-4 pb-4">
+      <div className={cn("space-y-3 px-4 pb-4", selecting && "pb-24")}>
         <div role="tablist" aria-label="ประเภท" className="flex gap-2">
           {FILTERS.map((f) => (
             <button
@@ -177,27 +267,41 @@ export default function TransactionsPage() {
                 <TxItem
                   key={tx.id}
                   tx={tx}
+                  onOpen={selecting ? () => toggle(tx.id) : () => setEditFor(tx)}
+                  leading={
+                    selecting ? (
+                      <input
+                        type="checkbox"
+                        checked={selected.has(tx.id)}
+                        onChange={() => toggle(tx.id)}
+                        aria-label={`เลือก ${tx.title}`}
+                        className="h-6 w-6 shrink-0 accent-[var(--primary)]"
+                      />
+                    ) : null
+                  }
                   action={
-                    <div className="flex shrink-0">
-                      {tx.hasSlip ? (
+                    selecting ? null : (
+                      <div className="flex shrink-0">
+                        {tx.hasSlip ? (
+                          <button
+                            type="button"
+                            onClick={() => setSlipFor(tx)}
+                            aria-label={`ดูสลิป ${tx.title}`}
+                            className="flex h-11 w-11 items-center justify-center rounded-2xl text-primary"
+                          >
+                            <Receipt className="h-4 w-4" aria-hidden />
+                          </button>
+                        ) : null}
                         <button
                           type="button"
-                          onClick={() => setSlipFor(tx)}
-                          aria-label={`ดูสลิป ${tx.title}`}
-                          className="flex h-11 w-11 items-center justify-center rounded-2xl text-primary"
+                          onClick={() => remove(tx)}
+                          aria-label={`ลบ ${tx.title}`}
+                          className="flex h-11 w-11 items-center justify-center rounded-2xl text-muted"
                         >
-                          <Receipt className="h-4 w-4" aria-hidden />
+                          <Trash2 className="h-4 w-4" aria-hidden />
                         </button>
-                      ) : null}
-                      <button
-                        type="button"
-                        onClick={() => remove(tx)}
-                        aria-label={`ลบ ${tx.title}`}
-                        className="flex h-11 w-11 items-center justify-center rounded-2xl text-muted"
-                      >
-                        <Trash2 className="h-4 w-4" aria-hidden />
-                      </button>
-                    </div>
+                      </div>
+                    )
                   }
                 />
               ))}
@@ -215,6 +319,57 @@ export default function TransactionsPage() {
           </>
         )}
       </div>
+
+      {selecting ? (
+        <div
+          role="region"
+          aria-label="จัดการรายการที่เลือก"
+          className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-surface pb-[env(safe-area-inset-bottom)]"
+        >
+          <div className="mx-auto flex max-w-md items-center gap-2 px-4 py-2">
+            <p className="num flex-1 text-sm font-semibold" aria-live="polite">
+              เลือกแล้ว {selected.size} รายการ
+            </p>
+            <button
+              type="button"
+              disabled={selected.size === 0 || bulkBusy}
+              onClick={() => setMoveOpen(true)}
+              className="flex h-11 items-center gap-1 rounded-2xl border border-primary px-4 text-sm font-semibold text-primary disabled:opacity-50"
+            >
+              <FolderInput className="h-4 w-4" aria-hidden /> ย้ายหมวด
+            </button>
+            <button
+              type="button"
+              disabled={selected.size === 0 || bulkBusy}
+              onClick={bulkDelete}
+              className="flex h-11 items-center gap-1 rounded-2xl bg-expense px-4 text-sm font-semibold text-surface disabled:opacity-50"
+            >
+              <Trash2 className="h-4 w-4" aria-hidden /> ลบ
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+      {moveOpen ? (
+        <MoveSheet
+          count={selected.size}
+          busy={bulkBusy}
+          onPick={bulkMove}
+          onClose={() => setMoveOpen(false)}
+        />
+      ) : null}
+
+      {editFor ? (
+        <EditSheet
+          tx={editFor}
+          onClose={() => setEditFor(null)}
+          onSaved={() => {
+            setEditFor(null);
+            setNotice("บันทึกแล้ว");
+            list.reload();
+          }}
+        />
+      ) : null}
 
       {slipFor ? <SlipSheet tx={slipFor} onClose={() => setSlipFor(null)} /> : null}
 
@@ -452,5 +607,229 @@ function AddSheet({ onClose, onSaved }: { onClose: () => void; onSaved: () => vo
         </button>
       </form>
     </div>
+  );
+}
+
+/** Pick the category to move the selected entries into (entries of the other type are skipped). */
+function MoveSheet({
+  count,
+  busy,
+  onPick,
+  onClose,
+}: {
+  count: number;
+  busy: boolean;
+  onPick: (categoryId: string) => void;
+  onClose: () => void;
+}) {
+  const categories = useApi<CategoriesResponse>("/api/categories");
+  const [categoryId, setCategoryId] = useState("");
+  const items = categories.data?.items ?? [];
+  const expense = items.filter((c) => c.type === "expense");
+  const income = items.filter((c) => c.type === "income");
+
+  return (
+    <Sheet title={`ย้ายหมวด ${count} รายการ`} onClose={onClose}>
+      {categories.loading ? (
+        <LoadingBlock rows={2} />
+      ) : categories.error ? (
+        <ErrorState message={categories.error} onRetry={categories.reload} />
+      ) : (
+        <div className="space-y-3">
+          <select
+            value={categoryId}
+            onChange={(e) => setCategoryId(e.target.value)}
+            aria-label="หมวดปลายทาง"
+            className="h-12 w-full rounded-2xl border border-border bg-background px-3 outline-none focus:border-primary"
+          >
+            <option value="">เลือกหมวดปลายทาง</option>
+            <optgroup label="รายจ่าย">
+              {expense.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </optgroup>
+            <optgroup label="รายรับ">
+              {income.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </optgroup>
+          </select>
+          <p className="text-xs text-muted">
+            ย้ายได้เฉพาะรายการที่เป็นประเภทเดียวกับหมวดที่เลือก รายการประเภทอื่นจะถูกข้าม
+          </p>
+          <button
+            type="button"
+            disabled={!categoryId || busy}
+            onClick={() => onPick(categoryId)}
+            className="h-12 w-full rounded-2xl bg-primary text-base font-semibold text-surface disabled:opacity-60"
+          >
+            {busy ? "กำลังย้าย..." : "ย้ายหมวด"}
+          </button>
+        </div>
+      )}
+    </Sheet>
+  );
+}
+
+/** Edit one confirmed entry. Only fields that changed are sent. */
+function EditSheet({
+  tx,
+  onClose,
+  onSaved,
+}: {
+  tx: TxDto;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const { api } = useLiff();
+  const categories = useApi<CategoriesResponse>("/api/categories");
+  const initial = useMemo(
+    () => ({
+      type: tx.type,
+      title: tx.title,
+      amount: satangToString(tx.amountSatang),
+      categoryId: tx.categoryId ?? "",
+      when: toBangkokInputValue(new Date(tx.occurredAt)),
+      note: tx.note ?? "",
+    }),
+    [tx],
+  );
+  const [type, setType] = useState(initial.type);
+  const [title, setTitle] = useState(initial.title);
+  const [amount, setAmount] = useState(initial.amount);
+  const [categoryId, setCategoryId] = useState(initial.categoryId);
+  const [when, setWhen] = useState(initial.when);
+  const [note, setNote] = useState(initial.note);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const typeChanged = type !== initial.type;
+  const options = (categories.data?.items ?? []).filter((c) => c.type === type);
+
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    const normalized = normalizeThaiDigits(amount).replace(/,/g, "").trim();
+    if (!title.trim()) return setError("ใส่ชื่อรายการด้วยนะ");
+    if (!AMOUNT_PATTERN.test(normalized) || Number(normalized) <= 0) {
+      return setError("จำนวนเงินไม่ถูกต้อง (เช่น 50 หรือ 50.50)");
+    }
+    const at = fromBangkokInputValue(when);
+    if (!at) return setError("วันเวลาไม่ถูกต้อง");
+
+    const body: Record<string, unknown> = {};
+    if (title.trim() !== initial.title) body.title = title.trim();
+    if (Number(normalized) !== Number(initial.amount)) body.amount = normalized;
+    if (typeChanged) body.type = type;
+    // After a type change an empty choice means "pick for me"; otherwise it means no category.
+    if (categoryId !== initial.categoryId && !(typeChanged && categoryId === "")) {
+      body.categoryId = categoryId || null;
+    }
+    if (when !== initial.when) body.occurredAt = at.toISOString();
+    if (note.trim() !== initial.note.trim()) body.note = note.trim() || null;
+    if (Object.keys(body).length === 0) return onClose();
+
+    setSaving(true);
+    setError(null);
+    try {
+      await api(`/api/transactions/${tx.id}`, { method: "PATCH", body: JSON.stringify(body) });
+      onSaved();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "บันทึกไม่สำเร็จ");
+      setSaving(false);
+    }
+  }
+
+  const field =
+    "h-12 w-full rounded-2xl border border-border bg-background px-4 outline-none focus:border-primary";
+
+  return (
+    <Sheet title="แก้ไขรายการ" onClose={onClose}>
+      <form onSubmit={submit} className="space-y-3">
+        <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="ประเภท">
+          {(["expense", "income"] as const).map((t) => (
+            <button
+              key={t}
+              type="button"
+              role="radio"
+              aria-checked={type === t}
+              onClick={() => {
+                setType(t);
+                setCategoryId(t === initial.type ? initial.categoryId : "");
+              }}
+              className={cn(
+                "h-11 rounded-2xl border text-sm font-semibold",
+                type === t
+                  ? t === "expense"
+                    ? "border-expense bg-expense/10 text-expense"
+                    : "border-income bg-income/10 text-income"
+                  : "border-border text-muted",
+              )}
+            >
+              {t === "expense" ? "รายจ่าย" : "รายรับ"}
+            </button>
+          ))}
+        </div>
+        <input
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          maxLength={MAX_TITLE}
+          aria-label="ชื่อรายการ"
+          className={field}
+        />
+        <input
+          value={amount}
+          onChange={(e) => setAmount(e.target.value)}
+          inputMode="decimal"
+          aria-label="จำนวนเงิน"
+          className={cn(field, "num")}
+        />
+        <select
+          value={categoryId}
+          onChange={(e) => setCategoryId(e.target.value)}
+          aria-label="หมวดหมู่"
+          className={field}
+        >
+          <option value="">{typeChanged ? "เลือกให้อัตโนมัติ" : "ไม่ระบุหมวด"}</option>
+          {options.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.name}
+            </option>
+          ))}
+        </select>
+        <input
+          type="datetime-local"
+          value={when}
+          onChange={(e) => setWhen(e.target.value)}
+          aria-label="วันและเวลา"
+          className={field}
+        />
+        <input
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          maxLength={MAX_NOTE}
+          placeholder="โน้ต (ไม่บังคับ)"
+          aria-label="โน้ต"
+          className={field}
+        />
+
+        {error ? (
+          <p role="alert" className="text-sm text-expense">
+            {error}
+          </p>
+        ) : null}
+
+        <button
+          type="submit"
+          disabled={saving}
+          className="h-12 w-full rounded-2xl bg-primary text-base font-semibold text-surface disabled:opacity-60"
+        >
+          {saving ? "กำลังบันทึก..." : "บันทึก"}
+        </button>
+      </form>
+    </Sheet>
   );
 }

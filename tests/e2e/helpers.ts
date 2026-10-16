@@ -133,5 +133,6 @@ export const TX = (over: Record<string, unknown> = {}) => ({
   categoryIcon: null,
   categoryColor: "#0F766E",
   hasSlip: false,
+  note: null,
   ...over,
 });
