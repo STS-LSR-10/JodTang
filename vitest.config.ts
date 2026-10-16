@@ -7,6 +7,9 @@ export default defineConfig({
   },
   test: {
     environment: "node",
-    include: ["src/**/*.test.ts", "tests/unit/**/*.test.ts"],
+    include: ["src/**/*.test.ts", "tests/unit/**/*.test.ts", "tests/db/**/*.test.ts"],
+    // DB tests boot a WASM Postgres and run every migration, so give them room
+    testTimeout: 30_000,
+    hookTimeout: 60_000,
   },
 });
