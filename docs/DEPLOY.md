@@ -77,6 +77,30 @@ GitHub Actions (รายชั่วโมง) ──► /api/cron/reminders �
 | `SUPABASE_SERVICE_ROLE_KEY` | Supabase → Settings → API → roll key → แก้ Vercel → Redeploy | ระบบหยุดชั่วคราวระหว่างสลับ |
 | Key ของ AI / EasySlip | ออก key ใหม่ → แก้ Vercel → Redeploy | ไม่มี (chain จะข้ามเจ้าที่ล้มเอง) |
 
+## 5.2) ตั้งค่า Stripe (ชำระเงิน / subscription)
+
+ทำใน **Test mode** ก่อนเสมอ แล้วค่อยทำซ้ำกับ Live mode
+
+1. รัน migration `0009_payments.sql` ใน Supabase SQL Editor แล้วรันสคริปต์ตรวจ RLS ซ้ำ (ต้องขึ้น `RLS checks passed`)
+2. Stripe Dashboard → **Settings → Payment methods**: เปิด **Cards** และ **PromptPay** (บัญชี Stripe ต้องเป็นประเทศไทยจึงจะเปิดพร้อมเพย์ได้)
+3. Stripe Dashboard → **Settings → Billing → Customer portal**: กด Activate แล้วเปิด "Cancel subscriptions" และ "Update payment method" (ไม่ต้องเปิดเปลี่ยนแผน เพราะแผนกำหนดราคาในโค้ด)
+4. Stripe Dashboard → **Developers → Webhooks → Add endpoint**
+   - URL: `https://<โดเมนของคุณ>/api/stripe/webhook`
+   - Events ที่ต้องเลือก: `checkout.session.completed`, `checkout.session.async_payment_succeeded`, `customer.subscription.created`, `customer.subscription.updated`, `invoice.paid`
+   - คัดลอก **Signing secret** (ขึ้นต้น `whsec_`)
+5. ใส่ใน Vercel → Environment Variables (Production): `STRIPE_SECRET_KEY` (ขึ้นต้น `sk_test_` / `sk_live_`) และ `STRIPE_WEBHOOK_SECRET` แล้ว Redeploy **อย่าส่งค่าทั้งสองในแชทหรือ commit**
+6. ทดสอบ: หน้าอัปเกรด → เลือกบัตรทดสอบ `4242 4242 4242 4242` (วันหมดอายุในอนาคต, CVC อะไรก็ได้) → กลับมาดูแผนในหน้าตั้งค่า
+
+วิธีทำงาน
+- บัตร → `mode=subscription`: เมื่อ Stripe ส่ง `customer.subscription.created/updated` (สถานะ active) ระบบตั้ง `plan` และ `plan_expires_at` = สิ้นรอบบิลปัจจุบัน ต่ออายุเองทุกรอบ
+- พร้อมเพย์ → `mode=payment`: เมื่อจ่ายสำเร็จ ระบบต่อ `plan_expires_at` ตามรอบ (1 หรือ 12 เดือน) ต่อท้ายเวลาที่เหลือ ผ่าน `apply_prepaid_purchase` (กันซ้ำด้วย `payments.provider_ref`)
+- ยกเลิก subscription: ผู้ใช้ยังใช้ได้จนสิ้นรอบที่จ่ายแล้ว (ไม่มีการคืนเงินอัตโนมัติ ถ้าต้องการคืนให้ทำใน Stripe เอง แล้วลด `plan_expires_at` ด้วยมือ)
+- ราคาอยู่ที่ `src/lib/pricing.ts` และส่งเป็น `price_data` ทุกครั้ง จึงไม่ต้องสร้าง Product/Price ใน Stripe
+
+ปัญหาที่พบบ่อย
+- Webhook ขึ้น 400 ใน Stripe: `STRIPE_WEBHOOK_SECRET` ไม่ตรงกับ endpoint นั้น (test กับ live คนละค่า)
+- จ่ายแล้วแผนไม่เปลี่ยน: ดู Stripe → Webhooks → ประวัติการส่ง ถ้าเป็น 5xx ดู log event `stripe_webhook_failed` ใน Vercel ส่วน Stripe จะส่งซ้ำให้เอง
+- ปุ่มยังตอบ "ยังไม่เปิดให้ชำระเงิน": ยังไม่ได้ตั้ง env ทั้งสองตัว หรือรูปแบบไม่ถูก (`sk_...`/`rk_...` และ `whsec_...`) หรือยังไม่ได้ Redeploy
 ## 6) Logging และการเฝ้าระวัง
 
 - ดู log ที่ Vercel → Project → **Logs** แต่ละบรรทัดเป็น JSON: `{"level":"error","event":"line_event_failed","message":"..."}`

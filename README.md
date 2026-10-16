@@ -103,7 +103,7 @@ pnpm lint && pnpm typecheck && pnpm test
 | กราฟเก็บออม, รายการประจำ, เตือนจดประจำวัน, จำผู้รับ → หมวด | – | ✅ |
 
 - **เช็คสิทธิ์จากที่เดียว:** `src/lib/plan.ts` (ฝั่ง API ใช้ `requireFeature` ใน `src/lib/plan-server.ts` จึงบังคับจริง ไม่ใช่แค่ซ่อนปุ่ม)
-- **ชำระเงินเป็น stub:** `src/lib/payments/` มี interface (`PaymentProvider`) พร้อมต่อ Stripe/PromptPay แต่ตอนนี้ปุ่มอัปเกรดตอบว่า "ยังไม่เปิดให้ชำระเงิน"
+- **ชำระเงินด้วย Stripe:** `src/lib/payments/` — บัตรเครดิต/เดบิต (ในประเทศ+ต่างประเทศ) = Stripe Billing subscription ต่ออายุอัตโนมัติ, พร้อมเพย์ = จ่ายครั้งเดียวต่อรอบ (พร้อมเพย์ตัดซ้ำอัตโนมัติไม่ได้), ปุ่ม "จัดการการชำระเงิน" เปิด Stripe Billing portal ถ้ายังไม่ตั้ง `STRIPE_SECRET_KEY` + `STRIPE_WEBHOOK_SECRET` ปุ่มจะตอบ "ยังไม่เปิดให้ชำระเงิน" (ขั้นตอนตั้งค่าอยู่ใน `docs/DEPLOY.md` หัวข้อ Stripe)
 - **ทดสอบแผน Plus:** ให้ตัวเองเป็น Plus ชั่วคราวใน Supabase SQL Editor
   ```sql
   update users set plan_expires_at = now() + interval '7 days'

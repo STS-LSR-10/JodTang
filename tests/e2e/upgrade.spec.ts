@@ -46,19 +46,58 @@ test.describe("upgrade page (360px)", () => {
     });
     await page.goto("/upgrade");
     await page.getByRole("radio", { name: /Ultimate/ }).click();
-    await page.getByRole("button", { name: /เลือกช่องทางชำระเงิน/ }).click();
+    await page.getByRole("radio", { name: /พร้อมเพย์/ }).click();
+    await page.getByRole("button", { name: /ชำระเงิน · Ultimate/ }).click();
 
     await expect.poll(() => bodies.length).toBe(1);
-    expect(bodies[0]).toEqual({ plan: "ultimate", period: "yearly" });
+    expect(bodies[0]).toEqual({ plan: "ultimate", period: "yearly", method: "promptpay" });
     await expect(
       page.getByRole("status").filter({ hasText: "ยังไม่เปิดให้ชำระเงิน" }),
     ).toBeVisible();
   });
 
-  test("a Professional user cannot buy Professional again", async ({ page }) => {
-    await mockApi(page, { "GET /api/me": ME_PLUS });
+  test("offers card (auto-renew) and PromptPay (one period) and defaults to card", async ({
+    page,
+  }) => {
+    await mockApi(page, { "GET /api/me": ME_FREE });
+    await page.goto("/upgrade");
+    const methods = page.getByRole("radiogroup", { name: "ช่องทางชำระเงิน" });
+    await expect(methods.getByRole("radio", { name: /บัตรเครดิต/ })).toHaveAttribute(
+      "aria-checked",
+      "true",
+    );
+    await expect(methods.getByRole("radio", { name: /พร้อมเพย์/ })).toContainText(
+      "ไม่ต่ออายุอัตโนมัติ",
+    );
+    await expect(page.getByRole("button", { name: /จัดการการชำระเงิน/ })).toHaveCount(0);
+  });
+
+  test("a card subscriber cannot start a second subscription but can open the billing portal", async ({
+    page,
+  }) => {
+    const me = {
+      ...ME_PLUS,
+      payments: { available: true, history: [], canManage: true, autoRenew: true },
+    };
+    const { seen } = await mockApi(page, {
+      "GET /api/me": me,
+      "POST /api/plan/portal": { available: false, message: "ยังไม่เปิด" },
+    });
     await page.goto("/upgrade");
     await expect(page.getByRole("button", { name: /ใช้แผน Professional อยู่แล้ว/ })).toBeDisabled();
+
+    // PromptPay can still top up the same plan
+    await page.getByRole("radio", { name: /พร้อมเพย์/ }).click();
+    await expect(page.getByRole("button", { name: /ต่ออายุ · Professional/ })).toBeEnabled();
+
+    await page.getByRole("button", { name: /จัดการการชำระเงิน/ }).click();
+    await expect.poll(() => seen.some((s) => s.startsWith("POST /api/plan/portal"))).toBe(true);
+  });
+
+  test("an Ultimate user cannot buy the cheaper plan", async ({ page }) => {
+    await mockApi(page, { "GET /api/me": { ...ME_PLUS, plan: "ultimate" } });
+    await page.goto("/upgrade");
+    await expect(page.getByRole("button", { name: /ใช้แผน Ultimate อยู่แล้ว/ })).toBeVisible();
   });
 
   test("has no serious accessibility violations", async ({ page }) => {

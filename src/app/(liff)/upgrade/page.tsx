@@ -21,7 +21,23 @@ import { cn } from "@/lib/utils";
 interface MeLite {
   plan: Plan;
   planExpiresAt: string | null;
+  payments?: { available: boolean; canManage?: boolean; autoRenew?: boolean };
 }
+
+type Method = "card" | "promptpay";
+
+const METHODS: { value: Method; label: string; hint: string }[] = [
+  {
+    value: "card",
+    label: "บัตรเครดิต/เดบิต",
+    hint: "บัตรในประเทศและต่างประเทศ ต่ออายุอัตโนมัติ ยกเลิกได้ทุกเมื่อ",
+  },
+  {
+    value: "promptpay",
+    label: "พร้อมเพย์ (QR)",
+    hint: "จ่ายครั้งเดียวต่อรอบ ไม่ต่ออายุอัตโนมัติ",
+  },
+];
 
 const PERIODS: { value: Period; label: string }[] = [
   { value: "monthly", label: "รายเดือน" },
@@ -38,15 +54,20 @@ const TIER_STYLE: Record<Plan, { card: string; chip: string }> = {
 const PAID: PaidPlan[] = ["plus", "ultimate"];
 
 export default function UpgradePage() {
-  const { api } = useLiff();
+  const { api, openExternal } = useLiff();
   const me = useApi<MeLite>("/api/me");
+  const [method, setMethod] = useState<Method>("card");
   const [period, setPeriod] = useState<Period>("yearly");
   const [picked, setPicked] = useState<PaidPlan>("plus");
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
 
   const current: Plan = me.data?.plan ?? "free";
-  const alreadyHas = current === picked || (current === "ultimate" && picked === "plus");
+  const autoRenew = me.data?.payments?.autoRenew === true;
+  const downgrade = current === "ultimate" && picked === "plus";
+  // a running card subscription renews by itself; prepaid (PromptPay) can always be topped up
+  const alreadyHas = downgrade || (method === "card" && current === picked && autoRenew);
+  const topUp = !alreadyHas && current === picked;
 
   async function checkout() {
     setBusy(true);
@@ -54,10 +75,29 @@ export default function UpgradePage() {
     try {
       const res = await api<{ available: boolean; message?: string; url?: string }>(
         "/api/plan/checkout",
-        { method: "POST", body: JSON.stringify({ plan: picked, period }) },
+        { method: "POST", body: JSON.stringify({ plan: picked, period, method }) },
       );
-      if (res.available && res.url) window.location.href = res.url;
+      // Stripe opens in the phone browser: PromptPay needs a banking app, and the LINE in-app
+      // browser cannot always hand over to one.
+      if (res.available && res.url) await openExternal(res.url);
       else setNotice(res.message ?? "ยังไม่เปิดให้ชำระเงิน");
+    } catch (e) {
+      setNotice(e instanceof Error ? e.message : "ทำรายการไม่สำเร็จ");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function manage() {
+    setBusy(true);
+    setNotice(null);
+    try {
+      const res = await api<{ available: boolean; message?: string; url?: string }>(
+        "/api/plan/portal",
+        { method: "POST", body: "{}" },
+      );
+      if (res.available && res.url) await openExternal(res.url);
+      else setNotice(res.message ?? "เปิดหน้าจัดการไม่สำเร็จ");
     } catch (e) {
       setNotice(e instanceof Error ? e.message : "ทำรายการไม่สำเร็จ");
     } finally {
@@ -122,6 +162,25 @@ export default function UpgradePage() {
           ))}
         </div>
 
+        <div role="radiogroup" aria-label="ช่องทางชำระเงิน" className="space-y-2">
+          {METHODS.map((m) => (
+            <button
+              key={m.value}
+              type="button"
+              role="radio"
+              aria-checked={method === m.value}
+              onClick={() => setMethod(m.value)}
+              className={cn(
+                "block w-full rounded-2xl border p-3 text-left",
+                method === m.value ? "border-primary bg-primary-soft" : "border-border bg-surface",
+              )}
+            >
+              <span className="block text-sm font-semibold">{m.label}</span>
+              <span className="block text-xs text-foreground/80">{m.hint}</span>
+            </button>
+          ))}
+        </div>
+
         <button
           type="button"
           onClick={checkout}
@@ -129,11 +188,23 @@ export default function UpgradePage() {
           className="h-12 w-full rounded-2xl bg-primary text-base font-semibold text-surface disabled:opacity-60"
         >
           {alreadyHas
-            ? `คุณใช้แผน ${PLAN_LABEL[current]} อยู่แล้ว`
+            ? downgrade
+              ? `คุณใช้แผน ${PLAN_LABEL[current]} อยู่แล้ว`
+              : `คุณใช้แผน ${PLAN_LABEL[current]} อยู่แล้ว (ต่ออายุอัตโนมัติ)`
             : busy
               ? "กำลังดำเนินการ..."
-              : `เลือกช่องทางชำระเงิน · ${PLAN_LABEL[picked]}`}
+              : `${topUp ? "ต่ออายุ" : "ชำระเงิน"} · ${PLAN_LABEL[picked]}`}
         </button>
+        {me.data?.payments?.canManage ? (
+          <button
+            type="button"
+            onClick={manage}
+            disabled={busy}
+            className="h-11 w-full rounded-2xl border border-primary text-sm font-semibold text-primary disabled:opacity-60"
+          >
+            จัดการการชำระเงิน (ยกเลิกต่ออายุ / เปลี่ยนบัตร)
+          </button>
+        ) : null}
         {notice ? (
           <p role="status" className="rounded-2xl bg-primary-soft px-4 py-2 text-sm text-primary">
             {notice}
