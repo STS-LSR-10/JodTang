@@ -36,6 +36,9 @@ const serverSchema = z
     // AI: pick one provider; only that provider's key is required.
     AI_PROVIDER: z.enum(AI_PROVIDERS).default("gemini"),
     AI_MODEL: optionalString, // overrides the provider's default model
+    // Slip reading chain (see src/lib/ocr/factory.ts): EasySlip first when its key is set.
+    EASYSLIP_API_KEY: optionalString,
+    SLIP_READERS: optionalString, // optional order override, e.g. "easyslip,gemini,anthropic"
     GEMINI_API_KEY: optionalString,
     ANTHROPIC_API_KEY: optionalString,
     OPENAI_API_KEY: optionalString,

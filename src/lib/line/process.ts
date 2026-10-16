@@ -1,5 +1,5 @@
 import { getServerEnv } from "@/lib/env";
-import { createSlipOcrProvider } from "@/lib/ocr/provider";
+import { buildSlipReader } from "@/lib/ocr/factory";
 import { claimEvent, releaseEvent } from "@/lib/repo";
 import { getAdminClient } from "@/lib/supabase/admin";
 import { createLineClient } from "./client";
@@ -36,28 +36,19 @@ export async function processEvents(rawEvents: unknown[]): Promise<void> {
     return;
   }
 
-  const apiKey = {
-    gemini: env.GEMINI_API_KEY,
-    anthropic: env.ANTHROPIC_API_KEY,
-    openai: env.OPENAI_API_KEY,
-  }[env.AI_PROVIDER];
-
+  // Slip readers: EasySlip first (when configured), then the AI models in order.
+  // Skips are logged with the reader name and a status-only reason (never the payload).
   const deps: HandlerDeps = {
     db,
     reply: line.reply,
     getProfile: line.getProfile,
     now: () => new Date(),
-    // getServerEnv() already guarantees the selected provider's key exists.
-    slip: apiKey
-      ? {
-          fetchImage: (messageId) => fetchLineImage(env.LINE_CHANNEL_ACCESS_TOKEN, messageId),
-          ocr: createSlipOcrProvider({
-            provider: env.AI_PROVIDER,
-            model: env.AI_MODEL,
-            apiKey,
-          }),
-        }
-      : undefined,
+    slip: {
+      fetchImage: (messageId) => fetchLineImage(env.LINE_CHANNEL_ACCESS_TOKEN, messageId),
+      ocr: buildSlipReader(env, {
+        onSkip: (name, reason) => console.warn(`slip reader skipped: ${name}: ${reason}`),
+      }).reader,
+    },
   };
 
   for (const raw of rawEvents) {
