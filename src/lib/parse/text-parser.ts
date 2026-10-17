@@ -9,6 +9,8 @@ export interface ParsedEntry {
   /** Integer satang, always > 0. */
   amountSatang: number;
   occurredAt: Date;
+  /** True when the text named a past day (เมื่อวาน, 12/10 …); "วันนี้" or no date is false. */
+  backdated: boolean;
   /** 0..1. Below CONFIRM_THRESHOLD the bot should ask before saving as confirmed. */
   confidence: number;
 }
@@ -212,6 +214,7 @@ function parseLine(segment: string, now: Date): ParsedEntry | null {
     title: title || defaultTitle,
     amountSatang: amount.satang,
     occurredAt: date ?? now,
+    backdated: date !== null && date !== now,
     confidence,
   };
 }

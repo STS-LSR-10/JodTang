@@ -40,6 +40,7 @@ import { buildCategoryChooser } from "./slip-flex";
 import {
   EDIT_HINT_TEXT,
   EDIT_USAGE_TEXT,
+  BACKDATE_LOCKED_TEXT,
   ERROR_TEXT,
   HELP_TEXT,
   MEMORY_PLUS_HINT_TEXT,
@@ -186,6 +187,10 @@ async function handleText(input: string, user: UserRow, deps: HandlerDeps): Prom
 
   const { entries } = parseMessage(input, deps.now());
   if (entries.length === 0) return [text(NOT_UNDERSTOOD_TEXT)];
+  const plan = effectivePlan(user.plan, user.plan_expires_at, deps.now());
+  if (entries.some((e) => e.backdated) && !can(plan, "backdate")) {
+    return [text(BACKDATE_LOCKED_TEXT)];
+  }
   return saveEntries(entries, user, deps);
 }
 

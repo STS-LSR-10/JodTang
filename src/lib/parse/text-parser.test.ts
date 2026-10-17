@@ -105,6 +105,13 @@ describe("parseMessage: dates", () => {
     expect(one("เมื่อวานซืน กาแฟ 45").occurredAt.toISOString()).toBe("2026-10-13T05:00:00.000Z");
   });
 
+  it("flags backdated entries only when a past day is named", () => {
+    expect(one("เมื่อวาน กาแฟ 45").backdated).toBe(true);
+    expect(one("12/10 ค่าไฟ 1200").backdated).toBe(true);
+    expect(one("วันนี้ ข้าว 60").backdated).toBe(false);
+    expect(one("กาแฟ 30").backdated).toBe(false);
+  });
+
   it("วันนี้ keeps the current time", () => {
     expect(one("วันนี้ ข้าว 60").occurredAt.getTime()).toBe(NOW.getTime());
   });

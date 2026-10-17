@@ -30,6 +30,7 @@ const FEATURES: Feature[] = [
   "advancedExport",
   "autoSummary",
   "voiceLog",
+  "backdate",
 ];
 
 export async function GET(request: Request): Promise<Response> {
