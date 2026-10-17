@@ -92,6 +92,7 @@ export const ME_FREE = {
     merchantMemory: false,
     dailyReminder: false,
     advancedExport: false,
+    autoSummary: false,
   },
   slips: { used: 12, limit: 30, remaining: 18 },
   points: 7,
@@ -121,6 +122,8 @@ export const SETTINGS = {
   cycle_start_day: 1,
   daily_reminder_enabled: false,
   daily_reminder_time: null,
+  weekly_summary_enabled: false,
+  monthly_summary_enabled: false,
 };
 
 export const TX = (over: Record<string, unknown> = {}) => ({

@@ -24,6 +24,9 @@ export interface SettingsRow {
   daily_reminder_enabled: boolean;
   /** "HH:MM:SS" (Bangkok time) or null */
   daily_reminder_time: string | null;
+  /** Automatic summary in the chat (Professional and above), Monday 09:00 / cycle start day 09:00 */
+  weekly_summary_enabled: boolean;
+  monthly_summary_enabled: boolean;
 }
 
 export interface TxRow {
@@ -43,6 +46,8 @@ const DEFAULT_SETTINGS: SettingsRow = {
   confirm_style: "full",
   daily_reminder_enabled: false,
   daily_reminder_time: null,
+  weekly_summary_enabled: false,
+  monthly_summary_enabled: false,
 };
 
 const TX_COLUMNS = "id,type,title,amount,category_id,occurred_at,status,slip_id";
@@ -108,7 +113,9 @@ export async function touchProfile(
 export async function getSettings(db: SupabaseClient, userId: string): Promise<SettingsRow> {
   const { data, error } = await db
     .from("user_settings")
-    .select("budget_cycle,cycle_start_day,confirm_style,daily_reminder_enabled,daily_reminder_time")
+    .select(
+      "budget_cycle,cycle_start_day,confirm_style,daily_reminder_enabled,daily_reminder_time,weekly_summary_enabled,monthly_summary_enabled",
+    )
     .eq("user_id", userId)
     .maybeSingle();
   if (error) fail("load settings", error);

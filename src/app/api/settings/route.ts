@@ -25,6 +25,8 @@ const patchSchema = z
     daily_reminder_enabled: z.boolean(),
     /** "HH:MM" Bangkok time */
     daily_reminder_time: z.string(),
+    weekly_summary_enabled: z.boolean(),
+    monthly_summary_enabled: z.boolean(),
   })
   .partial()
   .refine((v) => Object.keys(v).length > 0, "empty");
@@ -51,6 +53,15 @@ export async function PATCH(request: Request): Promise<Response> {
       parsed.data.daily_reminder_enabled === true || parsed.data.daily_reminder_time !== undefined;
     if (wantsReminder) {
       const locked = await requireFeature(db, auth.userId, "dailyReminder");
+      if (locked) return locked;
+    }
+
+    // Automatic summaries are a paid feature. Turning them off is always allowed.
+    if (
+      parsed.data.weekly_summary_enabled === true ||
+      parsed.data.monthly_summary_enabled === true
+    ) {
+      const locked = await requireFeature(db, auth.userId, "autoSummary");
       if (locked) return locked;
     }
 

@@ -22,7 +22,8 @@ export type Feature =
   | "multiAccount"
   | "merchantMemory"
   | "dailyReminder"
-  | "advancedExport";
+  | "advancedExport"
+  | "autoSummary";
 
 /** Every feature built so far is part of Professional, and so of Ultimate above it. */
 const PAID_ONLY: Record<Feature, boolean> = {
@@ -33,6 +34,7 @@ const PAID_ONLY: Record<Feature, boolean> = {
   merchantMemory: true,
   dailyReminder: true,
   advancedExport: true,
+  autoSummary: true,
 };
 
 export function isPaidPlan(plan: Plan): boolean {

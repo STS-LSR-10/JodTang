@@ -7,6 +7,7 @@ import { MemoryCard } from "@/components/liff/settings/memory-card";
 import { PlanCard } from "@/components/liff/settings/plan-card";
 import { ReferralCard } from "@/components/liff/settings/referral-card";
 import { ReminderCard } from "@/components/liff/settings/reminder-card";
+import { SummaryCard } from "@/components/liff/settings/summary-card";
 import { RecurringCard } from "@/components/liff/settings/recurring-card";
 import { cardClass, type Me, type Settings } from "@/components/liff/settings/types";
 import { ErrorState, LoadingBlock, PageHeader } from "@/components/liff/states";
@@ -155,6 +156,7 @@ export default function SettingsPage() {
             ) : null}
 
             <ReminderCard me={me.data} settings={current} onSaved={setOverride} />
+            <SummaryCard me={me.data} settings={current} onSaved={setOverride} />
             <RecurringCard me={me.data} />
             <MemoryCard me={me.data} />
             <ReferralCard me={me.data} onChanged={me.reload} />

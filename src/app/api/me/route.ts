@@ -28,6 +28,7 @@ const FEATURES: Feature[] = [
   "merchantMemory",
   "dailyReminder",
   "advancedExport",
+  "autoSummary",
 ];
 
 export async function GET(request: Request): Promise<Response> {

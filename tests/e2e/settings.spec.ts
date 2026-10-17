@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Route } from "@playwright/test";
 import {
   expectNoHorizontalScroll,
   expectNoSeriousA11yViolations,
@@ -23,6 +23,8 @@ test.describe("settings page (360px)", () => {
     await expect(page.getByText("12 / 30")).toBeVisible();
     await expect(page.getByText("สำหรับแผน Professional").first()).toBeVisible();
     await expect(page.getByRole("switch", { name: "เปิดเตือนจดประจำวัน" })).toBeDisabled();
+    await expect(page.getByRole("switch", { name: "เปิดสรุปรายสัปดาห์" })).toBeDisabled();
+    await expect(page.getByRole("switch", { name: "เปิดสรุปรายเดือน" })).toBeDisabled();
     await expect(page.getByRole("button", { name: "เพิ่ม" })).toBeDisabled();
     await expectNoHorizontalScroll(page);
   });
@@ -39,6 +41,35 @@ test.describe("settings page (360px)", () => {
     await expect(page.getByRole("button", { name: "เพิ่ม" })).toBeEnabled();
   });
 
+  test("Professional: automatic summaries are off by default and saved when switched on", async ({
+    page,
+  }) => {
+    const bodies: unknown[] = [];
+    await mockApi(page, {
+      ...COMMON,
+      "GET /api/me": ME_PLUS,
+      "GET /api/memory": { items: [] },
+      "PATCH /api/settings": (route: Route) => {
+        const body = route.request().postDataJSON();
+        bodies.push(body);
+        return { ...SETTINGS, ...body };
+      },
+    });
+    await page.goto("/settings");
+
+    const weekly = page.getByRole("switch", { name: "เปิดสรุปรายสัปดาห์" });
+    const monthly = page.getByRole("switch", { name: "เปิดสรุปรายเดือน" });
+    await expect(weekly).toHaveAttribute("aria-checked", "false");
+    await expect(monthly).toHaveAttribute("aria-checked", "false");
+    await expect(page.getByText(/ทุกวันจันทร์ 09:00/)).toBeVisible();
+    await expect(page.getByText(/วันที่ 1 ของเดือน 09:00/)).toBeVisible();
+
+    await weekly.click();
+    await expect.poll(() => bodies.length).toBe(1);
+    expect(bodies[0]).toEqual({ weekly_summary_enabled: true });
+    await expect(weekly).toHaveAttribute("aria-checked", "true");
+    await expectNoHorizontalScroll(page);
+  });
   test("referral code is shown and short codes cannot be submitted", async ({ page }) => {
     await mockApi(page, { ...COMMON, "GET /api/me": ME_FREE });
     await page.goto("/settings");

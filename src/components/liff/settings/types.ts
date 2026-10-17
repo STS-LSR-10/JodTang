@@ -22,6 +22,8 @@ export interface Settings {
   cycle_start_day: number;
   daily_reminder_enabled: boolean;
   daily_reminder_time: string | null;
+  weekly_summary_enabled: boolean;
+  monthly_summary_enabled: boolean;
 }
 
 export const cardClass = "space-y-3 rounded-2xl border border-border bg-surface p-4 shadow-card";
