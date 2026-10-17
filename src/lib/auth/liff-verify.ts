@@ -1,3 +1,4 @@
+import { log } from "@/lib/log";
 export interface LineIdTokenClaims {
   /** LINE user id — the same id the Messaging API webhook reports. */
   sub: string;
@@ -21,7 +22,13 @@ export async function verifyLineIdToken(
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({ id_token: idToken, client_id: clientId }),
   });
-  if (!res.ok) return null;
+  if (!res.ok) {
+    // LINE says why (e.g. wrong client id / expired token). The text holds no token or user data.
+    const reason = ((await res.json().catch(() => ({}))) as { error_description?: string })
+      .error_description;
+    log.warn("liff_verify_failed", { status: res.status, reason });
+    return null;
+  }
   const data = (await res.json()) as Partial<LineIdTokenClaims>;
   if (typeof data.sub !== "string" || data.sub.length === 0) return null;
   return {

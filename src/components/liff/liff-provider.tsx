@@ -35,6 +35,31 @@ export class ApiError extends Error {
 
 const LIFF_ID = process.env.NEXT_PUBLIC_LIFF_ID;
 
+const RELOGIN_KEY = "jodtang-liff-login-at";
+const RELOGIN_WINDOW_MS = 30_000;
+
+/**
+ * Send the person to LINE to sign in again, but only once per 30 seconds. If signing in does not
+ * produce a session (a server-side configuration problem, for example), looping through the login
+ * redirect forever shows only a flickering page, so give up with a clear message instead.
+ */
+function loginOnce(liff: { login: (o: { redirectUri: string }) => void }): Promise<string> {
+  try {
+    const last = Number(window.sessionStorage.getItem(RELOGIN_KEY) ?? 0);
+    if (Date.now() - last < RELOGIN_WINDOW_MS) {
+      throw new Error(
+        "เข้าสู่ระบบไม่สำเร็จ ลองปิดแล้วเปิดใหม่อีกครั้งนะ (ถ้ายังไม่ได้ แจ้งผู้ดูแล)",
+      );
+    }
+    window.sessionStorage.setItem(RELOGIN_KEY, String(Date.now()));
+  } catch (e) {
+    if (e instanceof Error && e.message.startsWith("เข้าสู่ระบบ")) throw e;
+    // sessionStorage unavailable: fall through to a single normal redirect
+  }
+  liff.login({ redirectUri: window.location.href });
+  return new Promise<string>(() => undefined); // page is navigating away
+}
+
 // Test-only switch for the Playwright suite (set at build time, never in production).
 // It only skips the LINE sign-in screen on the client: every /api call still needs a valid
 // server-issued session, so enabling it by mistake grants no access to anything.
@@ -65,15 +90,9 @@ export function LiffProvider({ children }: { children: ReactNode }) {
       if (!LIFF_ID) throw new Error("ยังไม่ได้ตั้งค่า LIFF");
       const liff = (await import("@line/liff")).default;
       await liff.init({ liffId: LIFF_ID });
-      if (!liff.isLoggedIn()) {
-        liff.login({ redirectUri: window.location.href });
-        return new Promise<string>(() => undefined); // page is navigating away
-      }
+      if (!liff.isLoggedIn()) return loginOnce(liff);
       const idToken = liff.getIDToken();
-      if (!idToken) {
-        liff.login({ redirectUri: window.location.href });
-        return new Promise<string>(() => undefined);
-      }
+      if (!idToken) return loginOnce(liff);
       const res = await fetch("/api/auth/liff", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -82,13 +101,15 @@ export function LiffProvider({ children }: { children: ReactNode }) {
       const body = (await res.json().catch(() => ({}))) as { token?: string; error?: string };
       if (!res.ok || !body.token) {
         // An expired ID token needs a fresh login rather than a retry.
-        if (res.status === 401) {
-          liff.login({ redirectUri: window.location.href });
-          return new Promise<string>(() => undefined);
-        }
+        if (res.status === 401) return loginOnce(liff);
         throw new Error(body.error ?? "เข้าสู่ระบบไม่สำเร็จ");
       }
       token.current = body.token;
+      try {
+        window.sessionStorage.removeItem(RELOGIN_KEY);
+      } catch {
+        // ignore
+      }
       return body.token;
     })();
     inflight.current = run;
