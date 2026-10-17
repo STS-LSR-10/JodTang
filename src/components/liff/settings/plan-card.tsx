@@ -71,7 +71,11 @@ export function PlanCard({ me, onChanged }: { me: Me; onChanged: () => void }) {
         </div>
       </div>
 
-      {!plus && me.slips.limit !== null ? (
+      {me.slips.limit === 0 ? (
+        <p className="text-xs text-muted">การอ่านสลิปใช้ได้ตั้งแต่แผน Professional</p>
+      ) : null}
+
+      {me.slips.limit !== null && me.slips.limit > 0 ? (
         <div>
           <div className="mb-1 flex justify-between text-xs text-muted">
             <span>สลิปเดือนนี้</span>

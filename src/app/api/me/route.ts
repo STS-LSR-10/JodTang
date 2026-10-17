@@ -4,8 +4,7 @@ import { MAX_RECURRING_RULES, POINTS_PER_PLUS_DAY } from "@/lib/config";
 import {
   can,
   effectivePlan,
-  FREE_SLIP_LIMIT,
-  isPaidPlan,
+  SLIP_LIMIT,
   slipsRemaining,
   type Feature,
 } from "@/lib/plan";
@@ -21,7 +20,6 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const FEATURES: Feature[] = [
-  "unlimitedSlips",
   "savingsChart",
   "recurring",
   "multiAccount",
@@ -65,7 +63,7 @@ export async function GET(request: Request): Promise<Response> {
       features: Object.fromEntries(FEATURES.map((f) => [f, can(plan, f)])),
       slips: {
         used: slipsUsed,
-        limit: isPaidPlan(plan) ? null : FREE_SLIP_LIMIT,
+        limit: SLIP_LIMIT[plan],
         remaining: slipsRemaining(plan, slipsUsed),
       },
       points: data.points,

@@ -8,6 +8,7 @@ import {
   IMAGE_ERROR_TEXT,
   IMAGE_TOO_LARGE_TEXT,
   NOT_A_SLIP_TEXT,
+  SLIP_LOCKED_TEXT,
   SLIP_QUOTA_TEXT,
   SLIP_UNREADABLE_TEXT,
   text,
@@ -15,7 +16,7 @@ import {
 import { formatBaht, toSatang } from "@/lib/money";
 import type { SlipImage, SlipOcrProvider } from "@/lib/ocr/provider";
 import { sanitizeSlip } from "@/lib/ocr/slip-schema";
-import { effectivePlan, slipsRemaining } from "@/lib/plan";
+import { effectivePlan, SLIP_LIMIT, slipsRemaining } from "@/lib/plan";
 import { insertTransaction, loadCategories, loadMemoryFor, type UserRow } from "@/lib/repo";
 import {
   countSlipsThisMonth,
@@ -63,6 +64,7 @@ export async function handleSlipImage(
   // 1. quota (failed reads are never inserted, so they never count)
   const planRow = await getUserPlanRow(db, user.id);
   const plan = effectivePlan(planRow.plan, planRow.plan_expires_at, now);
+  if (SLIP_LIMIT[plan] === 0) return [text(SLIP_LOCKED_TEXT)];
   const remaining = slipsRemaining(plan, await countSlipsThisMonth(db, user.id, now));
   if (remaining !== null && remaining <= 0) return [text(SLIP_QUOTA_TEXT)];
 

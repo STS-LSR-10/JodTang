@@ -13,10 +13,14 @@ export const PLAN_LABEL: Record<Plan, string> = {
   ultimate: "Ultimate",
 };
 
-export const FREE_SLIP_LIMIT = 30;
+/** Slips a person can have read per month, by plan. Null means unlimited. */
+export const SLIP_LIMIT: Record<Plan, number | null> = {
+  free: 0,
+  plus: 5,
+  ultimate: null,
+};
 
 export type Feature =
-  | "unlimitedSlips"
   | "savingsChart"
   | "recurring"
   | "multiAccount"
@@ -30,7 +34,6 @@ export type Feature =
 
 /** Every feature built so far is part of Professional, and so of Ultimate above it. */
 const PAID_ONLY: Record<Feature, boolean> = {
-  unlimitedSlips: true,
   savingsChart: true,
   recurring: true,
   multiAccount: true,
@@ -70,6 +73,6 @@ export function can(plan: Plan, feature: Feature): boolean {
 
 /** Slips still allowed this month, or null when unlimited. */
 export function slipsRemaining(plan: Plan, usedThisMonth: number): number | null {
-  if (can(plan, "unlimitedSlips")) return null;
-  return Math.max(0, FREE_SLIP_LIMIT - usedThisMonth);
+  const limit = SLIP_LIMIT[plan];
+  return limit === null ? null : Math.max(0, limit - usedThisMonth);
 }

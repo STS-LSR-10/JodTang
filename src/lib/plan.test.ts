@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { can, effectivePlan, FREE_SLIP_LIMIT, slipsRemaining } from "./plan";
+import { can, effectivePlan, slipsRemaining } from "./plan";
 
 const NOW = new Date("2026-10-15T08:00:00Z");
 
@@ -28,15 +28,16 @@ describe("effectivePlan", () => {
 });
 
 describe("limits", () => {
-  it("free has 30 slips a month", () => {
-    expect(slipsRemaining("free", 0)).toBe(FREE_SLIP_LIMIT);
-    expect(slipsRemaining("free", 29)).toBe(1);
-    expect(slipsRemaining("free", 30)).toBe(0);
+  it("free cannot read slips", () => {
+    expect(slipsRemaining("free", 0)).toBe(0);
     expect(slipsRemaining("free", 99)).toBe(0);
   });
 
-  it("plus is unlimited", () => {
-    expect(slipsRemaining("plus", 500)).toBeNull();
+  it("professional has 5 slips a month", () => {
+    expect(slipsRemaining("plus", 0)).toBe(5);
+    expect(slipsRemaining("plus", 4)).toBe(1);
+    expect(slipsRemaining("plus", 5)).toBe(0);
+    expect(slipsRemaining("plus", 99)).toBe(0);
   });
 
   it("ultimate is unlimited and has every paid feature", () => {

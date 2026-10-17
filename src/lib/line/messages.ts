@@ -43,8 +43,10 @@ export const SLIP_UNREADABLE_TEXT =
 export const IMAGE_ERROR_TEXT = "โหลดรูปไม่สำเร็จ ลองส่งรูปอีกครั้งนะ";
 export const IMAGE_TOO_LARGE_TEXT = "รูปใหญ่เกินไป (เกิน 10 MB) ลองลดขนาดแล้วส่งใหม่นะ";
 export const ALREADY_RECORDED_TEXT = "สลิปนี้เคยจดไว้แล้วนะ ไม่ได้จดซ้ำ";
+export const SLIP_LOCKED_TEXT =
+  'การอ่านสลิปเป็นฟีเจอร์ของแผน Professional ขึ้นไป (Professional อ่านได้ 5 ใบ/เดือน, Ultimate ไม่จำกัด) ลองทดลองใช้ฟรี 7 วันได้ที่เมนู "อัปเกรด" ตอนนี้พิมพ์จดเองได้เลย เช่น "ค่าไฟ 1200" นะ';
 export const SLIP_QUOTA_TEXT =
-  'เดือนนี้อ่านสลิปครบ 30 ใบแล้ว (แผน Free) พิมพ์จดเองได้ไม่จำกัด เช่น "ค่าไฟ 1200" และโควตาจะรีเซ็ตต้นเดือนหน้านะ';
+  'เดือนนี้อ่านสลิปครบ 5 ใบแล้ว (แผน Professional) พิมพ์จดเองได้ไม่จำกัด เช่น "ค่าไฟ 1200" อัปเกรดเป็น Ultimate เพื่ออ่านสลิปไม่จำกัด หรือรอโควตารีเซ็ตต้นเดือนหน้านะ';
 export const SLIP_CANCELLED_TEXT = "ยกเลิกแล้ว ไม่ได้จดสลิปนี้";
 export const PICK_CATEGORY_TEXT = "เลือกหมวดที่ถูกต้องนะ";
 export const REFERRAL_BONUS_TEXT = `ได้โบนัสชวนเพื่อน +${REFERRAL_BONUS_REFEREE} ตังสะสมแล้ว! ตรวจดูได้ที่หน้าตั้งค่า`;

@@ -29,7 +29,7 @@ test.describe("upgrade page (360px)", () => {
     const table = page.getByRole("table");
     await expect(table.getByRole("row", { name: /จดด้วย PDF/ })).toContainText("เร็วๆ นี้");
     await expect(table.getByRole("row", { name: /อ่านสลิปอัตโนมัติ/ })).toContainText(
-      "30 ใบ/เดือน",
+      "5 ใบ/เดือน",
     );
   });
 
