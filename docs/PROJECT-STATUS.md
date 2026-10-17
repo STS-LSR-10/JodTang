@@ -1,184 +1,197 @@
 # จดตังค์ (JodTang) — สถานะโปรเจกต์และคู่มือส่งต่องาน
 
-อัปเดตล่าสุด: 2026-10-16 · สถานะ: **Phase 0–3 เสร็จและ push แล้ว** · ถัดไป: **Phase 4 (สลิป OCR)**
+อัปเดตล่าสุด: 2026-10-17 · สถานะ: **ระบบทำงานบนบัญชีใหม่ทั้งหมด (Stripe ยังเป็น Test mode)** · ฟีเจอร์ที่ทำล่าสุด: จดด้วยเสียง
+· ถัดไป: เจ้าของขอหยุดเพิ่มฟีเจอร์ก่อน → ทดสอบจริง → เปิด Stripe Live เป็นขั้นสุดท้าย
 
-เอกสารนี้ไว้ให้เซสชันใหม่ (หรือคนใหม่) อ่านแล้วทำต่อได้ทันที ไม่มีความลับใด ๆ อยู่ในไฟล์นี้
-ค่า secret ทั้งหมดอยู่ใน Vercel Project Settings และ `.env.local` (ไม่ถูก commit)
+เอกสารนี้ไว้ให้เซสชันใหม่ (หรือคนใหม่) อ่านแล้วทำต่อได้ทันที **ไม่มีความลับใด ๆ อยู่ในไฟล์นี้**
+ค่า secret ทั้งหมดอยู่ใน Vercel Environment Variables และ `.env.local` (ไม่ถูก commit)
 
 ---
 
 ## 1) ผลิตภัณฑ์ในประโยคเดียว
 
-ผู้ช่วยจดรายรับรายจ่ายผ่าน **LINE Official Account**: พิมพ์ข้อความ (`กาแฟ 30`) หรือส่งสลิป
+ผู้ช่วยจดรายรับรายจ่ายผ่าน **LINE Official Account**: พิมพ์ข้อความ (`กาแฟ 30`), ส่งสลิป หรือส่งข้อความเสียง
 ระบบจดและจัดหมวดให้ แล้วดูสรุป/กราฟ/งบ/รายการในหน้า **LIFF** (เว็บในแอป LINE)
 
-- ชื่อ: จดตังค์ (JodTang) — เดิมชื่อ Mee-Tang / มีตัง (เปลี่ยนชื่อแล้วเมื่อ 2026-10) · แท็กไลน์ "จดง่าย เห็นเงินชัด" · โลโก้ฟองแชท+ใบเสร็จ+เหรียญ (SVG ใน `public/logo.svg`) — ไม่มีมาสคอตตัวการ์ตูนแล้ว
-- ภาษา UI/บอท: ไทย · สกุลเงิน THB · timezone Asia/Bangkok · แสดงปี พ.ศ.
-- DB เก็บเวลาเป็น UTC (`timestamptz`)
+- ชื่อ: จดตังค์ (JodTang) · แท็กไลน์ "จดง่าย เห็นเงินชัด" · โลโก้ `public/logo.svg` (+ `public/logo.png` สำหรับการ์ด LINE)
+- ภาษา UI/บอท: ไทย · สกุลเงิน THB · timezone Asia/Bangkok · แสดงปี พ.ศ. · DB เก็บเวลาเป็น UTC
 
-### หมายเหตุการเปลี่ยนชื่อเป็น JodTang
+## 2) บัญชีและโครงสร้างพื้นฐาน (หลังย้ายบัญชีเมื่อ 2026-10-17)
 
-- **เปลี่ยนในโค้ดแล้ว:** ชื่อที่แสดง (หน้าเว็บ, ข้อความส่งต่อ "จดด้วยจดตังค์"), `package.json`, `supabase/config.toml`, เอกสาร
-- **ค่าภายในเปลี่ยนเป็น `jodtang` แล้ว:** `ISSUER`/`AUDIENCE` ของ session (ผู้ใช้ที่ล็อกอินอยู่จะถูกให้ล็อกอินใหม่อัตโนมัติ 1 ครั้ง ไม่มีข้อมูลหาย)
-  และชื่อ Rich Menu `jodtang-main` (`pnpm richmenu --replace` ลบทั้งชื่อใหม่และ `meetang-main` เดิม — **ต้องรันใหม่ 1 ครั้ง** เพื่อให้เมนูใน LINE ใช้ชื่อใหม่)
-- **ต้องเปลี่ยนเองข้างนอกโค้ด:** ชื่อ repo GitHub, ชื่อโปรเจกต์ Vercel/Supabase, ชื่อ LINE OA / channel / LIFF
-  ถ้าโดเมน Vercel เปลี่ยน ต้องแก้ Webhook URL, LIFF Endpoint URL และ `APP_BASE_URL`
-  (repo เปลี่ยนชื่อเป็น JodTang แล้ว)
+| ส่วน | ที่อยู่ |
+|---|---|
+| โค้ด | GitHub `STS-LSR-10/JodTang` (private) branch `main` · remote `origin` = repo ใหม่, `old-origin` = repo เก่า (ไม่ใช้แล้ว) |
+| เว็บ + API | Vercel (บัญชีใหม่) โดเมนผลิต **`https://jodtang-th.vercel.app`** · deploy อัตโนมัติจาก push |
+| ฐานข้อมูล | Supabase โปรเจกต์ใหม่ (Singapore) เริ่มข้อมูลใหม่ ไม่ได้คัดลอกข้อมูลจากของเก่า |
+| LINE | ช่อง Messaging API + LINE Login (LIFF) **ใช้ช่องเดิม** ไม่ได้ย้าย · Webhook และ LIFF Endpoint ชี้โดเมนใหม่แล้ว |
+| ชำระเงิน | Stripe **Sandbox (Test mode)** ชื่อ JodTang · Live ยังไม่เปิด |
+| Cron | Vercel Cron (รายวัน: จดประจำ) + GitHub Actions `cron.yml` (รายชั่วโมง: เตือนจดประจำวัน + สรุปอัตโนมัติ) ต้องมี secrets `APP_BASE_URL`, `CRON_SECRET` ใน repo ใหม่ (ตั้งแล้ว) |
 
-## 2) ข้อกำหนดที่ต้องยึด (สำคัญ)
+ข้อมูลในระบบตอนนี้เป็น **ข้อมูลทดสอบของเจ้าของเท่านั้น** ยังไม่มีผู้ใช้จริง
+
+## 3) ข้อกำหนดที่ต้องยึด (สำคัญ)
 
 **แบรนด์/ลิขสิทธิ์** — ออกแบบใหม่ทั้งหมด ห้ามลอกบอทจดบัญชีเจ้าอื่น
-- ห้ามใช้ชื่อ "ป้านวล", "หลาน", "Pro Max" หรือมาสคอต/ข้อความโปรโมตของแบรนด์อื่น
-- ห้ามโทนชมพู-ส้มสด และห้ามใช้เลย์เอาต์ Rich Menu/การ์ดแบบเดียวกัน
+- ห้ามใช้ชื่อ/มาสคอต/ข้อความโปรโมตของแบรนด์อื่น (เจ้าของเคยแนบตัวอย่างแอปอื่นให้ดูเป็นแนวทาง ให้ออกแบบเองเสมอ)
 - ภาพ/ไอคอนต้องเป็น SVG ที่สร้างเอง หรือ Lucide เท่านั้น
-- ระดับสมาชิกชื่อ **Free** และ **Plus** เท่านั้น
 
-**เงิน** — ใช้ integer สตางค์ (`src/lib/money.ts`) ห้ามใช้ float บวกลบ · DB เป็น `numeric(14,2)`
+**เงิน** — ใช้ integer สตางค์ (`src/lib/money.ts`) ห้ามใช้ float บวกลบ · DB เป็น `numeric(14,2)` · ราคาแผนเป็นบาทเต็มใน `src/lib/pricing.ts`
 
 **ความปลอดภัย**
 - `user_id` มาจาก session ที่ตรวจแล้วเท่านั้น ห้ามรับจาก client
-- `SUPABASE_SERVICE_ROLE_KEY` ใช้ฝั่ง server เท่านั้น
-- ห้ามเก็บเลขบัญชีเต็ม เก็บแค่ 4 ตัวท้าย · bucket สลิปต้อง private + signed URL
-- log ต้องไม่มีข้อมูลส่วนบุคคล (ไม่ log ข้อความแชท/user id)
+- `SUPABASE_SERVICE_ROLE_KEY` และ Stripe key ใช้ฝั่ง server เท่านั้น · ฟังก์ชัน SQL ที่เปลี่ยนแผน/ยอด เรียกได้เฉพาะ service role
+- ห้ามเก็บเลขบัญชีเต็ม (4 ตัวท้ายเท่านั้น) · bucket สลิป private + signed URL · **ไม่เก็บไฟล์เสียง**
+- log ต้องไม่มีข้อมูลส่วนบุคคล (ใช้ `src/lib/log.ts` ไม่ใช้ `console.*`)
+- ห้ามกรอก/ถามรหัสผ่านและ secret ในแชท เจ้าของใส่ค่าลับใน Vercel เอง
 
-**แผน** — Free: จดข้อความไม่จำกัด, สลิป OCR 30 ใบ/เดือน · Plus: สลิปไม่จำกัด, กราฟเก็บออม,
-จดประจำ, หลายบัญชี, จัดหมวดด้วยความจำ, แจ้งเตือนรายวัน, ส่งออกขั้นสูง
-เช็คสิทธิ์จาก `src/lib/plan.ts` ที่เดียว (**ยังไม่ได้สร้าง** — Phase 5) ระบบชำระเงินเป็น stub
+## 4) แผนและราคา
 
-## 3) วิธีทำงานกับเจ้าของโปรเจกต์
+ชื่อที่ผู้ใช้เห็น: **Free / Professional / Ultimate** · id ในโค้ด/DB: `free` / `plus` / `ultimate` (`plus` = Professional ไม่ต้อง migrate ข้อมูล) · ชื่อและสิทธิ์เช็คจาก `src/lib/plan.ts` ที่เดียว
 
-- ก่อนเริ่มโค้ดแต่ละ Phase: สรุปแผนสั้น ๆ และถามเฉพาะที่จำเป็นจริง (ไม่เกิน 3 ข้อ)
-- เรื่อง trade-off: เสนอ 2 ตัวเลือก พร้อมข้อแนะนำ
-- commit เล็ก ๆ ข้อความภาษาอังกฤษแบบ Conventional Commits
-- ห้ามสร้างฟีเจอร์นอกสโคปโดยไม่ถามก่อน
-- ทำทีละ Phase แล้ว **หยุดให้รีวิว** พร้อมสรุปท้าย Phase: ทำอะไร / ยังไม่ทำ / ความเสี่ยง / สิ่งที่เจ้าของต้องตั้งค่าเอง
-- ไม่ push เองโดยไม่ถาม (เจ้าของตอบ "push ได้เลย" ทุกครั้ง) และไม่กรอก secret ลงเว็บแทนเจ้าของ
-- Definition of Done ทุก Phase: `pnpm lint && pnpm typecheck && pnpm test` ผ่าน, migration รันซ้ำได้,
-  README อธิบายวิธีทดสอบ, UI มี loading/empty/error และใช้ดีที่ 360px, ไม่มีสิ่งที่เหมือนแบรนด์อื่น
-
-## 4) Tech stack และโครงสร้าง
-
-Next.js 15 (App Router) · TypeScript strict · Tailwind 3 + shadcn-style · Supabase (Postgres/RLS/Storage)
-LINE Messaging API + LIFF v2 · Zod · Vitest · Recharts · Vercel · GitHub Actions
-OCR/LLM ผ่าน provider interface (`AI_PROVIDER` = `gemini` (ค่าเริ่มต้น) | `anthropic` | `openai`)
-
-```
-src/app/api/line/webhook      webhook (verify, dedupe, after())
-src/app/api/{auth,me,summary,transactions,categories,budgets,analytics,settings}
-src/app/(liff)/{summary,analytics,budgets,transactions,settings}
-src/lib/{money,thai-date,budget,budget-cycle,budget-alert,series,commands,dto,repo,env,api}.ts
-src/lib/{parse,categorize,line,auth,supabase}/
-src/components/{logo.tsx, liff/*}
-scripts/{create-richmenu,richmenu-design}.ts   assets/richmenu.png
-supabase/migrations/0001..0004
-```
-
-## 5) สถานะแต่ละ Phase
-
-| Phase | สถานะ | เนื้อหา |
+| แผน | รายเดือน | รายปี |
 |---|---|---|
-| 0 Setup | ✅ | scaffold, CI, env (Zod), design tokens, README |
-| 1 Webhook + จดข้อความ | ✅ | verify signature, dedupe `webhookEventId`, follow/text/postback, parser (49 เคส), categorizer แบบกฎ, การ์ด Flex, `ลบล่าสุด`/`แก้ล่าสุด`/`สรุป…`/`ช่วยเหลือ` |
-| 2 LIFF พื้นฐาน | ✅ | LIFF auth → session JWT 1 ชม., หน้า สรุป/รายการ/ตั้งค่า, แท็บล่าง 5 ปุ่ม, Rich Menu (สร้างและเผยแพร่แล้ว) |
-| 3 หมวด/งบ/วิเคราะห์ | ✅ | CRUD หมวด (+ `category_overrides`), งบรวม/แยกหมวด, แจ้งเตือน 80%/100%, กราฟแท่ง/โดนัท |
-| 4 สลิป OCR | ✅ (ยังไม่ทดสอบกับสลิปจริง) | LINE Content API → Storage (private) → OCR provider (gemini/anthropic/openai) → sanitize + mask → `pending_confirm` + การ์ดตรวจสลิป, กันซ้ำ hash/ref, โควตา Free 30 ใบ, เรียนรู้ผู้รับ → หมวด, ดูรูปผ่าน signed URL; `lib/plan.ts` เริ่มแล้ว (ยังไม่ gate merchant_memory) |
-| 5 Plus & Extra | ✅ (ยังไม่ทดสอบบนระบบจริง) | จดประจำ (Plus) + cron, เตือนรายวัน (Plus) + cron, ส่งออก CSV/XLSX ผ่านลิงก์ 2 นาที, ตังสะสม/streak/แลกวัน Plus, ชวนเพื่อน, plan gating ฝั่ง server, payment stub, กราฟเก็บออม (Plus), หน้าจัดการความจำผู้รับ (Plus) |
-| 6 Hardening | ✅ (ยังไม่ได้ทดสอบกับ LINE/Supabase จริง) | rate limit (Postgres, migration 0007), logger ปลอด PII, ลบข้อมูลทั้งหมด 2 ขั้น, Privacy/Terms (ร่าง), security headers, Playwright + axe 26 เคส, ทดสอบ migration/RLS/ฟังก์ชัน SQL บน Postgres จริง (PGlite) + `supabase/tests/rls_check.sql`, Lighthouse หน้าสาธารณะ 99–100, กราฟโหลดแบบ lazy, `docs/DEPLOY.md` |
+| Free | ฿0 | — |
+| Professional | ฿59 | ฿299 |
+| Ultimate | ฿139 | ฿799 |
 
-ทดสอบอัตโนมัติ: 338 เทสต์ (Vitest: unit + DB) + 26 เคส e2e (Playwright) · ตรวจแล้ว lint/typecheck/build ผ่าน
+- Free: จดข้อความไม่จำกัด, สลิป 30 ใบ/เดือน
+- Professional ขึ้นไป: สลิปไม่จำกัด, จดด้วยเสียง, จดประจำ (20 รายการ), เตือนจดประจำวัน, สรุปอัตโนมัติในแชท, จำผู้รับ→หมวด, Excel สรุป, กราฟเก็บออม
+- Ultimate: ตอนนี้ได้สิทธิ์เท่า Professional · ที่โชว์ "เร็วๆ นี้" = จดในกลุ่ม/หลายบัญชี, จดด้วย PDF, แนบสลิป/หลักฐาน, จดประจำ 100 รายการ
+- **ทดลองฟรี 7 วัน** (`TRIAL_DAYS`): Professional 1 ครั้ง และ Ultimate 1 ครั้งต่อคน ไม่ต้องใช้บัตร เริ่มได้เฉพาะตอนที่ยังไม่มีแผนใช้งาน
+- ตังสะสม: +1 แต้ม/วันที่จด, 10 แต้ม = 1 วัน Professional, ชวนเพื่อน +10 ทั้งสองฝ่าย (`src/lib/config.ts`)
 
-**Phase 4 — ต้องทำเองก่อนใช้:** รัน migration `0005` (bucket `slips` private) และตั้ง `AI_PROVIDER` + key
-**Fallback chain (`src/lib/ocr/factory.ts`):** `easyslip` → `slip2go` → AI (`AI_PROVIDER` ก่อน แล้วตัวอื่นที่มี key)
-- EasySlip v2 (`POST https://api.easyslip.com/v2/verify/bank`, multipart ฟิลด์ `image`, Bearer) — implement แล้ว
-  จากเอกสารสาธารณะ (ยังไม่เคยยิงด้วย key จริง); รูปต้องไม่เกิน 4 MB และสลิปมีอายุจำกัดตามธนาคาร (7–30 วัน)
-- **Slip2Go ยังไม่ implement:** เอกสาร API อยู่ในแดชบอร์ด (API Connect → วิธีใช้งาน) หลังล็อกอิน
-  ผมเข้าไม่ได้และไม่เดารูปแบบคำขอ — ต้องให้เจ้าของวางเอกสาร/ตัวอย่างคำขอ-คำตอบ แล้วเพิ่ม adapter
-  เป็น `src/lib/ocr/slip2go.ts` และเสียบใน `factory.ts` (ชื่อ `slip2go` ถูกจองไว้ใน `SLIP_READERS` แล้ว)
-**ข้อควรรู้:** adapter ของ 3 ค่ายเขียนตามเอกสาร API และทดสอบด้วย mock เท่านั้น ยังไม่เคยยิง API จริง
-(ชื่อโมเดลเริ่มต้นอยู่ใน `src/lib/ocr/provider.ts` เปลี่ยนได้ด้วย `AI_MODEL`)
-`merchant_memory` ตามสเปกเป็นฟีเจอร์ Plus — ตอนนี้ยังทำงานกับทุกแผน รอ gating ใน Phase 5
+## 5) ระบบชำระเงิน (Stripe)
 
-## 6) สิ่งที่ตั้งค่าไว้แล้ว (ชื่อตัวแปร ไม่มีค่า)
+โค้ดอยู่ใน `src/lib/payments/` · คู่มือตั้งค่าและกฎทั้งหมดอยู่ใน **`docs/DEPLOY.md` หัวข้อ 5.2**
+- **บัตร** (ในประเทศ+ต่างประเทศ) = Stripe Billing subscription ต่ออายุอัตโนมัติ · **พร้อมเพย์** = จ่ายครั้งเดียวต่อรอบ (ตัดซ้ำอัตโนมัติไม่ได้)
+- ปุ่ม "จัดการการชำระเงิน" เปิด Stripe Billing portal (ต้อง Activate ใน Dashboard ของแต่ละบัญชี/โหมด)
+- Webhook `POST /api/stripe/webhook` ตรวจลายเซ็น ทุกขั้นกันซ้ำได้ (idempotent) 5 อีเวนต์: `checkout.session.completed`, `checkout.session.async_payment_succeeded`, `customer.subscription.created`, `customer.subscription.updated`, `invoice.paid`
+- กฎกันจ่ายซ้อน/ลดแผน: `src/lib/payments/policy.ts` (ใช้ทั้งฝั่ง server และหน้าอัปเกรด)
+  - มีบัตรที่ยังทำงาน → อัปเกรดแผนสูงขึ้น หรือรายเดือน→รายปี = เปลี่ยน subscription เดิม Stripe คิดเฉพาะส่วนต่าง (`proration_behavior=always_invoice`) ลดแผน/รายปี→รายเดือนกลางรอบไม่ได้
+  - มีเวลาพร้อมเพย์เหลือ → ต่อเวลาเต็มราคาได้ หรือ **อัปเกรดส่วนที่เหลือจ่ายเฉพาะส่วนต่าง** (วันหมดอายุไม่เปลี่ยน คำนวณที่ server, ขั้นต่ำ ฿10) ห้ามผสมกับบัตร
+- ช่องทางที่ขึ้นในหน้าจ่ายเงินกำหนดที่ Stripe Dashboard → Payment methods (API เวอร์ชันใหม่ไม่รับ `payment_method_types`)
+- ไม่มีคืนเงินอัตโนมัติ: คืนเงินใน Stripe เองแล้วลด `plan_expires_at` ด้วยมือ
 
-- **Vercel (Production):** `LINE_CHANNEL_ID`, `LINE_CHANNEL_SECRET`, `LINE_CHANNEL_ACCESS_TOKEN`,
-  `LINE_LOGIN_CHANNEL_ID`, `NEXT_PUBLIC_LIFF_ID`, `NEXT_PUBLIC_SUPABASE_URL`,
-  `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `SESSION_JWT_SECRET` (≥ 32 ตัว),
-  `CRON_SECRET`, `AI_PROVIDER` + key ของค่ายที่เลือก, `APP_BASE_URL`
-- **LINE:** Messaging API channel (webhook → `<โดเมน>/api/line/webhook`) และ LINE Login channel
-  ที่เป็นเจ้าของ LIFF (Endpoint = **ราก** `<โดเมน>` ไม่ต่อ path, scope `profile` + `openid`)
-  — **ต้องอยู่ Provider เดียวกัน** · ถ้า Endpoint ต่อ `/summary` ลิงก์ `liff.line.me/<id>/budgets`
-  จะกลายเป็น `/summary/budgets` และขึ้น 404 (Rich Menu พังทุกปุ่ม)
-- **Supabase:** ต้องรัน migrations ตามลำดับ `0001` → `0007` (รันซ้ำได้) ผ่าน SQL Editor หรือ `supabase db push`
-  - `0004` เพิ่ม `user_settings.budget_mode`, ตาราง `category_overrides`, RPC `analytics_series`
-- **Rich Menu:** `pnpm richmenu --replace` (อ่าน `.env.local`) — เผยแพร่แล้ว 1 ชุดชื่อ `meetang-main` (แบบ 6 ช่องเดิม)
-  ดีไซน์ใหม่ 9 ช่อง (พาสเทลมิ้นต์: จดตังค์/สรุป/วิเคราะห์/หมวด-งบ/รายการ/ตั้งค่า/วิธีใช้งาน/อัปเกรด/ชวนเพื่อน)
-  อยู่ใน repo แล้ว **แต่ต้องรัน `--replace` ใหม่** ถึงจะขึ้นใน LINE (ชื่อเมนูใหม่ `jodtang-main`)
-  หมายเหตุ: Node หลัง proxy ต้องตั้ง `NODE_USE_ENV_PROXY=1`
-- Repo: `stsmcp101-source/JodTang` (branch `main`) · Vercel deploy อัตโนมัติจาก push
+## 6) ตัวแปร environment (ชื่อเท่านั้น ไม่มีค่า)
 
-**Phase 5 — ต้องทำเองก่อนใช้:**
-1. รัน migration `0006` ใน Supabase (ฟังก์ชัน `award_points`, `redeem_points`, `apply_referral`, `grant_referral_bonus` — เรียกได้เฉพาะ service role)
-2. GitHub → Settings → Secrets → Actions: ตั้ง `APP_BASE_URL` และ `CRON_SECRET` (ค่าเดียวกับ Vercel) ให้ workflow `cron.yml` เรียกตัวเตือนรายชั่วโมง
-   (Vercel Hobby รัน cron ได้วันละครั้ง: `vercel.json` มีเฉพาะจดรายการประจำ 00:00 เวลาไทย)
-3. ทดสอบ Plus: `update users set plan_expires_at = now() + interval '7 days' where line_user_id = '...'`
+Vercel (Production) · ตัวที่ขึ้นต้น `NEXT_PUBLIC_*` และ `APP_BASE_URL` **ห้ามติ๊ก Sensitive**
+- LINE: `LINE_CHANNEL_ID`, `LINE_CHANNEL_SECRET`, `LINE_CHANNEL_ACCESS_TOKEN`, `LINE_LOGIN_CHANNEL_ID`, `NEXT_PUBLIC_LIFF_ID`
+- Supabase: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`
+- ระบบ: `SESSION_JWT_SECRET` (≥ 32 ตัว), `CRON_SECRET`, `APP_BASE_URL` (`https://…` ไม่มี `/` ท้าย), `NEXT_PUBLIC_CONTACT_EMAIL`
+- AI: `AI_PROVIDER` (`gemini` ค่าเริ่มต้น | `anthropic` | `openai` — **ต้องไม่ว่าง**) + key ของค่ายที่เลือก (`GEMINI_API_KEY` …), ตัวเสริม `AI_MODEL`, `EASYSLIP_API_KEY`, `SLIP_READERS` (อย่าสร้างตัวแปรเสริมแบบค่าว่าง)
+- Stripe: `STRIPE_SECRET_KEY` (`sk_test_`/`sk_live_`), `STRIPE_WEBHOOK_SECRET` (`whsec_`) — ถ้าไม่ตั้ง ปุ่มชำระเงินตอบ "ยังไม่เปิดให้ชำระเงิน"
 
-**กติกาที่ตีความจากสเปก (แก้ได้ที่ `src/lib/config.ts`):** +1 แต้ม/วันที่จด (ไม่ใช่ต่อรายการ — กันปั่นแต้ม),
-10 แต้ม = 1 วัน Plus, ชวนเพื่อนได้ +10 ทั้งสองฝ่ายเมื่อเพื่อนจดรายการแรก (ใช้รหัสได้ใน 14 วันแรก)
-`merchant_memory` ถูก gate เป็น Plus แล้ว (Free ไม่เรียนรู้/ไม่ใช้) · หลายบัญชี/ช่องทางชำระ (Plus) **ยังไม่ทำ**
+## 7) ฐานข้อมูล: migrations `supabase/migrations/0001…0013` (รันตามลำดับ รันซ้ำได้)
 
-## 7) บทเรียน / ข้อควรรู้ (เจอมาแล้ว)
+| ไฟล์ | ทำอะไร |
+|---|---|
+| 0001–0003 | schema, RLS, seed หมวด + ฟังก์ชัน |
+| 0004 | โหมดงบ, `category_overrides`, RPC `analytics_series` |
+| 0005 | bucket `slips` (private) |
+| 0006 | ตังสะสม/ชวนเพื่อน/แลกวัน/เตือน (ฟังก์ชัน service-role เท่านั้น) |
+| 0007 | rate limit (Postgres) |
+| 0008 | enum แผน `ultimate` |
+| 0009 | ตาราง `payments`, คอลัมน์ Stripe บน `users`, `apply_prepaid_purchase`, `set_plan_until`, `record_payment` |
+| 0010 | `users.billing_period` + `set_plan_until` รุ่นมีรอบบิล |
+| 0011 | `plan_trials` + `start_plan_trial`, `payments.kind`, `apply_prepaid_upgrade` |
+| 0012 | คอลัมน์สรุปอัตโนมัติใน `user_settings` |
+| 0013 | `tx_source` เพิ่มค่า `voice` |
 
-- **Vercel Deployment Protection** ต้องปิด ไม่งั้น LINE เรียก webhook ได้ 401 (ตอบเป็นหน้า SSO)
-  และอย่าใช้ URL เฉพาะ deployment เป็น Webhook URL ให้ใช้โดเมน Production
-- **`NEXT_PUBLIC_*` ตั้งเป็น Sensitive ไม่ได้** (Vercel จะ Save ไม่ได้) — LIFF ID ไม่ใช่ความลับ
-- ตัวแปรใหม่หรือแก้ค่าแล้ว **ต้อง Redeploy** ถึงมีผล
-- **LIFF deep link:** `liff.line.me/<id>/budgets` เปิด Endpoint พร้อม `?liff.state=%2Fbudgets` และ
-  ต้องมีหน้าที่เรียก `liff.init()` ถึงจะพาไปหน้านั้น หน้าแรก (`src/app/page.tsx`) จึงเป็น client page
-  ที่ init LIFF แล้วไป deep link หรือ `/summary` — **อย่าเปลี่ยนเป็น server redirect** (ทิ้ง query)
-  และ Endpoint URL ต้องเป็นราก ไม่ใช่ `/summary`
-- LIFF สร้างได้เฉพาะใน **LINE Login channel** (Messaging API channel เพิ่ม LIFF ไม่ได้แล้ว)
-  ตรวจ ID token ด้วย `LINE_LOGIN_CHANNEL_ID`
-- Supabase project เคยมีตาราง `transactions` ของแอปอื่น ทำให้ migration `0001` ล้ม — ตรวจก่อนรันเสมอ
-  (`create table if not exists` ไม่แก้ตารางชื่อซ้ำที่โครงสร้างต่างกัน)
-- LINE ไม่รับ `fillInText` ว่างใน Rich Menu postback (ใช้ "ชื่อรายการ จำนวนเงิน")
-- ข้อความที่มีลิงก์ถูกข้ามใน parser (เคยถูกจดเป็นรายจ่าย ฿5)
-- Webhook ตอบ 200 ทันทีแล้วประมวลผลใน `after()`; ถ้าล้มจะคืน claim เพื่อให้ LINE redelivery ลองใหม่
-- `loadCategories` ทนต่อกรณียังไม่ได้รัน `0004` (ไม่พัง) แต่โหมดงบ/กราฟต้องการ migration นี้
-- Push message (แจ้งเตือนงบจากรายการที่จดบนเว็บ) นับโควตา OA
+- **ทุกครั้งที่เพิ่ม migration: รันใน Supabase SQL Editor ก่อน push** (โค้ดใหม่อ้างคอลัมน์/ฟังก์ชันใหม่ ถ้ายังไม่รันบางหน้าจะ 500)
+- โปรเจกต์ใหม่: ใช้ไฟล์รวม `supabase/_all-migrations.sql` (สร้างจาก migrations, ไม่ถูก commit — สร้างใหม่ด้วยการต่อไฟล์ตามลำดับ) แล้วรัน `supabase/tests/rls_check.sql` ต้องได้ `RLS checks passed`
 
-### สภาพแวดล้อมเครื่องพัฒนา (Windows)
+## 8) ฟีเจอร์และสถานะ
 
-- ยังไม่ได้ติดตั้ง `pnpm` แบบ global → ใช้ `npx --yes pnpm@10.34.7 <คำสั่ง>`
-- Node 24 ใน proxy ของเครื่อง: `fetch` ต้องตั้ง `NODE_USE_ENV_PROXY=1` (เช่นตอนรัน `pnpm richmenu`)
-- ถ้า `git` ไม่พบใน shell ใหม่ ให้โหลด PATH ใหม่ (ติดตั้งผ่าน `winget install Git.Git`)
-- git identity ตั้งเฉพาะ repo นี้
+| ฟีเจอร์ | สถานะ |
+|---|---|
+| จดข้อความ + parser (ตัดสินรายรับ/รายจ่ายจากคำสัญญาณที่มาก่อน เช่น ได้/รับ vs ซื้อ/จ่าย), หมวดอัตโนมัติ, การ์ด "จดสำเร็จ" | ✅ |
+| อ่านสลิป (EasySlip → AI) + การ์ดตรวจ, โควตา Free 30 ใบ | ✅ ยังไม่เคยทดสอบกับสลิปจริงครบทุกค่าย |
+| หน้า LIFF: สรุป/วิเคราะห์/หมวด-งบ/รายการ/ตั้งค่า/อัปเกรด | ✅ |
+| แก้ไขรายการ (PATCH) + เลือกหลายรายการลบ/ย้ายหมวด (`/api/transactions/bulk`) | ✅ |
+| Rich Menu 9 ช่อง (ช่อง "อัปเกรด" แทนสแกนสลิป; "จดตังค์" ตอบการ์ดวิธีพิมพ์) | ✅ ลิงก์ผูก LIFF ID จึงไม่ต้องสร้างใหม่เมื่อเปลี่ยนโดเมน |
+| จดประจำ, เตือนจดประจำวัน, ส่งออก CSV/XLSX, ตังสะสม, ชวนเพื่อน | ✅ |
+| หน้าอัปเกรด 3 แผน + เปรียบเทียบ + Stripe + ทดลองฟรี + อัปเกรดจ่ายส่วนต่าง | ✅ ทดสอบใน Test mode |
+| สรุปอัตโนมัติรายสัปดาห์ (จันทร์ 09:00) / รายเดือน (วันเริ่มรอบงบ 09:00) ส่งในแชท (Professional+, ปิดไว้เป็นค่าเริ่มต้น) | ✅ **ยังไม่ได้ลองส่งจริง** |
+| จดด้วยเสียง (Professional+): ถอดด้วย Gemini/OpenAI → **ถามยืนยันก่อนจดเสมอ** (จดเลย/เปลี่ยนหมวด/ยกเลิก) | ✅ **ยังไม่ได้ลองถอดเสียงจริง** (ส่งเสียง m4a ของ LINE ไป Gemini เป็น `audio/mp4` — ถ้าพังดู log `voice_transcribe_failed`) |
+| Rate limit, logger ปลอด PII, ลบข้อมูลทั้งหมด, Privacy/Terms (ร่าง), security headers | ✅ |
 
-## 8) ข้อจำกัดที่ยังค้าง
+ทดสอบอัตโนมัติ: **522 เทสต์** (Vitest: unit + DB บน Postgres จริงที่จำลอง Supabase + RLS) + **46 เคส e2e** (Playwright + axe ที่ 360px)
 
-- **ยังไม่ได้ทดสอบบนระบบจริง** ทั้ง Phase 4–6 (LINE/Supabase/cron/EasySlip/AI): logic และ SQL ถูกทดสอบด้วย unit + Postgres จำลอง (PGlite) + e2e ที่ mock API
-  ข้อมูลจริงอาจเจอกรณีที่ชุดทดสอบไม่ครอบคลุม — ไล่ตามชุดทดสอบใน README/สรุปแต่ละ Phase
-- หน้า LIFF วัด Lighthouse อัตโนมัติไม่ได้ (ต้องล็อกอิน LINE) — วัดได้เฉพาะ `/privacy`, `/terms` (99–100); ตรวจ LIFF ด้วยมือถือจริง
-- ปุ่ม "แก้ไข" ในการ์ดแชทแก้ได้เฉพาะรายการล่าสุดผ่านข้อความ; หน้า รายการ ยังไม่มีแก้ไขรายการ/เลือกหลายรายการ/ย้ายหมวด
-- **หลายบัญชี/ช่องทางชำระ (Plus)** ยังไม่ทำ · LLM categorizer (ชั้นที่ 3 ของ chain) ยังไม่ทำ
-- **CSP** ยังไม่เปิด · ไม่มีระบบ alert อัตโนมัติ · Privacy/Terms เป็นฉบับร่าง (ดู `docs/DEPLOY.md` ข้อ 9)
-- **Slip2Go** ยังไม่ implement (รอเอกสาร API)
+## 9) ฟีเจอร์ที่ยังไม่ทำ (backlog)
+
+เจ้าของเลือกทั้งหมดไว้แล้วแต่ขอหยุดก่อน ถ้ากลับมาทำ:
+- **หลายบัญชี/กระเป๋าเงิน (Ultimate)** — ตัวเลือกที่เจ้าของเลือกไว้: **แท็กกระเป๋าบนรายการ + กรอง/ดูยอดแยก** (ไม่ทำยอดตั้งต้น/โอนระหว่างกระเป๋า) จำนวนกระเป๋าสูงสุดยังไม่ได้กำหนด (เสนอ 10) ต้องแก้ DB หน้าจด และสรุปหลายจุด
+- **แนบสลิป/ใบเสร็จ/หลักฐาน + จดด้วย PDF (Ultimate)** — ต้องมีพื้นที่เก็บไฟล์เพิ่มและตรวจความปลอดภัย
+- Slip2Go adapter (รอเอกสาร API), LLM categorizer, CSP, ระบบ alert อัตโนมัติ, `Privacy/Terms` ฉบับจริง
 - Keyword แบบ substring อาจจัดผิดบ้าง (เช่น "ชา" ใน "ชาร์จ")
-- ระบบชำระเงิน Stripe เขียนครบแล้วแต่ **ยังไม่ได้ทดสอบกับ Stripe จริง** (ต้องรัน migration 0009, ตั้ง env + webhook ตาม DEPLOY.md หัวข้อ 5.2)
 
-## 9) การทดสอบและการปล่อยงาน
+## 10) งานค้างก่อนเปิดรับเงินจริง
 
-- `pnpm lint && pnpm typecheck && pnpm test` — unit + `tests/db` (รันทุก migration สองรอบบน Postgres จริงที่จำลอง Supabase และรัน `supabase/tests/rls_check.sql`)
-- `pnpm e2e` — Playwright + axe ที่ 360px (build ด้วย `NEXT_PUBLIC_E2E=1` เฉพาะตอนทดสอบ; ห้ามตั้งใน production)
-- **Phase 6 — ต้องทำเองก่อนใช้:** รัน migration `0007` แล้วรัน `rls_check.sql` ใน SQL Editor (ผลลัพธ์สุดท้าย `result = RLS checks passed`)
-- ขั้นตอน deploy / rollback / rotate secret / แก้ปัญหา: [DEPLOY.md](DEPLOY.md)
-## 10) คำสั่งที่ใช้บ่อย
+1. ทดสอบบนมือถือจริงให้ครบ: จดด้วยเสียง, สรุปอัตโนมัติ (รอวันจันทร์หลัง 09:00 หรือกด Run workflow), ทดลองฟรี, อัปเกรดส่วนต่างพร้อมเพย์
+2. **เปิด Stripe Live** (เจ้าของบอกว่าเป็นขั้นสุดท้าย): ใช้บัญชี Stripe ที่ยืนยันธุรกิจและผูกธนาคารแล้ว → ใส่ `sk_live_` + `whsec_` ของ Live ใน Vercel → สร้าง webhook 5 อีเวนต์ใน Live → เปิด Cards + PromptPay + Customer portal ใน Live → ทดสอบจ่ายจริงจำนวนน้อยแล้วคืนเงิน → ตั้ง Public business name + โลโก้ + `NEXT_PUBLIC_CONTACT_EMAIL`
+3. ตรวจโควตา push ของ LINE OA (สรุปอัตโนมัติและเตือนใช้โควตา)
+4. ปิด/ลบบริการบัญชีเก่า (Vercel เก่าปิดแล้ว) และหมุน (rotate) secret ที่เคยอยู่ในบัญชีเก่า
+
+## 11) วิธีทำงานกับเจ้าของโปรเจกต์
+
+- ก่อนเริ่มงานใหม่: สรุปแผนสั้น ๆ และถามเฉพาะที่จำเป็นจริง (ไม่เกิน 3 ข้อ) · เรื่อง trade-off เสนอ 2 ตัวเลือกพร้อมข้อแนะนำ
+- commit เล็ก ๆ ข้อความภาษาอังกฤษแบบ Conventional Commits และ **ท้ายทุก commit ต้องมี** `Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>`
+- ห้ามสร้างฟีเจอร์นอกสโคปโดยไม่ถาม · ทำทีละหน่วยแล้วหยุดสรุป (ทำอะไร / ยังไม่ทำ / ความเสี่ยง / สิ่งที่เจ้าของต้องตั้งค่าเอง)
+- **ไม่ push เองโดยไม่ถาม** (เจ้าของตอบ "push ได้เลย") · **ตรวจ `typecheck` + `lint` + `test` (+ `build` ถ้าแตะ route) ให้ผ่านก่อน push เสมอ** (เคย push ทั้งที่ typecheck ล้ม)
+- migration ใหม่: บอกเจ้าของให้รัน **ก่อน** push
+- UI ทุกจุดต้องมี loading/empty/error ใช้ดีที่ 360px, สีผ่าน WCAG AA, ข้อความ UI เป็นไทย
+- Definition of Done: lint/typecheck/test ผ่าน, migration รันซ้ำได้ + ผ่าน `rls_check.sql`, e2e ผ่าน, เอกสารอัปเดต
+
+## 12) บทเรียน / ข้อควรรู้ (เจอมาแล้ว)
+
+**Vercel / env**
+- ตัวแปรใหม่หรือแก้ค่าแล้ว **ต้อง Redeploy** · ตัวแปร `NEXT_PUBLIC_*` ฝังตอน build → Redeploy แบบ **ปิด build cache** · อย่าติ๊ก Sensitive (ไม่ถูกฝัง ทำให้ขึ้น "ยังไม่ได้ตั้งค่า LIFF")
+- `AI_PROVIDER` ค่าว่างทำให้ทุก route ที่อ่าน env พัง 500 "server misconfigured" (ตรวจจาก Logs ค้น `Invalid server environment`)
+- Deployment Protection ต้องปิด ไม่งั้น LINE เรียก webhook ได้ 401 · อย่าใช้ URL เฉพาะ deployment เป็น Webhook URL
+- ลบโดเมน `.vercel.app` ออกโดยพลาดได้ → Settings → Domains → Add กลับ
+
+**LINE / LIFF**
+- LIFF สร้างได้เฉพาะใน LINE Login channel · ตรวจ ID token ด้วย `LINE_LOGIN_CHANNEL_ID` (ผิด/ว่าง = 401 แล้วเว็บวน login) — โค้ดจำกัดให้ login ซ้ำได้แค่ 1 ครั้งต่อ 30 วินาที แล้วขึ้นข้อความแทนวนไม่จบ · ดู log `liff_verify_failed`
+- Endpoint URL ของ LIFF ต้องเป็น **ราก** ของโดเมน หน้าแรกเป็น client page ที่ `liff.init()` (อย่าเปลี่ยนเป็น server redirect)
+- Rich Menu ผูก LIFF ID ไม่ผูกโดเมน · `pnpm richmenu --replace` สร้างใหม่ · LINE ไม่รับ `fillInText` ว่าง (เมนู "จดตังค์" จึงเป็น postback เงียบ ๆ ที่บอทตอบเป็นการ์ด)
+- ตรวจรูปแบบ Flex message ได้โดยไม่ส่งจริงที่ `POST /v2/bot/message/validate/reply`
+- Flex `image` ต้องเป็น https · ข้อความที่มีลิงก์ถูกข้ามใน parser
+
+**Stripe**
+- API เวอร์ชันใหม่ (`2026-08-26.dahlia`) ไม่รับ `payment_method_types` ใน Checkout Session
+- Customer portal ต้อง Activate/Save ครั้งแรกแยกในแต่ละบัญชีและแต่ละโหมด (Test/Live)
+- ข้อความ error ตอนเปิดหน้าจ่ายเงินมีรหัสต่อท้าย (เช่น `(รหัส: 401 api_key_invalid)`) · log ชื่อ `stripe_checkout_failed` / `stripe_portal_failed` / `stripe_change_failed` / `stripe_webhook_failed`
+- ลิงก์สั้น `dashboard.stripe.com/test/...` อาจพาไปบัญชีอื่นที่เคยล็อกอิน ให้ตรวจชื่อบัญชีมุมซ้ายบนก่อนแก้อะไร
+
+**ฐานข้อมูล**
+- Supabase เก่าเคยมีตาราง `transactions` ของแอปอื่นทำให้ `0001` ล้ม — ตรวจก่อนรัน
+- Postgres: `alter type … add value` ใช้ค่าใหม่ใน transaction เดียวกันไม่ได้ (migration 0008/0013 ไม่ใช้ค่าใหม่ในไฟล์เดียวกัน)
+- คำนวณเงินส่วนต่างด้วยจำนวนเต็มก่อนหาร (ลอยตัวเคยทำ 40 กลายเป็น 41)
+
+**เครื่องพัฒนา (Windows / PowerShell)**
+- ใช้ `npx --yes pnpm@10.34.7 <คำสั่ง>` · Node หลังพร็อกซีบริษัท: ตั้ง `NODE_USE_ENV_PROXY=1` สำหรับสคริปต์ Node และ `git -c http.proxy=<พร็อกซี> push` ใน terminal ที่ไม่ได้ตั้ง `HTTPS_PROXY`
+- push ไป GitHub บัญชีอื่น: Git Credential Manager จะเด้งหน้าล็อกอินเอง ให้ใส่ username ใน URL ของ remote
+- แก้ไฟล์ไทยด้วย .NET UTF-8 (ไม่มี BOM) อย่าใช้ `Get-Content/Set-Content` ตรงๆ (ตัวอักษรเพี้ยน) · `R` ใน PowerShell คือ alias ของ Invoke-History ห้ามตั้งชื่อฟังก์ชันซ้ำ
+- Playwright e2e build ด้วย `NEXT_PUBLIC_E2E=1` เฉพาะตอนทดสอบ ห้ามตั้งใน production
+
+## 13) ย้ายเครื่องทำงานต่อ
+
+1. ติดตั้ง Git, Node 22 (ใช้ pnpm ผ่าน `npx` ได้) แล้ว `git clone https://github.com/STS-LSR-10/JodTang.git` → `npx --yes pnpm@10.34.7 install`
+2. สร้าง `.env.local` เอง (แม่แบบ `.env.example`) โดยคัดลอกจากเครื่องเก่าผ่านช่องทางปลอดภัย หรือเอาค่าจาก Vercel/Supabase/LINE/Stripe
+3. ถ้าจะรัน e2e: `npx --yes pnpm@10.34.7 exec playwright install chromium`
+4. ประวัติแชทกับ AI ไม่ตามไปด้วย — ให้เซสชันใหม่อ่านไฟล์นี้ + `README.md` + `docs/DEPLOY.md` ก่อนเริ่ม
+
+## 14) คำสั่งที่ใช้บ่อย
 
 ```bash
 npx --yes pnpm@10.34.7 install
 npx --yes pnpm@10.34.7 lint
 npx --yes pnpm@10.34.7 typecheck
-npx --yes pnpm@10.34.7 test
+npx --yes pnpm@10.34.7 test          # unit + tests/db (Postgres จำลอง) + RLS
+npx --yes pnpm@10.34.7 e2e           # Playwright + axe ที่ 360px
 npx --yes pnpm@10.34.7 build
-npx --yes pnpm@10.34.7 dev            # http://localhost:3000
+npx --yes pnpm@10.34.7 dev           # http://localhost:3000
 npx --yes pnpm@10.34.7 richmenu --dry-run
 ```
+
+ขั้นตอน deploy / rollback / rotate secret / ตั้งค่า Stripe / แก้ปัญหา: [DEPLOY.md](DEPLOY.md) · token การออกแบบ: [design-tokens.md](design-tokens.md)
