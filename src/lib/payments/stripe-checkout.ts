@@ -18,6 +18,11 @@ export function resultUrls(baseUrl: string) {
  *  - card      -> mode=subscription (Stripe Billing): renews by itself every month / year
  *  - promptpay -> mode=payment: one prepaid period; PromptPay cannot be charged repeatedly
  *
+ * Which payment methods appear is decided in the Stripe Dashboard (Settings -> Payment methods):
+ * recent API versions no longer accept `payment_method_types` on Checkout Sessions. Stripe shows
+ * only the enabled methods that fit the mode (PromptPay is offered for one-time payments, never
+ * for subscriptions).
+ *
  * The price is built inline (`price_data`) from src/lib/pricing.ts, so there is nothing to create
  * in the Stripe dashboard. Our own user id travels in metadata and comes back in the webhook.
  */
@@ -42,12 +47,10 @@ export function buildCheckoutFields(req: CheckoutRequest, baseUrl: string): Reco
   for (const [k, v] of Object.entries(meta)) f[`metadata[${k}]`] = v;
 
   if (subscription) {
-    f["payment_method_types[0]"] = "card";
     f["line_items[0][price_data][recurring][interval]"] =
       req.period === "yearly" ? "year" : "month";
     for (const [k, v] of Object.entries(meta)) f[`subscription_data[metadata][${k}]`] = v;
   } else {
-    f["payment_method_types[0]"] = "promptpay";
     if (!req.customerId) f.customer_creation = "always";
   }
   if (req.customerId) f.customer = req.customerId;

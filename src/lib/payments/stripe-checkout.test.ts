@@ -5,13 +5,13 @@ const USER = "11111111-1111-1111-1111-111111111111";
 const BASE = "https://jodtang.example.com/";
 
 describe("buildCheckoutFields", () => {
-  it("card = subscription with the right recurring interval and card only", () => {
+  it("card = subscription with the right recurring interval", () => {
     const f = buildCheckoutFields(
       { userId: USER, plan: "plus", period: "yearly", method: "card" },
       BASE,
     );
     expect(f.mode).toBe("subscription");
-    expect(f["payment_method_types[0]"]).toBe("card");
+    expect(Object.keys(f).some((k) => k.startsWith("payment_method_types"))).toBe(false);
     expect(f["line_items[0][price_data][currency]"]).toBe("thb");
     expect(f["line_items[0][price_data][unit_amount]"]).toBe("29900"); // ฿299 in satang
     expect(f["line_items[0][price_data][recurring][interval]"]).toBe("year");
@@ -29,13 +29,14 @@ describe("buildCheckoutFields", () => {
     expect(f["line_items[0][price_data][recurring][interval]"]).toBe("month");
   });
 
-  it("PromptPay = one-time payment (no recurring) with PromptPay only", () => {
+  it("PromptPay = one-time payment (no recurring)", () => {
     const f = buildCheckoutFields(
       { userId: USER, plan: "ultimate", period: "yearly", method: "promptpay" },
       BASE,
     );
     expect(f.mode).toBe("payment");
-    expect(f["payment_method_types[0]"]).toBe("promptpay");
+    // payment methods come from the Dashboard settings: the API no longer accepts a list here
+    expect(Object.keys(f).some((k) => k.startsWith("payment_method_types"))).toBe(false);
     expect(f["line_items[0][price_data][unit_amount]"]).toBe("79900");
     expect(Object.keys(f).some((k) => k.includes("recurring"))).toBe(false);
     expect(f["metadata[method]"]).toBe("promptpay");

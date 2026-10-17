@@ -41,7 +41,7 @@ const METHODS: { value: Method; label: string; hint: string }[] = [
   {
     value: "promptpay",
     label: "พร้อมเพย์ (QR)",
-    hint: "จ่ายครั้งเดียวต่อรอบ ไม่ต่ออายุอัตโนมัติ",
+    hint: "จ่ายครั้งเดียวต่อรอบ สแกน QR ผ่านแอปธนาคาร ไม่ต่ออายุอัตโนมัติ",
   },
 ];
 
