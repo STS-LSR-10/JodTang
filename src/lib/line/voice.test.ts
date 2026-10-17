@@ -1,0 +1,199 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { ImageError } from "./content";
+import { handleVoiceMessage, type VoiceDeps } from "./voice";
+import {
+  VOICE_DAY_LIMIT_TEXT,
+  VOICE_EMPTY_TEXT,
+  VOICE_FAILED_TEXT,
+  VOICE_LOCKED_TEXT,
+  VOICE_TOO_LONG_TEXT,
+} from "./messages";
+
+const inserted: Record<string, unknown>[] = [];
+
+vi.mock("@/lib/repo", () => ({
+  loadCategories: async () => [
+    {
+      id: "food",
+      user_id: null,
+      type: "expense",
+      name: "อาหาร",
+      keywords: ["กาแฟ", "ข้าว"],
+      sort_order: 1,
+      is_hidden: false,
+      icon: null,
+      color: null,
+    },
+    {
+      id: "other",
+      user_id: null,
+      type: "expense",
+      name: "อื่นๆ",
+      keywords: [],
+      sort_order: 9,
+      is_hidden: false,
+      icon: null,
+      color: null,
+    },
+    {
+      id: "salary",
+      user_id: null,
+      type: "income",
+      name: "เงินเดือน",
+      keywords: ["เงินเดือน"],
+      sort_order: 1,
+      is_hidden: false,
+      icon: null,
+      color: null,
+    },
+    {
+      id: "inc-other",
+      user_id: null,
+      type: "income",
+      name: "อื่นๆ",
+      keywords: [],
+      sort_order: 9,
+      is_hidden: false,
+      icon: null,
+      color: null,
+    },
+  ],
+  loadMemoryFor: async () => [],
+  insertTransaction: async (_db: unknown, input: Record<string, unknown>) => {
+    inserted.push(input);
+    return { id: `tx-${inserted.length}`, ...input };
+  },
+}));
+
+const NOW = new Date("2026-10-17T08:00:00Z");
+const PLUS_USER = {
+  id: "u1",
+  line_user_id: "U1",
+  display_name: null,
+  plan: "plus",
+  plan_expires_at: null,
+} as const;
+const FREE_USER = { ...PLUS_USER, plan: "free" } as const;
+
+function deps(over: Partial<VoiceDeps> & { heard?: string | Error } = {}): VoiceDeps & {
+  fetchAudio: ReturnType<typeof vi.fn>;
+} {
+  const heard = over.heard ?? "กาแฟ 30 บาท";
+  const fetchAudio = vi.fn(async () => ({ bytes: new Uint8Array([1]), mimeType: "audio/x-m4a" }));
+  return {
+    db: {} as SupabaseClient,
+    now: () => NOW,
+    fetchAudio: over.fetchAudio ?? fetchAudio,
+    transcriber: {
+      name: "fake",
+      transcribe: async () => {
+        if (heard instanceof Error) throw heard;
+        return heard;
+      },
+    },
+    limit: over.limit,
+  } as unknown as VoiceDeps & { fetchAudio: ReturnType<typeof vi.fn> };
+}
+
+const run = (
+  d: VoiceDeps,
+  user = PLUS_USER,
+  message: { id: string; duration?: number } = { id: "m1", duration: 4000 },
+) => handleVoiceMessage(d, user as never, message, "U1");
+
+const textOf = (m: unknown) => (m as { text?: string }).text;
+
+beforeEach(() => {
+  inserted.length = 0;
+});
+
+describe("handleVoiceMessage", () => {
+  it("a Free user only gets the upsell and nothing is downloaded or transcribed", async () => {
+    const d = deps();
+    const out = await run(d, FREE_USER as never);
+    expect(textOf(out[0])).toBe(VOICE_LOCKED_TEXT);
+    expect(d.fetchAudio).not.toHaveBeenCalled();
+    expect(inserted).toHaveLength(0);
+  });
+
+  it("a long voice note is refused before downloading it", async () => {
+    const d = deps();
+    const out = await run(d, PLUS_USER, { id: "m1", duration: 31_000 });
+    expect(textOf(out[0])).toBe(VOICE_TOO_LONG_TEXT);
+    expect(d.fetchAudio).not.toHaveBeenCalled();
+  });
+
+  it("stops at the daily ceiling without touching the AI", async () => {
+    const limit = vi.fn(async () => ({ allowed: false, hits: 61, limit: 60 }));
+    const d = deps({ limit });
+    const out = await run(d);
+    expect(limit).toHaveBeenCalledWith("voice_day", "U1", expect.objectContaining({ limit: 60 }));
+    expect(textOf(out[0])).toBe(VOICE_DAY_LIMIT_TEXT);
+    expect(d.fetchAudio).not.toHaveBeenCalled();
+  });
+
+  it("saves the entry as PENDING (never confirmed), tagged voice, and asks the person to check it", async () => {
+    const out = await run(deps({ heard: "กาแฟ 30 บาท" }));
+    expect(inserted).toHaveLength(1);
+    expect(inserted[0]).toMatchObject({
+      status: "pending_confirm",
+      source: "voice",
+      type: "expense",
+      title: "กาแฟ",
+      amountSatang: 3000,
+      categoryId: "food",
+      rawText: "กาแฟ 30 บาท",
+    });
+    expect(textOf(out[0])).toBe('ได้ยินว่า: "กาแฟ 30 บาท"');
+    const card = JSON.stringify(out[1]);
+    expect(card).toContain("a=sc&id=tx-1"); // จดเลย
+    expect(card).toContain("a=se&id=tx-1"); // เปลี่ยนหมวด
+    expect(card).toContain("a=vx&id=tx-1"); // ยกเลิก
+    expect(card).toContain("฿30");
+  });
+
+  it("understands income too", async () => {
+    await run(deps({ heard: "เงินเดือน 20000" }));
+    expect(inserted[0]).toMatchObject({
+      type: "income",
+      amountSatang: 2_000_000,
+      categoryId: "salary",
+    });
+  });
+
+  it("several entries in one note become several cards (max 3)", async () => {
+    const out = await run(deps({ heard: "กาแฟ 30, ข้าว 50, น้ำ 10, ขนม 20" }));
+    expect(inserted).toHaveLength(3);
+    expect(out).toHaveLength(4); // heard text + 3 cards
+  });
+
+  it("tells what it heard when there is no amount, and saves nothing", async () => {
+    const out = await run(deps({ heard: "สวัสดีครับวันนี้อากาศดี" }));
+    expect(textOf(out[0])).toContain('ได้ยินว่า "สวัสดีครับวันนี้อากาศดี" แต่ไม่เจอจำนวนเงิน');
+    expect(inserted).toHaveLength(0);
+  });
+
+  it("an empty transcript means no speech was heard", async () => {
+    expect(textOf((await run(deps({ heard: "" })))[0])).toBe(VOICE_EMPTY_TEXT);
+  });
+
+  it("a failing transcription or download gives a friendly message and saves nothing", async () => {
+    expect(
+      textOf((await run(deps({ heard: new Error("gemini-audio request failed: 500") })))[0]),
+    ).toBe(VOICE_FAILED_TEXT);
+    const broken = deps({
+      fetchAudio: vi.fn(async () => {
+        throw new ImageError("download_failed", "x");
+      }),
+    });
+    expect(textOf((await run(broken))[0])).toBe(VOICE_FAILED_TEXT);
+    const big = deps({
+      fetchAudio: vi.fn(async () => {
+        throw new ImageError("too_large", "x");
+      }),
+    });
+    expect(textOf((await run(big))[0])).toBe(VOICE_TOO_LONG_TEXT);
+    expect(inserted).toHaveLength(0);
+  });
+});

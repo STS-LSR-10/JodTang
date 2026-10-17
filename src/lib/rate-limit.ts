@@ -20,6 +20,10 @@ export const LIMITS = {
   chat: { limit: 30, windowSeconds: 60 },
   /** Chat images per user: each one can trigger paid OCR calls. */
   chatImage: { limit: 10, windowSeconds: 60 },
+  /** Voice messages per user: each one is a paid transcription call. */
+  chatVoice: { limit: 5, windowSeconds: 60 },
+  /** ... and a daily ceiling so one account cannot run up the AI bill. */
+  voiceDay: { limit: 60, windowSeconds: 86_400 },
   /** Button taps (postbacks) per user. */
   postback: { limit: 60, windowSeconds: 60 },
   /** LIFF sign-in attempts per IP. */

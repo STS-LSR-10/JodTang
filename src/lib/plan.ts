@@ -23,7 +23,8 @@ export type Feature =
   | "merchantMemory"
   | "dailyReminder"
   | "advancedExport"
-  | "autoSummary";
+  | "autoSummary"
+  | "voiceLog";
 
 /** Every feature built so far is part of Professional, and so of Ultimate above it. */
 const PAID_ONLY: Record<Feature, boolean> = {
@@ -35,6 +36,7 @@ const PAID_ONLY: Record<Feature, boolean> = {
   dailyReminder: true,
   advancedExport: true,
   autoSummary: true,
+  voiceLog: true,
 };
 
 export function isPaidPlan(plan: Plan): boolean {

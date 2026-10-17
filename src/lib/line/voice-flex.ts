@@ -1,0 +1,115 @@
+import { formatBaht } from "@/lib/money";
+import { formatThaiDate } from "@/lib/thai-date";
+import type { LineMessage, TxType } from "@/lib/types";
+import { COLOR, row } from "./flex";
+
+export interface VoiceCardInput {
+  txId: string;
+  type: TxType;
+  title: string;
+  amountSatang: number;
+  categoryName: string | null;
+  occurredAt: Date;
+}
+
+/**
+ * "Did I hear you right?" card for a voice entry. Nothing is saved until the person taps
+ * "จดเลย" (the pending entry is confirmed by the same `sc` step as a checked slip).
+ */
+export function buildVoiceCard(input: VoiceCardInput): LineMessage {
+  const income = input.type === "income";
+  const amountText = `${income ? "+" : "-"}฿${formatBaht(input.amountSatang)}`;
+
+  const button = (
+    label: string,
+    action: string,
+    style: "primary" | "secondary" | "link",
+    color?: string,
+  ) => ({
+    type: "button",
+    style,
+    height: "sm",
+    ...(color ? { color } : {}),
+    action: {
+      type: "postback",
+      label,
+      data: `a=${action}&id=${input.txId}`,
+      displayText: label,
+    },
+  });
+
+  return {
+    type: "flex",
+    altText: `ตรวจรายการจากเสียง: ${input.title} ${amountText}`,
+    contents: {
+      type: "bubble",
+      size: "mega",
+      header: {
+        type: "box",
+        layout: "vertical",
+        backgroundColor: COLOR.primarySoft,
+        paddingAll: "14px",
+        contents: [
+          {
+            type: "text",
+            text: "ตรวจรายการจากเสียง — ยังไม่ได้จด",
+            weight: "bold",
+            color: COLOR.primary,
+          },
+        ],
+      },
+      body: {
+        type: "box",
+        layout: "vertical",
+        backgroundColor: COLOR.surface,
+        paddingAll: "16px",
+        spacing: "sm",
+        contents: [
+          {
+            type: "text",
+            text: input.title,
+            weight: "bold",
+            size: "lg",
+            wrap: true,
+            color: COLOR.text,
+          },
+          {
+            type: "text",
+            text: amountText,
+            weight: "bold",
+            size: "xxl",
+            color: income ? COLOR.income : COLOR.expense,
+          },
+          row("ประเภท", income ? "รายรับ" : "รายจ่าย"),
+          row("หมวด (เดา)", input.categoryName ?? "ไม่ระบุหมวด"),
+          row("วันเวลา", formatThaiDate(input.occurredAt, true)),
+          {
+            type: "text",
+            text: "ฟังผิด? กดยกเลิกแล้วพูดใหม่ หรือพิมพ์จดเองได้เลย",
+            size: "xs",
+            color: COLOR.muted,
+            wrap: true,
+          },
+        ],
+      },
+      footer: {
+        type: "box",
+        layout: "vertical",
+        backgroundColor: COLOR.surface,
+        spacing: "sm",
+        contents: [
+          button("จดเลย", "sc", "primary", COLOR.primary),
+          {
+            type: "box",
+            layout: "horizontal",
+            spacing: "sm",
+            contents: [
+              button("เปลี่ยนหมวด", "se", "secondary"),
+              button("ยกเลิก", "vx", "secondary"),
+            ],
+          },
+        ],
+      },
+    },
+  };
+}

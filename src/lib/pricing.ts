@@ -49,6 +49,7 @@ export const FEATURE_GROUPS: FeatureGroup[] = [
     rows: [
       { label: "จดด้วยข้อความ", cells: [true, true, true] },
       { label: "อ่านสลิปอัตโนมัติ", cells: ["30 ใบ/เดือน", "ไม่จำกัด", "ไม่จำกัด"] },
+      { label: "จดด้วยเสียง", cells: [false, true, true] },
       { label: "ตั้งรายการจดอัตโนมัติ", cells: [false, "20 รายการ", "20 รายการ"] },
       { label: "เตือนจดประจำวัน", cells: [false, true, true] },
     ],
@@ -82,7 +83,11 @@ export const FEATURE_GROUPS: FeatureGroup[] = [
 /** Short selling points shown on each plan card. */
 export const PLAN_HIGHLIGHTS: Record<Plan, string[]> = {
   free: ["จดด้วยข้อความ", "อ่านสลิป 30 ใบ/เดือน", "ตั้งหมวดและงบ"],
-  plus: ["อ่านสลิปไม่จำกัด", "รายการจดอัตโนมัติ + เตือนประจำวัน", "Excel สรุป กราฟเก็บออม"],
+  plus: [
+    "อ่านสลิปไม่จำกัด + จดด้วยเสียง",
+    "รายการจดอัตโนมัติ + เตือนประจำวัน",
+    "Excel สรุป กราฟเก็บออม สรุปในแชท",
+  ],
   ultimate: [
     "ทุกอย่างใน Professional",
     "จดในกลุ่ม / หลายบัญชี (เร็วๆ นี้)",

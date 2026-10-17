@@ -1,10 +1,11 @@
 import { getServerEnv } from "@/lib/env";
 import { buildSlipReader } from "@/lib/ocr/factory";
 import { rateLimit } from "@/lib/rate-limit";
+import { buildTranscriber } from "@/lib/voice/transcribe";
 import { claimEvent, releaseEvent } from "@/lib/repo";
 import { getAdminClient } from "@/lib/supabase/admin";
 import { createLineClient } from "./client";
-import { fetchLineImage } from "./content";
+import { fetchLineAudio, fetchLineImage } from "./content";
 import { handleEvent, type HandlerDeps, type LineEvent } from "./handlers";
 import { ERROR_TEXT, text } from "./messages";
 import { log } from "@/lib/log";
@@ -53,6 +54,15 @@ export async function processEvents(rawEvents: unknown[]): Promise<void> {
       }).reader,
     },
   };
+
+  // Voice messages need an AI that can hear (Gemini or OpenAI key); without one they get a polite no.
+  const transcriber = buildTranscriber(env);
+  if (transcriber) {
+    deps.voice = {
+      fetchAudio: (messageId) => fetchLineAudio(env.LINE_CHANNEL_ACCESS_TOKEN, messageId),
+      transcriber,
+    };
+  }
 
   for (const raw of rawEvents) {
     if (!isLineEvent(raw)) continue;

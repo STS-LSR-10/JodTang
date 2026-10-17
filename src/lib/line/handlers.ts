@@ -54,17 +54,21 @@ import {
   SLIP_SOON_TEXT,
   TOO_MANY_MESSAGES_TEXT,
   USE_CODE_USAGE_TEXT,
+  VOICE_CANCELLED_TEXT,
+  VOICE_UNAVAILABLE_TEXT,
   WELCOME_TEXT,
   text,
 } from "./messages";
 import { log } from "@/lib/log";
+import type { Transcriber } from "@/lib/voice/transcribe";
+import { handleVoiceMessage, type VoiceDeps } from "./voice";
 
 export interface LineEvent {
   type: string;
   webhookEventId?: string;
   replyToken?: string;
   source?: { type: string; userId?: string };
-  message?: { type: string; id?: string; text?: string };
+  message?: { type: string; id?: string; text?: string; duration?: number };
   postback?: { data: string };
 }
 
@@ -80,6 +84,11 @@ export interface HandlerDeps {
     fetchImage: (messageId: string) => Promise<SlipImage>;
     ocr: SlipOcrProvider;
   };
+  /** Voice messages. Absent (no AI key that hears audio) -> a polite "not available" reply. */
+  voice?: {
+    fetchAudio: VoiceDeps["fetchAudio"];
+    transcriber: Transcriber;
+  };
 }
 
 const MAX_REPLY_MESSAGES = 5;
@@ -94,12 +103,15 @@ export async function handleEvent(event: LineEvent, deps: HandlerDeps): Promise<
   // (on the first excess hit of the window) and then stay quiet instead of flooding the chat.
   if (deps.limit && (event.type === "message" || event.type === "postback")) {
     const isImage = event.message?.type === "image";
+    const isAudio = event.message?.type === "audio";
     const [bucket, rule] =
       event.type === "postback"
         ? (["postback", LIMITS.postback] as const)
         : isImage
           ? (["chat_image", LIMITS.chatImage] as const)
-          : (["chat", LIMITS.chat] as const);
+          : isAudio
+            ? (["chat_voice", LIMITS.chatVoice] as const)
+            : (["chat", LIMITS.chat] as const);
     const result = await deps.limit(bucket, lineUserId, rule);
     if (!result.allowed) {
       if (result.hits === result.limit + 1 && event.replyToken) {
@@ -135,6 +147,26 @@ export async function handleEvent(event: LineEvent, deps: HandlerDeps): Promise<
           );
         } else {
           await reply([text(SLIP_SOON_TEXT)]);
+        }
+      } else if (event.message?.type === "audio" && event.message.id) {
+        const { voice } = deps;
+        if (!voice) {
+          await reply([text(VOICE_UNAVAILABLE_TEXT)]);
+        } else {
+          await reply(
+            await handleVoiceMessage(
+              {
+                db: deps.db,
+                now: deps.now,
+                fetchAudio: voice.fetchAudio,
+                transcriber: voice.transcriber,
+                limit: deps.limit,
+              },
+              user,
+              { id: event.message.id, duration: event.message.duration },
+              lineUserId,
+            ),
+          );
         }
       }
       return;
@@ -455,12 +487,13 @@ async function handlePostback(
   }
 
   // ── slip review: confirm / pick category / cancel ──
-  if (action === "sc" || action === "se" || action === "sk" || action === "sx") {
+  // (voice entries reuse the same steps; only "cancel" has its own wording)
+  if (action === "sc" || action === "se" || action === "sk" || action === "sx" || action === "vx") {
     if (tx.status !== "pending_confirm") return [text(NOT_FOUND_TEXT)];
 
-    if (action === "sx") {
+    if (action === "sx" || action === "vx") {
       await updateTransaction(db, user.id, id, { status: "deleted" });
-      return [text(SLIP_CANCELLED_TEXT)];
+      return [text(action === "vx" ? VOICE_CANCELLED_TEXT : SLIP_CANCELLED_TEXT)];
     }
 
     const [settings, categories, memory] = await Promise.all([

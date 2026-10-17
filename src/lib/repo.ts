@@ -271,7 +271,7 @@ export async function insertTransaction(
     occurredAt: Date;
     status: "confirmed" | "pending_confirm";
     rawText: string;
-    source?: "text" | "manual" | "slip";
+    source?: "text" | "manual" | "slip" | "voice";
     slipId?: string;
   },
 ): Promise<TxRow> {

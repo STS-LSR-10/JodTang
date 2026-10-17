@@ -29,6 +29,7 @@ const FEATURES: Feature[] = [
   "dailyReminder",
   "advancedExport",
   "autoSummary",
+  "voiceLog",
 ];
 
 export async function GET(request: Request): Promise<Response> {

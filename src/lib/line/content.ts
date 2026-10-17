@@ -39,3 +39,27 @@ export async function fetchLineImage(
 export function extensionFor(mimeType: string): string {
   return mimeType === "image/png" ? "png" : mimeType === "image/webp" ? "webp" : "jpg";
 }
+
+export const MAX_AUDIO_BYTES = 2 * 1024 * 1024;
+export const MAX_AUDIO_MS = 30_000;
+
+/** Download a voice message's audio from LINE (status only in errors, never the payload). */
+export async function fetchLineAudio(
+  accessToken: string,
+  messageId: string,
+  fetchImpl: typeof fetch = fetch,
+): Promise<{ bytes: Uint8Array; mimeType: string }> {
+  const res = await fetchImpl(`${API_DATA}/message/${encodeURIComponent(messageId)}/content`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+    signal: AbortSignal.timeout(20_000),
+  });
+  if (!res.ok) throw new ImageError("download_failed", `LINE content failed: ${res.status}`);
+
+  const declared = Number(res.headers.get("content-length") ?? 0);
+  if (declared > MAX_AUDIO_BYTES) throw new ImageError("too_large", "audio too large");
+  const bytes = new Uint8Array(await res.arrayBuffer());
+  if (bytes.byteLength > MAX_AUDIO_BYTES) throw new ImageError("too_large", "audio too large");
+  if (bytes.byteLength === 0) throw new ImageError("download_failed", "empty audio");
+  const mimeType = (res.headers.get("content-type") ?? "").split(";")[0]?.trim() ?? "";
+  return { bytes, mimeType };
+}
