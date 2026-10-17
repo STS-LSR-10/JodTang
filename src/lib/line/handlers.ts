@@ -41,6 +41,7 @@ import {
   EDIT_HINT_TEXT,
   EDIT_USAGE_TEXT,
   BACKDATE_LOCKED_TEXT,
+  MULTI_ENTRY_LOCKED_TEXT,
   ERROR_TEXT,
   HELP_TEXT,
   MEMORY_PLUS_HINT_TEXT,
@@ -191,6 +192,7 @@ async function handleText(input: string, user: UserRow, deps: HandlerDeps): Prom
   if (entries.some((e) => e.backdated) && !can(plan, "backdate")) {
     return [text(BACKDATE_LOCKED_TEXT)];
   }
+  if (entries.length > 1 && !can(plan, "multiEntry")) return [text(MULTI_ENTRY_LOCKED_TEXT)];
   return saveEntries(entries, user, deps);
 }
 

@@ -1,7 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { handleEvent, type HandlerDeps, type LineEvent } from "./handlers";
-import { BACKDATE_LOCKED_TEXT } from "./messages";
+import { BACKDATE_LOCKED_TEXT, MULTI_ENTRY_LOCKED_TEXT } from "./messages";
 
 let plan = "free";
 const insertTransaction = vi.fn(async () => ({
@@ -81,5 +81,30 @@ describe("backdating in text messages", () => {
     const { deps } = setup();
     await handleEvent(message("เมื่อวาน กาแฟ 45"), deps);
     expect(insertTransaction).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("several entries in one message", () => {
+  const many = "ข้าวเช้า 50\nกาแฟ 45\nวินมอไซค์ 30";
+
+  it("is locked for Free and records nothing", async () => {
+    const { deps, reply } = setup();
+    await handleEvent(message(many), deps);
+    expect(repliedText(reply)).toBe(MULTI_ENTRY_LOCKED_TEXT);
+    expect(insertTransaction).not.toHaveBeenCalled();
+  });
+
+  it("does not treat a thousands separator as a second entry", async () => {
+    const { deps, reply } = setup();
+    await handleEvent(message("เงินเดือน 20,000"), deps);
+    expect(repliedText(reply)).not.toBe(MULTI_ENTRY_LOCKED_TEXT);
+    expect(insertTransaction).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(["plus", "ultimate"])("records every line on %s", async (p) => {
+    plan = p;
+    const { deps } = setup();
+    await handleEvent(message(many), deps);
+    expect(insertTransaction).toHaveBeenCalledTimes(3);
   });
 });

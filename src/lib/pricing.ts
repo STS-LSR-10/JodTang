@@ -50,6 +50,7 @@ export const FEATURE_GROUPS: FeatureGroup[] = [
       { label: "จดด้วยข้อความ", cells: [true, true, true] },
       { label: "อ่านสลิปอัตโนมัติ", cells: ["30 ใบ/เดือน", "ไม่จำกัด", "ไม่จำกัด"] },
       { label: "จดย้อนหลัง", cells: [false, true, true] },
+      { label: "จดหลายรายการในข้อความเดียว", cells: [false, true, true] },
       { label: "จดด้วยเสียง", cells: [false, true, true] },
       { label: "ตั้งรายการจดอัตโนมัติ", cells: [false, "20 รายการ", "20 รายการ"] },
       { label: "เตือนจดประจำวัน", cells: [false, true, true] },

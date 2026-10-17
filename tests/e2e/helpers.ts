@@ -95,6 +95,7 @@ export const ME_FREE = {
     autoSummary: false,
     voiceLog: false,
     backdate: false,
+    multiEntry: false,
   },
   slips: { used: 12, limit: 30, remaining: 18 },
   points: 7,

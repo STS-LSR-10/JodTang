@@ -25,7 +25,8 @@ export type Feature =
   | "advancedExport"
   | "autoSummary"
   | "voiceLog"
-  | "backdate";
+  | "backdate"
+  | "multiEntry";
 
 /** Every feature built so far is part of Professional, and so of Ultimate above it. */
 const PAID_ONLY: Record<Feature, boolean> = {
@@ -39,6 +40,7 @@ const PAID_ONLY: Record<Feature, boolean> = {
   autoSummary: true,
   voiceLog: true,
   backdate: true,
+  multiEntry: true,
 };
 
 export function isPaidPlan(plan: Plan): boolean {
