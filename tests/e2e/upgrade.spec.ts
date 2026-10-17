@@ -72,7 +72,7 @@ test.describe("upgrade page (360px)", () => {
     await expect(page.getByRole("button", { name: /จัดการการชำระเงิน/ })).toHaveCount(0);
   });
 
-  test("a card subscriber cannot start a second subscription but can open the billing portal", async ({
+  test("a card subscriber cannot pay a second time but can open the billing portal", async ({
     page,
   }) => {
     const me = {
@@ -84,22 +84,48 @@ test.describe("upgrade page (360px)", () => {
       "POST /api/plan/portal": { available: false, message: "ยังไม่เปิด" },
     });
     await page.goto("/upgrade");
-    await expect(page.getByRole("button", { name: /ใช้แผน Professional อยู่แล้ว/ })).toBeDisabled();
+    const pay = page.getByRole("button", { name: /(ชำระเงิน|ต่ออายุ) · Professional/ });
+    await expect(pay).toBeDisabled();
+    await expect(page.getByText(/ต่ออายุอัตโนมัติด้วยบัตรอยู่/)).toBeVisible();
 
-    // PromptPay can still top up the same plan
+    // PromptPay would pay twice for the same time, so it is blocked as well
     await page.getByRole("radio", { name: /พร้อมเพย์/ }).click();
-    await expect(page.getByRole("button", { name: /ต่ออายุ · Professional/ })).toBeEnabled();
+    await expect(pay).toBeDisabled();
 
     await page.getByRole("button", { name: /จัดการการชำระเงิน/ }).click();
     await expect.poll(() => seen.some((s) => s.startsWith("POST /api/plan/portal"))).toBe(true);
   });
 
+  test("prepaid (PromptPay) time can be topped up or upgraded, but not mixed with a card", async ({
+    page,
+  }) => {
+    const me = {
+      ...ME_PLUS,
+      payments: { available: true, history: [], canManage: false, prepaidRunning: true },
+    };
+    await mockApi(page, { "GET /api/me": me });
+    await page.goto("/upgrade");
+
+    // card is the default method: blocked with an explanation
+    await expect(page.getByText(/แผนแบบพร้อมเพย์ที่ยังไม่หมดอายุ/)).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: /(ชำระเงิน|ต่ออายุ) · Professional/ }),
+    ).toBeDisabled();
+
+    await page.getByRole("radio", { name: /พร้อมเพย์/ }).click();
+    await expect(page.getByRole("button", { name: /ต่ออายุ · Professional/ })).toBeEnabled();
+    await page.getByRole("radio", { name: /^Ultimate/ }).click();
+    await expect(page.getByRole("button", { name: /ชำระเงิน · Ultimate/ })).toBeEnabled();
+  });
+
   test("an Ultimate user cannot buy the cheaper plan", async ({ page }) => {
     await mockApi(page, { "GET /api/me": { ...ME_PLUS, plan: "ultimate" } });
     await page.goto("/upgrade");
-    await expect(page.getByRole("button", { name: /ใช้แผน Ultimate อยู่แล้ว/ })).toBeVisible();
+    await expect(page.getByText("คุณใช้แผนที่สูงกว่านี้อยู่แล้ว")).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: /ต่ออายุ · Professional|ชำระเงิน · Professional/ }),
+    ).toBeDisabled();
   });
-
   test("has no serious accessibility violations", async ({ page }) => {
     await mockApi(page, { "GET /api/me": ME_FREE });
     await page.goto("/upgrade");

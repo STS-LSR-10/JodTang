@@ -10,6 +10,7 @@ import {
   type Feature,
 } from "@/lib/plan";
 import { getPaymentProvider } from "@/lib/payments";
+import { loadBillingState } from "@/lib/payments/billing-state";
 import { currentStreak, recentDailyKeys, redeemable } from "@/lib/points";
 import { countSlipsThisMonth } from "@/lib/slip-repo";
 import { getAdminClient } from "@/lib/supabase/admin";
@@ -35,15 +36,14 @@ export async function GET(request: Request): Promise<Response> {
     const db = getAdminClient();
     const { data, error } = await db
       .from("users")
-      .select(
-        "display_name,picture_url,plan,plan_expires_at,points,referral_code,referred_by,stripe_customer_id,stripe_subscription_id",
-      )
+      .select("display_name,picture_url,plan,plan_expires_at,points,referral_code,referred_by")
       .eq("id", auth.userId)
       .single();
     if (error) throw new Error(`load me: ${error.message}`);
 
     const now = new Date();
     const plan = effectivePlan(data.plan, data.plan_expires_at, now);
+    const billing = await loadBillingState(db, auth.userId, now);
     const [slipsUsed, dailyKeys, payments] = await Promise.all([
       countSlipsThisMonth(db, auth.userId, now),
       recentDailyKeys(db, auth.userId),
@@ -72,8 +72,10 @@ export async function GET(request: Request): Promise<Response> {
         available: getPaymentProvider().available,
         history: payments,
         // paid by card before: the billing portal can be opened
-        canManage: Boolean(data.stripe_customer_id),
-        autoRenew: Boolean(data.stripe_subscription_id) && plan !== "free",
+        canManage: Boolean(billing.customerId),
+        autoRenew: billing.subscriptionRunning,
+        // prepaid (PromptPay) time left: can be topped up, not mixed with a card subscription
+        prepaidRunning: billing.prepaidRunning,
       },
     });
   });

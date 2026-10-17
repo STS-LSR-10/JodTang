@@ -5,6 +5,7 @@ import { useState } from "react";
 import { useApi, useLiff } from "@/components/liff/liff-provider";
 import { Logo } from "@/components/logo";
 import { PageHeader } from "@/components/liff/states";
+import { checkoutBlock } from "@/lib/payments/policy";
 import { PLAN_LABEL, type Plan } from "@/lib/plan";
 import {
   FEATURE_GROUPS,
@@ -21,7 +22,12 @@ import { cn } from "@/lib/utils";
 interface MeLite {
   plan: Plan;
   planExpiresAt: string | null;
-  payments?: { available: boolean; canManage?: boolean; autoRenew?: boolean };
+  payments?: {
+    available: boolean;
+    canManage?: boolean;
+    autoRenew?: boolean;
+    prepaidRunning?: boolean;
+  };
 }
 
 type Method = "card" | "promptpay";
@@ -63,11 +69,17 @@ export default function UpgradePage() {
   const [notice, setNotice] = useState<string | null>(null);
 
   const current: Plan = me.data?.plan ?? "free";
-  const autoRenew = me.data?.payments?.autoRenew === true;
-  const downgrade = current === "ultimate" && picked === "plus";
-  // a running card subscription renews by itself; prepaid (PromptPay) can always be topped up
-  const alreadyHas = downgrade || (method === "card" && current === picked && autoRenew);
-  const topUp = !alreadyHas && current === picked;
+  // The same rules the server enforces (src/lib/payments/policy.ts), so the button explains itself.
+  const block = checkoutBlock(
+    {
+      plan: current,
+      customerId: null,
+      subscriptionRunning: me.data?.payments?.autoRenew === true,
+      prepaidRunning: me.data?.payments?.prepaidRunning === true,
+    },
+    { plan: picked, method },
+  );
+  const topUp = !block && current === picked;
 
   async function checkout() {
     setBusy(true);
@@ -184,17 +196,16 @@ export default function UpgradePage() {
         <button
           type="button"
           onClick={checkout}
-          disabled={busy || alreadyHas}
+          disabled={busy || block !== null}
           className="h-12 w-full rounded-2xl bg-primary text-base font-semibold text-surface disabled:opacity-60"
         >
-          {alreadyHas
-            ? downgrade
-              ? `คุณใช้แผน ${PLAN_LABEL[current]} อยู่แล้ว`
-              : `คุณใช้แผน ${PLAN_LABEL[current]} อยู่แล้ว (ต่ออายุอัตโนมัติ)`
-            : busy
-              ? "กำลังดำเนินการ..."
-              : `${topUp ? "ต่ออายุ" : "ชำระเงิน"} · ${PLAN_LABEL[picked]}`}
+          {busy ? "กำลังดำเนินการ..." : `${topUp ? "ต่ออายุ" : "ชำระเงิน"} · ${PLAN_LABEL[picked]}`}
         </button>
+        {block ? (
+          <p className="rounded-2xl bg-accent/15 px-4 py-2 text-sm text-foreground">
+            {block.message}
+          </p>
+        ) : null}
         {me.data?.payments?.canManage ? (
           <button
             type="button"
