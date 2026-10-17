@@ -29,7 +29,9 @@ describe("stripePost", () => {
     reply(401, {
       error: { code: "api_key_invalid", message: "Invalid API Key provided: sk_test_***abc" },
     });
-    const err = await stripePost("sk_test_secretvalue", "/checkout/sessions", {}).catch((e) => e);
+    const err = await stripePost("sk_test_secretvalue", "/checkout/sessions", {}).catch(
+      (e: unknown) => e as StripeApiError,
+    );
     expect(err).toBeInstanceOf(StripeApiError);
     expect(err.reason).toBe("401 api_key_invalid");
     expect(err.message).not.toContain("sk_test_secretvalue");
