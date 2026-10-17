@@ -264,6 +264,23 @@ test.describe("upgrade page (360px)", () => {
     await expect.poll(() => bodies.length).toBe(1);
     expect(bodies[0]).toMatchObject({ plan: "ultimate", method: "promptpay", upgrade: true });
   });
+  test("only the chosen plan card is green (frame and fill) and it follows the choice", async ({
+    page,
+  }) => {
+    await mockApi(page, { "GET /api/me": ME_FREE });
+    await page.goto("/upgrade");
+    const pro = page.getByRole("radio", { name: /^Professional/ });
+    const ultimate = page.getByRole("radio", { name: /^Ultimate/ });
+    const isGreen = (c: string | null) =>
+      /border-primary/.test(c ?? "") && /bg-primary-soft/.test(c ?? "");
+
+    expect(isGreen(await pro.getAttribute("class"))).toBe(true);
+    expect(isGreen(await ultimate.getAttribute("class"))).toBe(false);
+
+    await ultimate.click();
+    expect(isGreen(await ultimate.getAttribute("class"))).toBe(true);
+    expect(isGreen(await pro.getAttribute("class"))).toBe(false);
+  });
   test("has no serious accessibility violations", async ({ page }) => {
     await mockApi(page, { "GET /api/me": ME_FREE });
     await page.goto("/upgrade");

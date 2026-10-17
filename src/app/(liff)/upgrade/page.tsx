@@ -53,11 +53,12 @@ const PERIODS: { value: Period; label: string }[] = [
   { value: "yearly", label: "รายปี" },
 ];
 
-// Pastel surface per tier. Text stays on the dark foreground colour for contrast.
-const TIER_STYLE: Record<Plan, { card: string; chip: string }> = {
-  free: { card: "bg-background", chip: "bg-border text-foreground" },
-  plus: { card: "bg-primary-soft", chip: "bg-primary text-surface" },
-  ultimate: { card: "bg-accent/15", chip: "bg-accent text-foreground" },
+// Only the badge differs per tier. The card itself is neutral until it is the chosen one, then it
+// gets the green frame and the green fill (so the choice is never ambiguous).
+const TIER_STYLE: Record<Plan, { chip: string }> = {
+  free: { chip: "bg-border text-foreground" },
+  plus: { chip: "bg-primary text-surface" },
+  ultimate: { chip: "bg-accent text-foreground" },
 };
 
 const PAID: PaidPlan[] = ["plus", "ultimate"];
@@ -390,15 +391,18 @@ function PlanCard({
     </>
   );
 
-  const base = cn("block w-full space-y-2 rounded-3xl border-2 p-4 text-left", style.card);
-  if (!onSelect) return <div className={cn(base, "border-border")}>{body}</div>;
+  const base = "block w-full space-y-2 rounded-3xl border-2 p-4 text-left";
+  if (!onSelect) return <div className={cn(base, "border-border bg-background")}>{body}</div>;
   return (
     <button
       type="button"
       role="radio"
       aria-checked={selected}
       onClick={onSelect}
-      className={cn(base, selected ? "border-primary shadow-card" : "border-border")}
+      className={cn(
+        base,
+        selected ? "border-primary bg-primary-soft shadow-card" : "border-border bg-surface",
+      )}
     >
       {body}
     </button>
