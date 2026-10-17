@@ -89,3 +89,47 @@ export const PLAN_HIGHLIGHTS: Record<Plan, string[]> = {
     "จดด้วย PDF + แนบหลักฐาน (เร็วๆ นี้)",
   ],
 };
+
+/** Free trial length (once per person and tier). */
+export const TRIAL_DAYS = 7;
+
+/** Stripe's smallest THB charge. */
+export const MIN_CHARGE_BAHT = 10;
+
+export interface UpgradeQuote {
+  /** Whole baht to pay for the difference. */
+  amountBaht: number;
+  /** Days of prepaid time left that the upgrade covers. */
+  days: number;
+}
+
+const TIER_RANK: Record<PaidPlan, number> = { plus: 1, ultimate: 2 };
+
+/**
+ * Price of moving prepaid (PromptPay) time to a higher tier, keeping the end date: the difference
+ * in daily price between the two tiers (at the rate of the period that was bought) times the days
+ * left. Rounded up to whole baht, at least Stripe's minimum and never above a full new period.
+ * Null when `to` is not higher than `from`.
+ */
+export function prepaidUpgradeQuote(input: {
+  from: PaidPlan;
+  to: PaidPlan;
+  /** Months of the prepaid purchase being upgraded (12 = yearly, otherwise monthly). */
+  months: number;
+  expiresAt: Date;
+  now: Date;
+}): UpgradeQuote | null {
+  if (TIER_RANK[input.to] <= TIER_RANK[input.from]) return null;
+  const period: Period = input.months >= 12 ? "yearly" : "monthly";
+  const periodDays = period === "yearly" ? 365 : 30;
+  const days = Math.max(
+    1,
+    Math.ceil((input.expiresAt.getTime() - input.now.getTime()) / 86_400_000),
+  );
+  // integer arithmetic first, so an exact result (e.g. 40) is not pushed up by float rounding
+  const raw = Math.ceil(
+    ((PRICES[input.to][period] - PRICES[input.from][period]) * days) / periodDays,
+  );
+  const amountBaht = Math.min(PRICES[input.to][period], Math.max(MIN_CHARGE_BAHT, raw));
+  return { amountBaht, days };
+}

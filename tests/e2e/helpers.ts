@@ -101,6 +101,7 @@ export const ME_FREE = {
   referred: false,
   limits: { recurringRules: 20 },
   payments: { available: false, history: [] },
+  trial: { days: 7, available: { plus: true, ultimate: true } },
 };
 
 export const ME_PLUS = {
@@ -111,6 +112,7 @@ export const ME_PLUS = {
   slips: { used: 40, limit: null, remaining: null },
   points: 25,
   redeem: { pointsPerDay: 10, days: 2, cost: 20 },
+  trial: { days: 7, available: { plus: false, ultimate: false } },
 };
 
 export const SETTINGS = {

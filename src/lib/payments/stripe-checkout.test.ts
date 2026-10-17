@@ -43,6 +43,38 @@ describe("buildCheckoutFields", () => {
     expect(f.customer_creation).toBe("always");
   });
 
+  it("a prepaid upgrade charges only the difference and is marked as an upgrade", () => {
+    const f = buildCheckoutFields(
+      {
+        userId: USER,
+        plan: "ultimate",
+        period: "monthly",
+        method: "promptpay",
+        upgrade: { amountSatang: 4000, days: 15 },
+      },
+      BASE,
+    );
+    expect(f.mode).toBe("payment");
+    expect(f["line_items[0][price_data][unit_amount]"]).toBe("4000");
+    expect(f["metadata[kind]"]).toBe("upgrade");
+    expect(f["line_items[0][price_data][product_data][name]"]).toContain("ส่วนต่าง 15 วัน");
+  });
+
+  it("ignores an upgrade amount for a card subscription (never a custom price)", () => {
+    const f = buildCheckoutFields(
+      {
+        userId: USER,
+        plan: "ultimate",
+        period: "monthly",
+        method: "card",
+        upgrade: { amountSatang: 100, days: 1 },
+      },
+      BASE,
+    );
+    expect(f["line_items[0][price_data][unit_amount]"]).toBe("13900");
+    expect(f["metadata[kind]"]).toBeUndefined();
+  });
+
   it("reuses an existing customer instead of creating one", () => {
     const f = buildCheckoutFields(
       { userId: USER, plan: "plus", period: "monthly", method: "promptpay", customerId: "cus_1" },

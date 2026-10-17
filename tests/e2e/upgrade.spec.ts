@@ -50,7 +50,12 @@ test.describe("upgrade page (360px)", () => {
     await page.getByRole("button", { name: /ชำระเงิน · Ultimate/ }).click();
 
     await expect.poll(() => bodies.length).toBe(1);
-    expect(bodies[0]).toEqual({ plan: "ultimate", period: "yearly", method: "promptpay" });
+    expect(bodies[0]).toEqual({
+      plan: "ultimate",
+      period: "yearly",
+      method: "promptpay",
+      upgrade: false,
+    });
     await expect(
       page.getByRole("status").filter({ hasText: "ยังไม่เปิดให้ชำระเงิน" }),
     ).toBeVisible();
@@ -159,7 +164,7 @@ test.describe("upgrade page (360px)", () => {
     await page.getByRole("radio", { name: /รายเดือน/ }).click();
     await expect(page.getByText(/เปลี่ยนจากรายปีเป็นรายเดือนไม่ได้/)).toBeVisible();
   });
-  test("prepaid (PromptPay) time can be topped up or upgraded, but not mixed with a card", async ({
+  test("prepaid (PromptPay) time continues with PromptPay: no method choice, top-up and upgrade work", async ({
     page,
   }) => {
     const me = {
@@ -169,18 +174,12 @@ test.describe("upgrade page (360px)", () => {
     await mockApi(page, { "GET /api/me": me });
     await page.goto("/upgrade");
 
-    // card is the default method: blocked with an explanation
-    await expect(page.getByText(/แผนแบบพร้อมเพย์ที่ยังไม่หมดอายุ/)).toBeVisible();
-    await expect(
-      page.getByRole("button", { name: /(ชำระเงิน|ต่ออายุ) · Professional/ }),
-    ).toBeDisabled();
-
-    await page.getByRole("radio", { name: /พร้อมเพย์/ }).click();
+    // mixing with a card is refused by the server, so the page does not offer it at all
+    await expect(page.getByRole("radiogroup", { name: "ช่องทางชำระเงิน" })).toHaveCount(0);
     await expect(page.getByRole("button", { name: /ต่ออายุ · Professional/ })).toBeEnabled();
     await page.getByRole("radio", { name: /^Ultimate/ }).click();
     await expect(page.getByRole("button", { name: /ชำระเงิน · Ultimate/ })).toBeEnabled();
   });
-
   test("an Ultimate user cannot buy the cheaper plan", async ({ page }) => {
     await mockApi(page, { "GET /api/me": { ...ME_PLUS, plan: "ultimate" } });
     await page.goto("/upgrade");
@@ -188,6 +187,82 @@ test.describe("upgrade page (360px)", () => {
     await expect(
       page.getByRole("button", { name: /ต่ออายุ · Professional|ชำระเงิน · Professional/ }),
     ).toBeDisabled();
+  });
+  test("a new user can start a 7-day free trial of either paid tier", async ({ page }) => {
+    const bodies: unknown[] = [];
+    await mockApi(page, {
+      "GET /api/me": ME_FREE,
+      "POST /api/plan/trial": (route: Route) => {
+        bodies.push(route.request().postDataJSON());
+        return { ok: true, days: 7 };
+      },
+    });
+    await page.goto("/upgrade");
+    await expect(
+      page.getByRole("button", { name: "ทดลองใช้ Professional ฟรี 7 วัน" }),
+    ).toBeVisible();
+    await expect(page.getByText(/ไม่ต้องใช้บัตร/)).toBeVisible();
+
+    await page.getByRole("radio", { name: /^Ultimate/ }).click();
+    await page.getByRole("button", { name: "ทดลองใช้ Ultimate ฟรี 7 วัน" }).click();
+    await expect.poll(() => bodies.length).toBe(1);
+    expect(bodies[0]).toEqual({ plan: "ultimate" });
+    await expect(
+      page.getByRole("status").filter({ hasText: "เริ่มทดลองใช้ Ultimate ฟรี 7 วันแล้ว" }),
+    ).toBeVisible();
+  });
+
+  test("no trial button once the tier was tried or a plan is running", async ({ page }) => {
+    await mockApi(page, {
+      "GET /api/me": { ...ME_FREE, trial: { days: 7, available: { plus: false, ultimate: true } } },
+    });
+    await page.goto("/upgrade");
+    await expect(page.getByRole("button", { name: /ทดลองใช้ Professional/ })).toHaveCount(0);
+    await page.getByRole("radio", { name: /^Ultimate/ }).click();
+    await expect(page.getByRole("button", { name: /ทดลองใช้ Ultimate/ })).toBeVisible();
+
+    const plus = await page.context().newPage();
+    await mockApi(plus, { "GET /api/me": ME_PLUS });
+    await plus.goto("/upgrade");
+    await expect(plus.getByRole("button", { name: /ทดลองใช้/ })).toHaveCount(0);
+  });
+
+  test("prepaid time can be upgraded by paying only the difference", async ({ page }) => {
+    const bodies: unknown[] = [];
+    const in15Days = new Date(Date.now() + 15 * 86_400_000 - 3_600_000).toISOString();
+    const me = {
+      ...ME_PLUS,
+      planExpiresAt: in15Days,
+      payments: {
+        available: true,
+        history: [],
+        canManage: true,
+        prepaidRunning: true,
+        prepaidMonths: 1,
+      },
+    };
+    await mockApi(page, {
+      "GET /api/me": me,
+      "POST /api/plan/checkout": (route: Route) => {
+        bodies.push(route.request().postDataJSON());
+        return { available: false, message: "ยังไม่เปิด" };
+      },
+    });
+    await page.goto("/upgrade");
+
+    // same tier: only the normal top-up, no difference offer
+    await expect(page.getByRole("button", { name: /อัปเกรดส่วนที่เหลือ/ })).toHaveCount(0);
+
+    await page.getByRole("radio", { name: /^Ultimate/ }).click();
+    // (139 - 59) / 30 * 15 days = ฿40
+    const diff = page.getByRole("button", { name: "อัปเกรดส่วนที่เหลือ · จ่ายส่วนต่าง ฿40" });
+    await expect(diff).toBeVisible();
+    await expect(page.getByText(/อีก 15 วัน/)).toBeVisible();
+    await expect(page.getByRole("button", { name: /ชำระเงิน · Ultimate/ })).toBeEnabled(); // full new period
+
+    await diff.click();
+    await expect.poll(() => bodies.length).toBe(1);
+    expect(bodies[0]).toMatchObject({ plan: "ultimate", method: "promptpay", upgrade: true });
   });
   test("has no serious accessibility violations", async ({ page }) => {
     await mockApi(page, { "GET /api/me": ME_FREE });

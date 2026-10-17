@@ -21,6 +21,15 @@ export type PaymentAction =
       customer: string | null;
     }
   | {
+      /** PromptPay: pay the difference to raise the tier of prepaid time that is already running. */
+      kind: "prepaidUpgrade";
+      userId: string;
+      plan: PaidPlan;
+      ref: string;
+      amountSatang: number;
+      method: string;
+    }
+  | {
       kind: "subscription";
       userId: string;
       plan: PaidPlan;
@@ -77,6 +86,16 @@ export function interpretEvent(event: StripeEvent): PaymentAction {
       const ref = str(o.id);
       const amount = num(o.amount_total);
       if (!meta || !ref || amount === null || o.currency !== "thb") return IGNORE;
+      if (obj(o.metadata)?.kind === "upgrade") {
+        return {
+          kind: "prepaidUpgrade",
+          userId: meta.userId,
+          plan: meta.plan,
+          ref,
+          amountSatang: amount,
+          method: str(obj(o.metadata)?.method) ?? "promptpay",
+        };
+      }
       return {
         kind: "prepaid",
         userId: meta.userId,
@@ -169,6 +188,18 @@ export async function applyAction(
           .is("stripe_customer_id", null);
       }
       return { handled: true, userId: action.userId };
+    }
+
+    case "prepaidUpgrade": {
+      const applied = await rpc(db, "apply_prepaid_upgrade", {
+        p_user: action.userId,
+        p_plan: action.plan,
+        p_ref: action.ref,
+        p_amount: action.amountSatang,
+        p_method: action.method,
+      });
+      // false: already applied before, or the prepaid time ended while the person was paying
+      return applied === true ? { handled: true, userId: action.userId } : { handled: false };
     }
 
     case "subscription": {

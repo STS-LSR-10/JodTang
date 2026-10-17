@@ -34,6 +34,27 @@ describe("interpretEvent", () => {
     });
   });
 
+  it("a paid session marked as an upgrade becomes a prepaid upgrade, not a new period", () => {
+    const a = interpretEvent(
+      ev("checkout.session.completed", {
+        id: "cs_up",
+        mode: "payment",
+        payment_status: "paid",
+        amount_total: 4000,
+        currency: "thb",
+        metadata: { ...meta, plan: "ultimate", kind: "upgrade" },
+      }),
+    );
+    expect(a).toEqual({
+      kind: "prepaidUpgrade",
+      userId: USER,
+      plan: "ultimate",
+      ref: "cs_up",
+      amountSatang: 4000,
+      method: "promptpay",
+    });
+  });
+
   it("the delayed-payment success event is handled the same way", () => {
     const a = interpretEvent(
       ev("checkout.session.async_payment_succeeded", {

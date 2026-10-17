@@ -19,6 +19,11 @@ export interface CheckoutRequest {
   method: PaymentMethod;
   /** Stripe customer of this user, when they already paid before. */
   customerId?: string | null;
+  /**
+   * PromptPay only: pay just the difference to raise the tier of prepaid time already running
+   * (amount in satang, computed on the server; the end date does not change).
+   */
+  upgrade?: { amountSatang: number; days: number };
 }
 
 export type CheckoutResult =

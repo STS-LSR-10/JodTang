@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { billingState, planAction, type BillingInputs } from "./policy";
+import {
+  billingState,
+  planAction,
+  prepaidUpgradeFor,
+  trialBlock,
+  type BillingInputs,
+} from "./policy";
 
 const NOW = new Date("2026-10-17T00:00:00Z");
 const FUTURE = "2026-11-17T00:00:00Z";
@@ -12,6 +18,8 @@ const input = (over: Partial<BillingInputs> = {}): BillingInputs => ({
   stripeSubscriptionId: null,
   billingPeriod: null,
   hasPrepaidPayment: false,
+  prepaidMonths: null,
+  trialsUsed: [],
   ...over,
 });
 const state = (over: Partial<BillingInputs> = {}) => billingState(input(over), NOW);
@@ -179,5 +187,47 @@ describe("planAction: prepaid (PromptPay) time", () => {
     expect(planAction(s, { plan: "plus", period: "monthly", method: "promptpay" })).toMatchObject({
       kind: "blocked",
     });
+  });
+});
+
+describe("trialBlock", () => {
+  it("a person with no plan can try either tier once", () => {
+    expect(trialBlock(state(), "plus")).toBeNull();
+    expect(trialBlock(state(), "ultimate")).toBeNull();
+  });
+
+  it("a tier that was already tried cannot be tried again, the other one still can", () => {
+    const s = state({ trialsUsed: ["plus"] });
+    expect(trialBlock(s, "plus")).toMatch(/เคยทดลอง/);
+    expect(trialBlock(s, "ultimate")).toBeNull();
+  });
+
+  it("is not offered while any plan is running (paid, redeemed days or a trial)", () => {
+    expect(trialBlock(sub(), "ultimate")).toMatch(/ยังไม่มีแผน/);
+    expect(trialBlock(state({ plan: "plus", planExpiresAt: FUTURE }), "ultimate")).not.toBeNull();
+  });
+
+  it("is offered again once the previous plan has ended", () => {
+    expect(
+      trialBlock(state({ plan: "plus", planExpiresAt: PAST, trialsUsed: ["plus"] }), "ultimate"),
+    ).toBeNull();
+  });
+});
+
+describe("prepaidUpgradeFor", () => {
+  const prepaid = (months: number) =>
+    state({ plan: "plus", planExpiresAt: FUTURE, hasPrepaidPayment: true, prepaidMonths: months });
+
+  it("quotes the difference for prepaid time, at the rate of the period that was bought", () => {
+    // 31 days left (2026-10-17 -> 2026-11-17), monthly: 80/30*31 = 82.67 -> 83
+    expect(prepaidUpgradeFor(prepaid(1), "ultimate", NOW)).toEqual({ amountBaht: 83, days: 31 });
+    // yearly: 500/365*31 = 42.47 -> 43
+    expect(prepaidUpgradeFor(prepaid(12), "ultimate", NOW)).toEqual({ amountBaht: 43, days: 31 });
+  });
+
+  it("has no quote without running prepaid time or for a lower tier", () => {
+    expect(prepaidUpgradeFor(state(), "ultimate", NOW)).toBeNull();
+    expect(prepaidUpgradeFor(sub(), "ultimate", NOW)).toBeNull(); // a card subscription uses change
+    expect(prepaidUpgradeFor(prepaid(1), "plus", NOW)).toBeNull();
   });
 });

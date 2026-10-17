@@ -5,7 +5,7 @@ import { useState } from "react";
 import { useApi, useLiff } from "@/components/liff/liff-provider";
 import { Logo } from "@/components/logo";
 import { PageHeader } from "@/components/liff/states";
-import { planAction } from "@/lib/payments/policy";
+import { planAction, prepaidUpgradeFor } from "@/lib/payments/policy";
 import { PLAN_LABEL, type Plan } from "@/lib/plan";
 import {
   FEATURE_GROUPS,
@@ -22,12 +22,14 @@ import { cn } from "@/lib/utils";
 interface MeLite {
   plan: Plan;
   planExpiresAt: string | null;
+  trial?: { days: number; available: { plus: boolean; ultimate: boolean } };
   payments?: {
     available: boolean;
     canManage?: boolean;
     autoRenew?: boolean;
     prepaidRunning?: boolean;
     period?: Period | null;
+    prepaidMonths?: number | null;
   };
 }
 
@@ -72,22 +74,41 @@ export default function UpgradePage() {
   const current: Plan = me.data?.plan ?? "free";
   // The same rules the server enforces (src/lib/payments/policy.ts), so the button explains itself.
   const autoRenew = me.data?.payments?.autoRenew === true;
-  // A card subscriber can only change that subscription, so the payment method is not a choice.
-  const payWith: Method = autoRenew ? "card" : method;
-  const action = planAction(
-    {
-      plan: current,
-      customerId: null,
-      subscriptionRunning: autoRenew,
-      subscriptionId: autoRenew ? "running" : null,
-      period: autoRenew ? (me.data?.payments?.period ?? "monthly") : null,
-      prepaidRunning: me.data?.payments?.prepaidRunning === true,
-    },
-    { plan: picked, period, method: payWith },
-  );
+  const prepaidRunning = me.data?.payments?.prepaidRunning === true;
+  // Someone with a running plan can only continue the way they pay, so the method is not a choice.
+  const payWith: Method = autoRenew ? "card" : prepaidRunning ? "promptpay" : method;
+  const billing = {
+    plan: current,
+    customerId: null,
+    subscriptionRunning: autoRenew,
+    subscriptionId: autoRenew ? "running" : null,
+    period: autoRenew ? (me.data?.payments?.period ?? "monthly") : null,
+    prepaidRunning,
+    prepaidMonths: prepaidRunning ? (me.data?.payments?.prepaidMonths ?? 1) : null,
+    expiresAt: me.data?.planExpiresAt ? new Date(me.data.planExpiresAt) : null,
+    trialsUsed: [],
+  };
+  const action = planAction(billing, { plan: picked, period, method: payWith });
   const blockMessage = action.kind === "blocked" ? action.message : null;
   const topUp = action.kind === "checkout" && current === picked;
+  // prepaid time can also be raised to a higher tier by paying only the difference
+  const quote = action.kind === "checkout" ? prepaidUpgradeFor(billing, picked) : null;
+  const trialDays = me.data?.trial?.days ?? 7;
+  const canTry = me.data?.trial?.available[picked] === true;
 
+  async function startTrial() {
+    setBusy(true);
+    setNotice(null);
+    try {
+      await api("/api/plan/trial", { method: "POST", body: JSON.stringify({ plan: picked }) });
+      setNotice(`เริ่มทดลองใช้ ${PLAN_LABEL[picked]} ฟรี ${trialDays} วันแล้ว`);
+      me.reload();
+    } catch (e) {
+      setNotice(e instanceof Error ? e.message : "เริ่มทดลองใช้ไม่สำเร็จ");
+    } finally {
+      setBusy(false);
+    }
+  }
   async function changePlan() {
     setBusy(true);
     setNotice(null);
@@ -108,13 +129,16 @@ export default function UpgradePage() {
       setBusy(false);
     }
   }
-  async function checkout() {
+  async function checkout(upgrade = false) {
     setBusy(true);
     setNotice(null);
     try {
       const res = await api<{ available: boolean; message?: string; url?: string }>(
         "/api/plan/checkout",
-        { method: "POST", body: JSON.stringify({ plan: picked, period, method: payWith }) },
+        {
+          method: "POST",
+          body: JSON.stringify({ plan: picked, period, method: payWith, upgrade }),
+        },
       );
       // Stripe opens in the phone browser: PromptPay needs a banking app, and the LINE in-app
       // browser cannot always hand over to one.
@@ -201,7 +225,7 @@ export default function UpgradePage() {
           ))}
         </div>
 
-        {autoRenew ? null : (
+        {autoRenew || prepaidRunning ? null : (
           <div role="radiogroup" aria-label="ช่องทางชำระเงิน" className="space-y-2">
             {METHODS.map((m) => (
               <button
@@ -226,7 +250,7 @@ export default function UpgradePage() {
 
         <button
           type="button"
-          onClick={action.kind === "change" ? changePlan : checkout}
+          onClick={action.kind === "change" ? changePlan : () => checkout(false)}
           disabled={busy || action.kind === "blocked"}
           className="h-12 w-full rounded-2xl bg-primary text-base font-semibold text-surface disabled:opacity-60"
         >
@@ -236,6 +260,38 @@ export default function UpgradePage() {
               ? `อัปเกรดแผน · ${PLAN_LABEL[picked]} (${period === "yearly" ? "รายปี" : "รายเดือน"})`
               : `${topUp ? "ต่ออายุ" : "ชำระเงิน"} · ${PLAN_LABEL[picked]}`}
         </button>
+        {quote ? (
+          <button
+            type="button"
+            onClick={() => checkout(true)}
+            disabled={busy}
+            className="h-12 w-full rounded-2xl border border-primary text-base font-semibold text-primary disabled:opacity-60"
+          >
+            อัปเกรดส่วนที่เหลือ · จ่ายส่วนต่าง ฿{quote.amountBaht}
+          </button>
+        ) : null}
+        {quote ? (
+          <p className="rounded-2xl bg-primary-soft px-4 py-2 text-sm text-foreground">
+            ใช้ {PLAN_LABEL[picked]} ต่อจนถึงวันหมดอายุเดิม (อีก {quote.days} วัน)
+            โดยจ่ายเฉพาะส่วนต่างของราคา ถ้าอยากต่อเวลาเพิ่ม ให้กดปุ่มด้านบน (ซื้อรอบใหม่เต็มราคา
+            ต่อท้ายเวลาที่เหลือ)
+          </p>
+        ) : null}
+        {canTry ? (
+          <button
+            type="button"
+            onClick={startTrial}
+            disabled={busy}
+            className="h-12 w-full rounded-2xl border-2 border-accent bg-accent/15 text-base font-semibold text-foreground disabled:opacity-60"
+          >
+            ทดลองใช้ {PLAN_LABEL[picked]} ฟรี {trialDays} วัน
+          </button>
+        ) : null}
+        {canTry ? (
+          <p className="text-xs text-foreground/80">
+            ไม่ต้องใช้บัตร ครบ {trialDays} วันแผนจะกลับเป็น Free เอง (ทดลองได้ครั้งเดียวต่อแผน)
+          </p>
+        ) : null}
         {action.kind === "change" ? (
           <p className="rounded-2xl bg-primary-soft px-4 py-2 text-sm text-foreground">
             จ่ายเฉพาะส่วนต่าง: Stripe หักเวลาที่ยังไม่ได้ใช้ของแผนเดิม แล้วคิดแผนใหม่

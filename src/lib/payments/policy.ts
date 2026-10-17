@@ -1,5 +1,5 @@
 import { effectivePlan, type Plan } from "@/lib/plan";
-import type { Period } from "@/lib/pricing";
+import { prepaidUpgradeQuote, type Period, type UpgradeQuote } from "@/lib/pricing";
 import type { PaymentMethod } from "./provider";
 
 /** What a person is currently paying with, worked out from their user row and payment history. */
@@ -15,6 +15,12 @@ export interface BillingState {
   period: Period | null;
   /** Prepaid (PromptPay) time is still left and no card subscription is running. */
   prepaidRunning: boolean;
+  /** Months of the prepaid purchase that is running (12 = yearly), when `prepaidRunning`. */
+  prepaidMonths: number | null;
+  /** End of the plan in force (null on Free). */
+  expiresAt: Date | null;
+  /** Tiers the person has already tried for free. */
+  trialsUsed: Plan[];
 }
 
 export interface BillingInputs {
@@ -25,19 +31,26 @@ export interface BillingInputs {
   billingPeriod?: Period | null;
   /** The user has at least one paid PromptPay (prepaid) payment. */
   hasPrepaidPayment: boolean;
+  /** Months of the latest prepaid purchase (defaults to 1 when unknown). */
+  prepaidMonths?: number | null;
+  trialsUsed?: Plan[];
 }
 
 export function billingState(i: BillingInputs, now: Date = new Date()): BillingState {
   const active =
     Boolean(i.planExpiresAt) && new Date(i.planExpiresAt as string).getTime() > now.getTime();
   const subscriptionRunning = Boolean(i.stripeSubscriptionId) && active;
+  const prepaidRunning = active && !subscriptionRunning && i.hasPrepaidPayment;
   return {
     plan: effectivePlan(i.plan, i.planExpiresAt, now),
     customerId: i.stripeCustomerId,
     subscriptionRunning,
     subscriptionId: subscriptionRunning ? i.stripeSubscriptionId : null,
     period: subscriptionRunning ? (i.billingPeriod ?? "monthly") : null,
-    prepaidRunning: active && !subscriptionRunning && i.hasPrepaidPayment,
+    prepaidRunning,
+    prepaidMonths: prepaidRunning ? (i.prepaidMonths ?? 1) : null,
+    expiresAt: active ? new Date(i.planExpiresAt as string) : null,
+    trialsUsed: i.trialsUsed ?? [],
   };
 }
 
@@ -102,4 +115,32 @@ export function planAction(state: BillingState, request: PlanRequest): PlanActio
     );
   }
   return { kind: "checkout" };
+}
+
+/** Why a free trial of `plan` cannot start now, or null when it can. */
+export function trialBlock(state: BillingState, plan: "plus" | "ultimate"): string | null {
+  if (state.plan !== "free") {
+    return "ทดลองใช้ฟรีได้เฉพาะตอนที่ยังไม่มีแผนที่ใช้งานอยู่";
+  }
+  if (state.trialsUsed.includes(plan)) {
+    return "คุณเคยทดลองใช้แผนนี้แล้ว";
+  }
+  return null;
+}
+
+/** The quote for upgrading running prepaid time to `to`, or null when that is not possible. */
+export function prepaidUpgradeFor(
+  state: BillingState,
+  to: "plus" | "ultimate",
+  now: Date = new Date(),
+): UpgradeQuote | null {
+  if (!state.prepaidRunning || !state.expiresAt || state.prepaidMonths === null) return null;
+  if (state.plan === "free") return null;
+  return prepaidUpgradeQuote({
+    from: state.plan,
+    to,
+    months: state.prepaidMonths,
+    expiresAt: state.expiresAt,
+    now,
+  });
 }

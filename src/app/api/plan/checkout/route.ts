@@ -3,7 +3,7 @@ import { apiError, guard, json } from "@/lib/api";
 import { requireUser } from "@/lib/auth/require-user";
 import { getPaymentProvider } from "@/lib/payments";
 import { loadBillingState } from "@/lib/payments/billing-state";
-import { planAction } from "@/lib/payments/policy";
+import { planAction, prepaidUpgradeFor } from "@/lib/payments/policy";
 import { LIMITS, limitOr429 } from "@/lib/rate-limit";
 import { getAdminClient } from "@/lib/supabase/admin";
 
@@ -15,6 +15,8 @@ const bodySchema = z.object({
   period: z.enum(["monthly", "yearly"]).default("monthly"),
   /** card = auto-renewing subscription, promptpay = one prepaid period */
   method: z.enum(["card", "promptpay"]).default("card"),
+  /** PromptPay only: pay just the difference to raise the tier of prepaid time that is running. */
+  upgrade: z.boolean().default(false),
 });
 
 /** POST /api/plan/checkout — starts an upgrade. Answers { available:false } until Stripe is set up. */
@@ -31,7 +33,8 @@ export async function POST(request: Request): Promise<Response> {
     if (!parsed.success) return apiError("ข้อมูลไม่ถูกต้อง", 400);
 
     const state = await loadBillingState(db, auth.userId);
-    const action = planAction(state, parsed.data);
+    const { upgrade: wantsUpgrade, ...choice } = parsed.data;
+    const action = planAction(state, choice);
     if (action.kind === "blocked") {
       return json(
         { available: false, message: action.message, manage: action.manage === true },
@@ -45,10 +48,26 @@ export async function POST(request: Request): Promise<Response> {
         409,
       );
     }
+    // Raising the tier of prepaid time: the server works out the price, never the client.
+    let upgrade: { amountSatang: number; days: number } | undefined;
+    let period = choice.period;
+    if (wantsUpgrade) {
+      const quote = choice.method === "promptpay" ? prepaidUpgradeFor(state, choice.plan) : null;
+      if (!quote) {
+        return json(
+          { available: false, message: "อัปเกรดส่วนต่างได้เฉพาะแผนพร้อมเพย์ที่ยังไม่หมดอายุ" },
+          409,
+        );
+      }
+      upgrade = { amountSatang: quote.amountBaht * 100, days: quote.days };
+      period = (state.prepaidMonths ?? 1) >= 12 ? "yearly" : "monthly";
+    }
     const result = await getPaymentProvider().createCheckout({
       userId: auth.userId,
-      ...parsed.data,
+      ...choice,
+      period,
       customerId: state.customerId,
+      ...(upgrade ? { upgrade } : {}),
     });
     if (result.status === "unavailable") return json({ available: false, message: result.message });
     return json({ available: true, url: result.url, reference: result.reference });

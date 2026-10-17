@@ -29,7 +29,14 @@ export function resultUrls(baseUrl: string) {
 export function buildCheckoutFields(req: CheckoutRequest, baseUrl: string): Record<string, string> {
   const urls = resultUrls(baseUrl);
   const subscription = req.method === "card";
-  const meta = { user_id: req.userId, plan: req.plan, period: req.period, method: req.method };
+  const upgrade = !subscription && req.upgrade ? req.upgrade : null;
+  const meta: Record<string, string> = {
+    user_id: req.userId,
+    plan: req.plan,
+    period: req.period,
+    method: req.method,
+    ...(upgrade ? { kind: "upgrade" } : {}),
+  };
 
   const f: Record<string, string> = {
     mode: subscription ? "subscription" : "payment",
@@ -39,8 +46,12 @@ export function buildCheckoutFields(req: CheckoutRequest, baseUrl: string): Reco
     client_reference_id: req.userId,
     "line_items[0][quantity]": "1",
     "line_items[0][price_data][currency]": "thb",
-    "line_items[0][price_data][unit_amount]": String(PRICES[req.plan][req.period] * 100),
-    "line_items[0][price_data][product_data][name]": productName(req.plan, req.period),
+    "line_items[0][price_data][unit_amount]": String(
+      upgrade ? upgrade.amountSatang : PRICES[req.plan][req.period] * 100,
+    ),
+    "line_items[0][price_data][product_data][name]": upgrade
+      ? `จดตังค์ อัปเกรดเป็น ${PLAN_LABEL[req.plan]} (ส่วนต่าง ${upgrade.days} วัน)`
+      : productName(req.plan, req.period),
   };
   for (const [k, v] of Object.entries(meta)) f[`metadata[${k}]`] = v;
 

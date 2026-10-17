@@ -11,6 +11,8 @@ import {
 } from "@/lib/plan";
 import { getPaymentProvider } from "@/lib/payments";
 import { loadBillingState } from "@/lib/payments/billing-state";
+import { trialBlock } from "@/lib/payments/policy";
+import { TRIAL_DAYS } from "@/lib/pricing";
 import { currentStreak, recentDailyKeys, redeemable } from "@/lib/points";
 import { countSlipsThisMonth } from "@/lib/slip-repo";
 import { getAdminClient } from "@/lib/supabase/admin";
@@ -68,6 +70,14 @@ export async function GET(request: Request): Promise<Response> {
       referralCode: data.referral_code,
       referred: Boolean(data.referred_by),
       limits: { recurringRules: MAX_RECURRING_RULES },
+      // free trials still available (once per tier, and only while no plan is running)
+      trial: {
+        days: TRIAL_DAYS,
+        available: {
+          plus: trialBlock(billing, "plus") === null,
+          ultimate: trialBlock(billing, "ultimate") === null,
+        },
+      },
       payments: {
         available: getPaymentProvider().available,
         history: payments,
@@ -76,6 +86,8 @@ export async function GET(request: Request): Promise<Response> {
         autoRenew: billing.subscriptionRunning,
         // billing period of the running card subscription (monthly | yearly)
         period: billing.period,
+        // months of the running prepaid purchase (for the "pay the difference" upgrade quote)
+        prepaidMonths: billing.prepaidMonths,
         // prepaid (PromptPay) time left: can be topped up, not mixed with a card subscription
         prepaidRunning: billing.prepaidRunning,
       },

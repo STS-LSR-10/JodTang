@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { FEATURE_GROUPS, PRICES, yearlyPerDay, yearlySavingPercent } from "./pricing";
+import {
+  FEATURE_GROUPS,
+  MIN_CHARGE_BAHT,
+  PRICES,
+  prepaidUpgradeQuote,
+  TRIAL_DAYS,
+  yearlyPerDay,
+  yearlySavingPercent,
+} from "./pricing";
 
 describe("pricing", () => {
   it("has the agreed prices", () => {
@@ -20,5 +28,80 @@ describe("pricing", () => {
       expect(row.cells).toHaveLength(3);
       if (row.cells[0] === true) expect(row.cells[1]).toBe(true);
     }
+  });
+});
+
+describe("trial", () => {
+  it("is 7 days", () => {
+    expect(TRIAL_DAYS).toBe(7);
+  });
+});
+
+describe("prepaidUpgradeQuote", () => {
+  const now = new Date("2026-10-17T00:00:00Z");
+  const inDays = (d: number) => new Date(now.getTime() + d * 86_400_000);
+
+  it("monthly prepaid: the daily price difference times the days left, rounded up", () => {
+    // (139 - 59) / 30 * 15 = 40
+    expect(
+      prepaidUpgradeQuote({ from: "plus", to: "ultimate", months: 1, expiresAt: inDays(15), now }),
+    ).toEqual({ amountBaht: 40, days: 15 });
+    // 10 days: 80/30*10 = 26.67 -> 27
+    expect(
+      prepaidUpgradeQuote({ from: "plus", to: "ultimate", months: 1, expiresAt: inDays(10), now })
+        ?.amountBaht,
+    ).toBe(27);
+  });
+
+  it("yearly prepaid uses the yearly rates", () => {
+    // (799 - 299) / 365 * 200 = 273.97 -> 274
+    expect(
+      prepaidUpgradeQuote({
+        from: "plus",
+        to: "ultimate",
+        months: 12,
+        expiresAt: inDays(200),
+        now,
+      }),
+    ).toEqual({ amountBaht: 274, days: 200 });
+  });
+
+  it("never charges less than Stripe's minimum or more than a full new period", () => {
+    const tiny = prepaidUpgradeQuote({
+      from: "plus",
+      to: "ultimate",
+      months: 1,
+      expiresAt: inDays(1),
+      now,
+    });
+    expect(tiny?.amountBaht).toBe(MIN_CHARGE_BAHT);
+    const huge = prepaidUpgradeQuote({
+      from: "plus",
+      to: "ultimate",
+      months: 1,
+      expiresAt: inDays(400),
+      now,
+    });
+    expect(huge?.amountBaht).toBe(PRICES.ultimate.monthly);
+  });
+
+  it("counts a started day as a whole day", () => {
+    const q = prepaidUpgradeQuote({
+      from: "plus",
+      to: "ultimate",
+      months: 1,
+      expiresAt: new Date(now.getTime() + 36 * 3_600_000),
+      now,
+    });
+    expect(q?.days).toBe(2);
+  });
+
+  it("is null when the target is not a higher tier", () => {
+    expect(
+      prepaidUpgradeQuote({ from: "plus", to: "plus", months: 1, expiresAt: inDays(5), now }),
+    ).toBeNull();
+    expect(
+      prepaidUpgradeQuote({ from: "ultimate", to: "plus", months: 1, expiresAt: inDays(5), now }),
+    ).toBeNull();
   });
 });
