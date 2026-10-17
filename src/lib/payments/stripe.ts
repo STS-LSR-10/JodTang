@@ -2,7 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { log } from "@/lib/log";
 import { buildCheckoutFields, resultUrls } from "./stripe-checkout";
 import { applyAction, interpretEvent, type StripeEvent } from "./stripe-events";
-import { stripePost } from "./stripe-api";
+import { StripeApiError, stripePost } from "./stripe-api";
 import { verifyStripeSignature } from "./stripe-signature";
 import type { PaymentProvider, PaymentRecord } from "./provider";
 
@@ -13,6 +13,13 @@ export interface StripeConfig {
 }
 
 export const PAYMENT_FAILED_TEXT = "เปิดหน้าชำระเงินไม่สำเร็จ ลองใหม่อีกครั้งนะ";
+
+/** The generic message plus Stripe's error code, so a failure can be traced without server logs. */
+export function failureMessage(error: unknown): string {
+  return error instanceof StripeApiError && error.reason
+    ? `${PAYMENT_FAILED_TEXT} (รหัส: ${error.reason})`
+    : PAYMENT_FAILED_TEXT;
+}
 
 export function createStripeProvider(
   config: StripeConfig,
@@ -33,7 +40,7 @@ export function createStripeProvider(
         return { status: "redirect", url: session.url, reference: session.id };
       } catch (error) {
         log.error("stripe_checkout_failed", error);
-        return { status: "unavailable", message: PAYMENT_FAILED_TEXT };
+        return { status: "unavailable", message: failureMessage(error) };
       }
     },
 
@@ -47,7 +54,7 @@ export function createStripeProvider(
         return { status: "redirect", url: session.url };
       } catch (error) {
         log.error("stripe_portal_failed", error);
-        return { status: "unavailable", message: PAYMENT_FAILED_TEXT };
+        return { status: "unavailable", message: failureMessage(error) };
       }
     },
 

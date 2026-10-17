@@ -4,8 +4,15 @@ export class StripeApiError extends Error {
   constructor(
     readonly status: number,
     message: string,
+    /** Stripe's machine-readable error code, e.g. "api_key_invalid". */
+    readonly code: string | null = null,
   ) {
     super(message);
+  }
+
+  /** Short, non-sensitive reason to show next to a generic failure message: "401 api_key_invalid". */
+  get reason(): string {
+    return [this.status, this.code].filter(Boolean).join(" ");
   }
 }
 
@@ -24,13 +31,17 @@ export async function stripePost<T>(
     body: new URLSearchParams(fields).toString(),
   });
   const body = (await res.json().catch(() => ({}))) as {
-    error?: { message?: string; code?: string };
+    error?: { message?: string; code?: string; param?: string };
   };
   if (!res.ok) {
     // Stripe's error text describes the request, never the key
+    const e = body.error;
     throw new StripeApiError(
       res.status,
-      `stripe ${path} ${res.status} ${body.error?.code ?? ""}`.trim(),
+      `stripe ${path} ${res.status} ${e?.code ?? ""} ${e?.param ?? ""} ${e?.message ?? ""}`
+        .replace(/\s+/g, " ")
+        .trim(),
+      e?.code ?? null,
     );
   }
   return body as T;
