@@ -51,7 +51,7 @@ export const FEATURE_GROUPS: FeatureGroup[] = [
       { label: "อ่านสลิปอัตโนมัติ", cells: [false, "5 ใบ/เดือน", "ไม่จำกัด"] },
       { label: "จดย้อนหลัง", cells: [false, true, true] },
       { label: "จดหลายรายการในข้อความเดียว", cells: [false, true, true] },
-      { label: "จดด้วยเสียง", cells: [false, true, true] },
+      { label: "จดด้วยเสียง", cells: [false, false, true] },
       { label: "ตั้งรายการจดอัตโนมัติ", cells: [false, "20 รายการ", "20 รายการ"] },
       { label: "เตือนจดประจำวัน", cells: [false, true, true] },
     ],
@@ -86,13 +86,13 @@ export const FEATURE_GROUPS: FeatureGroup[] = [
 export const PLAN_HIGHLIGHTS: Record<Plan, string[]> = {
   free: ["จดด้วยข้อความ", "ตั้งหมวดและงบ"],
   plus: [
-    "อ่านสลิป 5 ใบ/เดือน + จดด้วยเสียง",
+    "อ่านสลิป 5 ใบ/เดือน + จดย้อนหลัง",
     "รายการจดอัตโนมัติ + เตือนประจำวัน",
     "Excel สรุป กราฟเก็บออม สรุปในแชท",
   ],
   ultimate: [
     "ทุกอย่างใน Professional",
-    "อ่านสลิปไม่จำกัด",
+    "อ่านสลิปไม่จำกัด + จดด้วยเสียง",
     "จดในกลุ่ม / หลายบัญชี (เร็วๆ นี้)",
     "จดด้วย PDF + แนบหลักฐาน (เร็วๆ นี้)",
   ],

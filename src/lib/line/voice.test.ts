@@ -67,14 +67,15 @@ vi.mock("@/lib/repo", () => ({
 }));
 
 const NOW = new Date("2026-10-17T08:00:00Z");
-const PLUS_USER = {
+const ULTIMATE_USER = {
   id: "u1",
   line_user_id: "U1",
   display_name: null,
-  plan: "plus",
+  plan: "ultimate",
   plan_expires_at: null,
 } as const;
-const FREE_USER = { ...PLUS_USER, plan: "free" } as const;
+const FREE_USER = { ...ULTIMATE_USER, plan: "free" } as const;
+const PROFESSIONAL_USER = { ...ULTIMATE_USER, plan: "plus" } as const;
 
 function deps(over: Partial<VoiceDeps> & { heard?: string | Error } = {}): VoiceDeps & {
   fetchAudio: ReturnType<typeof vi.fn>;
@@ -98,7 +99,7 @@ function deps(over: Partial<VoiceDeps> & { heard?: string | Error } = {}): Voice
 
 const run = (
   d: VoiceDeps,
-  user = PLUS_USER,
+  user = ULTIMATE_USER,
   message: { id: string; duration?: number } = { id: "m1", duration: 4000 },
 ) => handleVoiceMessage(d, user as never, message, "U1");
 
@@ -109,6 +110,14 @@ beforeEach(() => {
 });
 
 describe("handleVoiceMessage", () => {
+  it("a Professional user only gets the Ultimate upsell and nothing is downloaded", async () => {
+    const d = deps();
+    const out = await run(d, PROFESSIONAL_USER as never);
+    expect(textOf(out[0])).toBe(VOICE_LOCKED_TEXT);
+    expect(d.fetchAudio).not.toHaveBeenCalled();
+    expect(inserted).toHaveLength(0);
+  });
+
   it("a Free user only gets the upsell and nothing is downloaded or transcribed", async () => {
     const d = deps();
     const out = await run(d, FREE_USER as never);
@@ -119,7 +128,7 @@ describe("handleVoiceMessage", () => {
 
   it("a long voice note is refused before downloading it", async () => {
     const d = deps();
-    const out = await run(d, PLUS_USER, { id: "m1", duration: 31_000 });
+    const out = await run(d, ULTIMATE_USER, { id: "m1", duration: 31_000 });
     expect(textOf(out[0])).toBe(VOICE_TOO_LONG_TEXT);
     expect(d.fetchAudio).not.toHaveBeenCalled();
   });

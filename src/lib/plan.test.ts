@@ -40,6 +40,12 @@ describe("limits", () => {
     expect(slipsRemaining("plus", 99)).toBe(0);
   });
 
+  it("voice logging is Ultimate only", () => {
+    expect(can("free", "voiceLog")).toBe(false);
+    expect(can("plus", "voiceLog")).toBe(false);
+    expect(can("ultimate", "voiceLog")).toBe(true);
+  });
+
   it("ultimate is unlimited and has every paid feature", () => {
     expect(slipsRemaining("ultimate", 500)).toBeNull();
     expect(can("ultimate", "savingsChart")).toBe(true);

@@ -32,18 +32,18 @@ export type Feature =
   | "backdate"
   | "multiEntry";
 
-/** Every feature built so far is part of Professional, and so of Ultimate above it. */
-const PAID_ONLY: Record<Feature, boolean> = {
-  savingsChart: true,
-  recurring: true,
-  multiAccount: true,
-  merchantMemory: true,
-  dailyReminder: true,
-  advancedExport: true,
-  autoSummary: true,
-  voiceLog: true,
-  backdate: true,
-  multiEntry: true,
+/** The lowest tier that has each feature (Ultimate always includes everything Professional has). */
+const MIN_PLAN: Record<Feature, "plus" | "ultimate"> = {
+  savingsChart: "plus",
+  recurring: "plus",
+  multiAccount: "plus",
+  merchantMemory: "plus",
+  dailyReminder: "plus",
+  advancedExport: "plus",
+  autoSummary: "plus",
+  voiceLog: "ultimate",
+  backdate: "plus",
+  multiEntry: "plus",
 };
 
 export function isPaidPlan(plan: Plan): boolean {
@@ -68,7 +68,7 @@ export function effectivePlan(
 }
 
 export function can(plan: Plan, feature: Feature): boolean {
-  return PAID_ONLY[feature] ? isPaidPlan(plan) : true;
+  return MIN_PLAN[feature] === "ultimate" ? plan === "ultimate" : isPaidPlan(plan);
 }
 
 /** Slips still allowed this month, or null when unlimited. */

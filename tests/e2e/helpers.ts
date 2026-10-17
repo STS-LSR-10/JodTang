@@ -111,7 +111,10 @@ export const ME_PLUS = {
   ...ME_FREE,
   plan: "plus",
   planExpiresAt: "2026-12-31T00:00:00Z",
-  features: Object.fromEntries(Object.keys(ME_FREE.features).map((k) => [k, true])),
+  features: {
+    ...Object.fromEntries(Object.keys(ME_FREE.features).map((k) => [k, true])),
+    voiceLog: false,
+  },
   slips: { used: 3, limit: 5, remaining: 2 },
   points: 25,
   redeem: { pointsPerDay: 10, days: 2, cost: 20 },
