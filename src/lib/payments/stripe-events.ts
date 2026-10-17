@@ -25,6 +25,7 @@ export type PaymentAction =
       userId: string;
       plan: PaidPlan;
       until: Date;
+      period: Period;
       customer: string | null;
       subscription: string;
     }
@@ -103,6 +104,7 @@ export function interpretEvent(event: StripeEvent): PaymentAction {
         userId: meta.userId,
         plan: meta.plan,
         until: new Date(end * 1000),
+        period: meta.period,
         customer: idOf(o.customer),
         subscription: id,
       };
@@ -176,6 +178,7 @@ export async function applyAction(
         p_until: action.until.toISOString(),
         p_customer: action.customer,
         p_subscription: action.subscription,
+        p_period: action.period,
       });
       return { handled: true, userId: action.userId };
     }

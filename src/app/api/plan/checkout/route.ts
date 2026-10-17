@@ -3,7 +3,7 @@ import { apiError, guard, json } from "@/lib/api";
 import { requireUser } from "@/lib/auth/require-user";
 import { getPaymentProvider } from "@/lib/payments";
 import { loadBillingState } from "@/lib/payments/billing-state";
-import { checkoutBlock } from "@/lib/payments/policy";
+import { planAction } from "@/lib/payments/policy";
 import { LIMITS, limitOr429 } from "@/lib/rate-limit";
 import { getAdminClient } from "@/lib/supabase/admin";
 
@@ -31,9 +31,19 @@ export async function POST(request: Request): Promise<Response> {
     if (!parsed.success) return apiError("ข้อมูลไม่ถูกต้อง", 400);
 
     const state = await loadBillingState(db, auth.userId);
-    const block = checkoutBlock(state, { plan: parsed.data.plan, method: parsed.data.method });
-    if (block) {
-      return json({ available: false, message: block.message, manage: block.manage === true }, 409);
+    const action = planAction(state, parsed.data);
+    if (action.kind === "blocked") {
+      return json(
+        { available: false, message: action.message, manage: action.manage === true },
+        409,
+      );
+    }
+    if (action.kind === "change") {
+      // A running card subscription is changed (difference only), never paid for a second time.
+      return json(
+        { available: false, message: "ใช้ปุ่มอัปเกรดแผนเพื่อเปลี่ยนแผนที่สมัครไว้", change: true },
+        409,
+      );
     }
     const result = await getPaymentProvider().createCheckout({
       userId: auth.userId,

@@ -40,9 +40,7 @@ export function buildCheckoutFields(req: CheckoutRequest, baseUrl: string): Reco
     "line_items[0][quantity]": "1",
     "line_items[0][price_data][currency]": "thb",
     "line_items[0][price_data][unit_amount]": String(PRICES[req.plan][req.period] * 100),
-    "line_items[0][price_data][product_data][name]": `จดตังค์ ${PLAN_LABEL[req.plan]} (${
-      req.period === "yearly" ? "รายปี" : "รายเดือน"
-    })`,
+    "line_items[0][price_data][product_data][name]": productName(req.plan, req.period),
   };
   for (const [k, v] of Object.entries(meta)) f[`metadata[${k}]`] = v;
 
@@ -54,6 +52,38 @@ export function buildCheckoutFields(req: CheckoutRequest, baseUrl: string): Reco
     if (!req.customerId) f.customer_creation = "always";
   }
   if (req.customerId) f.customer = req.customerId;
+  return f;
+}
+
+export function productName(plan: "plus" | "ultimate", period: "monthly" | "yearly"): string {
+  return `จดตังค์ ${PLAN_LABEL[plan]} (${period === "yearly" ? "รายปี" : "รายเดือน"})`;
+}
+
+/**
+ * Form fields for POST /v1/subscriptions/{id}: swap the subscription item for the new plan.
+ * `always_invoice` makes Stripe settle the difference at once: it credits the unused time of the
+ * old price and charges the new one (a yearly switch starts a new yearly period today). If the
+ * card fails, `error_if_incomplete` leaves the subscription exactly as it was.
+ */
+export function buildChangeFields(input: {
+  userId: string;
+  itemId: string;
+  productId: string;
+  plan: "plus" | "ultimate";
+  period: "monthly" | "yearly";
+}): Record<string, string> {
+  const meta = { user_id: input.userId, plan: input.plan, period: input.period, method: "card" };
+  const f: Record<string, string> = {
+    "items[0][id]": input.itemId,
+    "items[0][price_data][currency]": "thb",
+    "items[0][price_data][product]": input.productId,
+    "items[0][price_data][unit_amount]": String(PRICES[input.plan][input.period] * 100),
+    "items[0][price_data][recurring][interval]": input.period === "yearly" ? "year" : "month",
+    proration_behavior: "always_invoice",
+    payment_behavior: "error_if_incomplete",
+    cancel_at_period_end: "false",
+  };
+  for (const [k, v] of Object.entries(meta)) f[`metadata[${k}]`] = v;
   return f;
 }
 

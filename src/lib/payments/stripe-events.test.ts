@@ -108,6 +108,7 @@ describe("interpretEvent", () => {
       userId: USER,
       plan: "ultimate",
       until: new Date(1_800_000_000_000),
+      period: "yearly",
       customer: "cus_1",
       subscription: "sub_1",
     });

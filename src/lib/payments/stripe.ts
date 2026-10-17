@@ -1,8 +1,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { log } from "@/lib/log";
-import { buildCheckoutFields, resultUrls } from "./stripe-checkout";
+import { buildChangeFields, buildCheckoutFields, productName, resultUrls } from "./stripe-checkout";
 import { applyAction, interpretEvent, type StripeEvent } from "./stripe-events";
-import { StripeApiError, stripePost } from "./stripe-api";
+import { StripeApiError, stripeGet, stripePost } from "./stripe-api";
 import { verifyStripeSignature } from "./stripe-signature";
 import type { PaymentProvider, PaymentRecord } from "./provider";
 
@@ -40,6 +40,49 @@ export function createStripeProvider(
         return { status: "redirect", url: session.url, reference: session.id };
       } catch (error) {
         log.error("stripe_checkout_failed", error);
+        return { status: "unavailable", message: failureMessage(error) };
+      }
+    },
+
+    async changeSubscription(request) {
+      try {
+        const current = await stripeGet<{
+          metadata?: Record<string, string>;
+          items?: { data?: { id?: string }[] };
+        }>(config.secretKey, `/subscriptions/${request.subscriptionId}`);
+        // the subscription id comes from our own database, but never touch someone else's
+        const itemId = current.items?.data?.[0]?.id;
+        if (current.metadata?.user_id !== request.userId || !itemId) {
+          return { status: "unavailable", message: PAYMENT_FAILED_TEXT };
+        }
+        const product = await stripePost<{ id: string }>(config.secretKey, "/products", {
+          name: productName(request.plan, request.period),
+          "metadata[plan]": request.plan,
+          "metadata[period]": request.period,
+        });
+        const updated = await stripePost<Record<string, unknown>>(
+          config.secretKey,
+          `/subscriptions/${request.subscriptionId}`,
+          buildChangeFields({
+            userId: request.userId,
+            itemId,
+            productId: product.id,
+            plan: request.plan,
+            period: request.period,
+          }),
+        );
+        // Apply now instead of waiting for the webhook (which then repeats the same idempotent step).
+        await applyAction(
+          getDb(),
+          interpretEvent({
+            id: "local",
+            type: "customer.subscription.updated",
+            data: { object: updated },
+          }),
+        );
+        return { status: "changed" };
+      } catch (error) {
+        log.error("stripe_change_failed", error);
         return { status: "unavailable", message: failureMessage(error) };
       }
     },

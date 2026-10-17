@@ -5,7 +5,7 @@ import { useState } from "react";
 import { useApi, useLiff } from "@/components/liff/liff-provider";
 import { Logo } from "@/components/logo";
 import { PageHeader } from "@/components/liff/states";
-import { checkoutBlock } from "@/lib/payments/policy";
+import { planAction } from "@/lib/payments/policy";
 import { PLAN_LABEL, type Plan } from "@/lib/plan";
 import {
   FEATURE_GROUPS,
@@ -27,6 +27,7 @@ interface MeLite {
     canManage?: boolean;
     autoRenew?: boolean;
     prepaidRunning?: boolean;
+    period?: Period | null;
   };
 }
 
@@ -70,24 +71,50 @@ export default function UpgradePage() {
 
   const current: Plan = me.data?.plan ?? "free";
   // The same rules the server enforces (src/lib/payments/policy.ts), so the button explains itself.
-  const block = checkoutBlock(
+  const autoRenew = me.data?.payments?.autoRenew === true;
+  // A card subscriber can only change that subscription, so the payment method is not a choice.
+  const payWith: Method = autoRenew ? "card" : method;
+  const action = planAction(
     {
       plan: current,
       customerId: null,
-      subscriptionRunning: me.data?.payments?.autoRenew === true,
+      subscriptionRunning: autoRenew,
+      subscriptionId: autoRenew ? "running" : null,
+      period: autoRenew ? (me.data?.payments?.period ?? "monthly") : null,
       prepaidRunning: me.data?.payments?.prepaidRunning === true,
     },
-    { plan: picked, method },
+    { plan: picked, period, method: payWith },
   );
-  const topUp = !block && current === picked;
+  const blockMessage = action.kind === "blocked" ? action.message : null;
+  const topUp = action.kind === "checkout" && current === picked;
 
+  async function changePlan() {
+    setBusy(true);
+    setNotice(null);
+    try {
+      const res = await api<{ available: boolean; message?: string }>("/api/plan/change", {
+        method: "POST",
+        body: JSON.stringify({ plan: picked, period }),
+      });
+      if (res.available) {
+        setNotice("เปลี่ยนแผนเรียบร้อย ตัดเฉพาะส่วนต่างจากบัตรที่ใช้สมัครไว้แล้ว");
+        me.reload();
+      } else {
+        setNotice(res.message ?? "เปลี่ยนแผนไม่สำเร็จ");
+      }
+    } catch (e) {
+      setNotice(e instanceof Error ? e.message : "ทำรายการไม่สำเร็จ");
+    } finally {
+      setBusy(false);
+    }
+  }
   async function checkout() {
     setBusy(true);
     setNotice(null);
     try {
       const res = await api<{ available: boolean; message?: string; url?: string }>(
         "/api/plan/checkout",
-        { method: "POST", body: JSON.stringify({ plan: picked, period, method }) },
+        { method: "POST", body: JSON.stringify({ plan: picked, period, method: payWith }) },
       );
       // Stripe opens in the phone browser: PromptPay needs a banking app, and the LINE in-app
       // browser cannot always hand over to one.
@@ -174,36 +201,50 @@ export default function UpgradePage() {
           ))}
         </div>
 
-        <div role="radiogroup" aria-label="ช่องทางชำระเงิน" className="space-y-2">
-          {METHODS.map((m) => (
-            <button
-              key={m.value}
-              type="button"
-              role="radio"
-              aria-checked={method === m.value}
-              onClick={() => setMethod(m.value)}
-              className={cn(
-                "block w-full rounded-2xl border p-3 text-left",
-                method === m.value ? "border-primary bg-primary-soft" : "border-border bg-surface",
-              )}
-            >
-              <span className="block text-sm font-semibold">{m.label}</span>
-              <span className="block text-xs text-foreground/80">{m.hint}</span>
-            </button>
-          ))}
-        </div>
+        {autoRenew ? null : (
+          <div role="radiogroup" aria-label="ช่องทางชำระเงิน" className="space-y-2">
+            {METHODS.map((m) => (
+              <button
+                key={m.value}
+                type="button"
+                role="radio"
+                aria-checked={method === m.value}
+                onClick={() => setMethod(m.value)}
+                className={cn(
+                  "block w-full rounded-2xl border p-3 text-left",
+                  method === m.value
+                    ? "border-primary bg-primary-soft"
+                    : "border-border bg-surface",
+                )}
+              >
+                <span className="block text-sm font-semibold">{m.label}</span>
+                <span className="block text-xs text-foreground/80">{m.hint}</span>
+              </button>
+            ))}
+          </div>
+        )}
 
         <button
           type="button"
-          onClick={checkout}
-          disabled={busy || block !== null}
+          onClick={action.kind === "change" ? changePlan : checkout}
+          disabled={busy || action.kind === "blocked"}
           className="h-12 w-full rounded-2xl bg-primary text-base font-semibold text-surface disabled:opacity-60"
         >
-          {busy ? "กำลังดำเนินการ..." : `${topUp ? "ต่ออายุ" : "ชำระเงิน"} · ${PLAN_LABEL[picked]}`}
+          {busy
+            ? "กำลังดำเนินการ..."
+            : action.kind === "change"
+              ? `อัปเกรดแผน · ${PLAN_LABEL[picked]} (${period === "yearly" ? "รายปี" : "รายเดือน"})`
+              : `${topUp ? "ต่ออายุ" : "ชำระเงิน"} · ${PLAN_LABEL[picked]}`}
         </button>
-        {block ? (
+        {action.kind === "change" ? (
+          <p className="rounded-2xl bg-primary-soft px-4 py-2 text-sm text-foreground">
+            จ่ายเฉพาะส่วนต่าง: Stripe หักเวลาที่ยังไม่ได้ใช้ของแผนเดิม แล้วคิดแผนใหม่
+            ตัดจากบัตรที่ใช้สมัครไว้ทันที
+          </p>
+        ) : null}
+        {blockMessage ? (
           <p className="rounded-2xl bg-accent/15 px-4 py-2 text-sm text-foreground">
-            {block.message}
+            {blockMessage}
           </p>
         ) : null}
         {me.data?.payments?.canManage ? (

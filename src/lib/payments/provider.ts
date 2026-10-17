@@ -25,6 +25,18 @@ export type CheckoutResult =
   | { status: "unavailable"; message: string }
   | { status: "redirect"; url: string; reference: string };
 
+export interface ChangeRequest {
+  userId: string;
+  subscriptionId: string;
+  plan: "plus" | "ultimate";
+  period: Period;
+}
+
+export type ChangeResult =
+  | { status: "unavailable"; message: string }
+  /** The subscription now has the new plan; the difference was charged to the saved card. */
+  | { status: "changed" };
+
 export type PortalResult =
   { status: "unavailable"; message: string } | { status: "redirect"; url: string };
 
@@ -48,6 +60,8 @@ export interface PaymentProvider {
   readonly available: boolean;
   createCheckout(request: CheckoutRequest): Promise<CheckoutResult>;
   createPortal(customerId: string): Promise<PortalResult>;
+  /** Move a running card subscription to a higher tier / yearly billing (prorated by Stripe). */
+  changeSubscription(request: ChangeRequest): Promise<ChangeResult>;
   listPayments(userId: string): Promise<PaymentRecord[]>;
   handleWebhook(rawBody: string, headers: Headers): Promise<WebhookResult>;
 }

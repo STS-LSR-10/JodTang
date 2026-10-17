@@ -74,6 +74,8 @@ export async function GET(request: Request): Promise<Response> {
         // paid by card before: the billing portal can be opened
         canManage: Boolean(billing.customerId),
         autoRenew: billing.subscriptionRunning,
+        // billing period of the running card subscription (monthly | yearly)
+        period: billing.period,
         // prepaid (PromptPay) time left: can be topped up, not mixed with a card subscription
         prepaidRunning: billing.prepaidRunning,
       },

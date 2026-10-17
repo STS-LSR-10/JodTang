@@ -46,3 +46,17 @@ export async function stripePost<T>(
   }
   return body as T;
 }
+
+/** GET a Stripe resource and return the JSON body. */
+export async function stripeGet<T>(secretKey: string, path: string): Promise<T> {
+  const res = await fetch(`${API}${path}`, { headers: { Authorization: `Bearer ${secretKey}` } });
+  const body = (await res.json().catch(() => ({}))) as { error?: { code?: string } };
+  if (!res.ok) {
+    throw new StripeApiError(
+      res.status,
+      `stripe GET ${path} ${res.status} ${body.error?.code ?? ""}`.trim(),
+      body.error?.code ?? null,
+    );
+  }
+  return body as T;
+}

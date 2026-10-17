@@ -71,12 +71,10 @@ describe("apply_prepaid_purchase", () => {
 
 describe("set_plan_until", () => {
   const until = (user: string, plan: string, at: string) =>
-    db.query("select set_plan_until($1::uuid, $2::plan_tier, $3::timestamptz, $4, 'sub_x')", [
-      user,
-      plan,
-      at,
-      `cus_${user}`,
-    ]);
+    db.query(
+      "select set_plan_until($1::uuid, $2::plan_tier, $3::timestamptz, $4, 'sub_x', 'monthly')",
+      [user, plan, at, `cus_${user}`],
+    );
   it("sets the plan until the period end and remembers the Stripe ids", async () => {
     const u = await newUser(db, "sub-a");
     await until(u, "plus", "2030-01-01T00:00:00Z");
@@ -89,6 +87,12 @@ describe("set_plan_until", () => {
     expect(r.e.startsWith("2030-01-01")).toBe(true);
     expect(r.c).toBe(`cus_${u}`);
     expect(r.s).toBe("sub_x");
+    const period = await one<{ billing_period: string }>(
+      db,
+      "select billing_period from users where id = $1",
+      [u],
+    );
+    expect(period.billing_period).toBe("monthly");
   });
 
   it("a renewal moves the end forward, a late/duplicate event never shortens it", async () => {

@@ -10,7 +10,7 @@ export async function loadBillingState(
   const [user, prepaid] = await Promise.all([
     db
       .from("users")
-      .select("plan,plan_expires_at,stripe_customer_id,stripe_subscription_id")
+      .select("plan,plan_expires_at,stripe_customer_id,stripe_subscription_id,billing_period")
       .eq("id", userId)
       .single(),
     db
@@ -29,6 +29,7 @@ export async function loadBillingState(
       planExpiresAt: user.data.plan_expires_at,
       stripeCustomerId: user.data.stripe_customer_id,
       stripeSubscriptionId: user.data.stripe_subscription_id,
+      billingPeriod: user.data.billing_period,
       hasPrepaidPayment: (prepaid.data ?? []).length > 0,
     },
     now,

@@ -72,30 +72,93 @@ test.describe("upgrade page (360px)", () => {
     await expect(page.getByRole("button", { name: /จัดการการชำระเงิน/ })).toHaveCount(0);
   });
 
-  test("a card subscriber cannot pay a second time but can open the billing portal", async ({
+  test("a card subscriber can upgrade the tier or switch to yearly (difference only)", async ({
+    page,
+  }) => {
+    const bodies: unknown[] = [];
+    const me = {
+      ...ME_PLUS,
+      payments: {
+        available: true,
+        history: [],
+        canManage: true,
+        autoRenew: true,
+        period: "monthly",
+      },
+    };
+    await mockApi(page, {
+      "GET /api/me": me,
+      "POST /api/plan/change": (route: Route) => {
+        bodies.push(route.request().postDataJSON());
+        return { available: true, changed: true };
+      },
+    });
+    await page.goto("/upgrade");
+
+    // a subscriber can only change the running subscription, so the payment method is not asked
+    await expect(page.getByRole("radiogroup", { name: "ช่องทางชำระเงิน" })).toHaveCount(0);
+
+    // default view: Professional + yearly = switch the monthly subscription to yearly
+    const change = page.getByRole("button", { name: /อัปเกรดแผน · Professional \(รายปี\)/ });
+    await expect(change).toBeEnabled();
+    await expect(page.getByText(/จ่ายเฉพาะส่วนต่าง/)).toBeVisible();
+
+    // upgrade the tier instead, still monthly
+    await page.getByRole("radio", { name: /^Ultimate/ }).click();
+    await page.getByRole("radio", { name: /รายเดือน/ }).click();
+    const toUltimate = page.getByRole("button", { name: /อัปเกรดแผน · Ultimate \(รายเดือน\)/ });
+    await expect(toUltimate).toBeEnabled();
+    await toUltimate.click();
+
+    await expect.poll(() => bodies.length).toBe(1);
+    expect(bodies[0]).toEqual({ plan: "ultimate", period: "monthly" });
+    await expect(page.getByRole("status").filter({ hasText: "เปลี่ยนแผนเรียบร้อย" })).toBeVisible();
+  });
+
+  test("a card subscriber cannot repeat the same plan, and can open the billing portal", async ({
     page,
   }) => {
     const me = {
       ...ME_PLUS,
-      payments: { available: true, history: [], canManage: true, autoRenew: true },
+      payments: {
+        available: true,
+        history: [],
+        canManage: true,
+        autoRenew: true,
+        period: "monthly",
+      },
     };
     const { seen } = await mockApi(page, {
       "GET /api/me": me,
       "POST /api/plan/portal": { available: false, message: "ยังไม่เปิด" },
     });
     await page.goto("/upgrade");
-    const pay = page.getByRole("button", { name: /(ชำระเงิน|ต่ออายุ) · Professional/ });
-    await expect(pay).toBeDisabled();
-    await expect(page.getByText(/ต่ออายุอัตโนมัติด้วยบัตรอยู่/)).toBeVisible();
-
-    // PromptPay would pay twice for the same time, so it is blocked as well
-    await page.getByRole("radio", { name: /พร้อมเพย์/ }).click();
-    await expect(pay).toBeDisabled();
+    await page.getByRole("radio", { name: /รายเดือน/ }).click(); // Professional + monthly = what they have
+    await expect(page.getByText(/คุณใช้แผนนี้อยู่แล้ว/)).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: /(ชำระเงิน|ต่ออายุ) · Professional/ }),
+    ).toBeDisabled();
 
     await page.getByRole("button", { name: /จัดการการชำระเงิน/ }).click();
     await expect.poll(() => seen.some((s) => s.startsWith("POST /api/plan/portal"))).toBe(true);
   });
 
+  test("a yearly subscriber cannot go back to monthly mid-term", async ({ page }) => {
+    const me = {
+      ...ME_PLUS,
+      payments: {
+        available: true,
+        history: [],
+        canManage: true,
+        autoRenew: true,
+        period: "yearly",
+      },
+    };
+    await mockApi(page, { "GET /api/me": me });
+    await page.goto("/upgrade");
+    await page.getByRole("radio", { name: /รายเดือน/ }).click();
+    await expect(page.getByText(/เปลี่ยนจากรายปีเป็นรายเดือนไม่ได้/)).toBeVisible();
+  });
   test("prepaid (PromptPay) time can be topped up or upgraded, but not mixed with a card", async ({
     page,
   }) => {

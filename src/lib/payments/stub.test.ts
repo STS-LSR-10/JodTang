@@ -8,6 +8,14 @@ describe("payment stub (used until Stripe keys are set)", () => {
     expect(
       await p.createCheckout({ userId: "u", plan: "plus", period: "monthly", method: "card" }),
     ).toEqual({ status: "unavailable", message: PAYMENTS_UNAVAILABLE_TEXT });
+    expect(
+      await p.changeSubscription({
+        userId: "u",
+        subscriptionId: "sub_1",
+        plan: "ultimate",
+        period: "yearly",
+      }),
+    ).toEqual({ status: "unavailable", message: PAYMENTS_UNAVAILABLE_TEXT });
     expect(await p.createPortal("cus_1")).toEqual({
       status: "unavailable",
       message: PAYMENTS_UNAVAILABLE_TEXT,
