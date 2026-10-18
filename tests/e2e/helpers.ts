@@ -114,7 +114,7 @@ export const ME_FREE = {
   redeem: { pointsPerDay: 10, days: 0, cost: 0 },
   referralCode: "ABCD1234",
   referred: false,
-  limits: { recurringRules: 20 },
+  limits: { recurringRules: 20, wallets: 1 },
   payments: { available: false, history: [] },
   trial: { days: 7, available: { plus: true, ultimate: true } },
 };

@@ -9,6 +9,7 @@ import { getTransaction, loadCategories, patchTransactionRow, updateTransaction 
 import { getSlip, learnMerchant } from "@/lib/slip-repo";
 import { getAdminClient } from "@/lib/supabase/admin";
 import { planEdit } from "@/lib/tx-edit";
+import { listWallets } from "@/lib/wallet-repo";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -21,6 +22,7 @@ const patchSchema = z
     categoryId: z.string().uuid().nullable(),
     occurredAt: z.string().datetime({ offset: true }),
     note: z.string().max(500).nullable(),
+    accountId: z.string().uuid().nullable(),
   })
   .partial()
   .strict();
@@ -46,6 +48,13 @@ export async function PATCH(
     const db = getAdminClient();
     const existing = await getTransaction(db, auth.userId, id);
     if (!existing || existing.status !== "confirmed") return apiError("ไม่พบรายการนี้", 404);
+
+    if (parsed.data.accountId) {
+      const wallets = await listWallets(db, auth.userId);
+      if (!wallets.some((w) => w.id === parsed.data.accountId)) {
+        return apiError("ไม่พบกระเป๋านี้", 400);
+      }
+    }
 
     const [categories, memory] = await Promise.all([
       loadCategories(db, auth.userId),

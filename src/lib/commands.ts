@@ -13,6 +13,7 @@ export type Command =
   | { kind: "compare-months" }
   | { kind: "forecast" }
   | { kind: "insight" }
+  | { kind: "wallets" }
   | { kind: "summary"; scope: "today" | "month" }
   | { kind: "delete-latest" }
   | { kind: "edit-latest"; amountSatang: number }
@@ -46,6 +47,9 @@ export function parseCommand(input: string): Command | null {
   }
   if (["วิเคราะห์", "วิเคราะห์การใช้จ่าย", "ai insight", "insight"].includes(text)) {
     return { kind: "insight" };
+  }
+  if (["กระเป๋า", "กระเป๋าเงิน", "ยอดเงิน", "ยอดคงเหลือ", "wallet", "wallets"].includes(text)) {
+    return { kind: "wallets" };
   }
   if (["พยากรณ์", "พยากรณ์เงิน", "พยากรณ์ปลายเดือน", "พยากรณ์ปลายรอบ"].includes(text)) {
     return { kind: "forecast" };

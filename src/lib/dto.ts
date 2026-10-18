@@ -20,10 +20,13 @@ export interface TxDto {
   note: string | null;
   /** #tags without the # (Professional and above). */
   tags: string[];
+  /** The wallet the entry was put in; null = the main wallet. */
+  accountId: string | null;
+  accountName: string | null;
 }
 
 export const TX_SELECT =
-  "id,type,title,amount,occurred_at,source,category_id,slip_id,photo_path,note,tags,categories(name,icon,color)";
+  "id,type,title,amount,occurred_at,source,category_id,slip_id,photo_path,note,tags,account_id,accounts(name),categories(name,icon,color)";
 
 interface TxJoinRow {
   id: string;
@@ -37,6 +40,8 @@ interface TxJoinRow {
   photo_path?: string | null;
   note?: string | null;
   tags?: string[] | null;
+  account_id?: string | null;
+  accounts?: { name: string } | { name: string }[] | null;
   // PostgREST returns a single object for a to-one embed, but be lenient.
   categories: CategoryEmbed | CategoryEmbed[] | null;
 }
@@ -64,5 +69,7 @@ export function toTxDto(row: TxJoinRow): TxDto {
     hasSlip: Boolean(row.slip_id),
     note: row.note ?? null,
     tags: row.tags ?? [],
+    accountId: row.account_id ?? null,
+    accountName: (Array.isArray(row.accounts) ? row.accounts[0] : row.accounts)?.name ?? null,
   };
 }

@@ -73,6 +73,10 @@ import type { TextStructurer } from "@/lib/ai/text-structurer";
 import { recordSmartEntries } from "./smart-entries";
 import { buildForecastCard } from "./forecast-flex";
 import { buildInsightCard } from "./insight-flex";
+import { buildWalletChooser, buildWalletsCard } from "./wallet-flex";
+import { ensureWallets, listWallets, setEntryWallet } from "@/lib/wallet-repo";
+import { resolveWallet, walletLabel } from "@/lib/wallet";
+import { walletCapacity } from "@/lib/plan";
 import { buildSearchCard } from "./search-flex";
 import {
   buildCategorySpendCard,
@@ -144,6 +148,10 @@ import {
   TOO_MANY_MESSAGES_TEXT,
   USE_CODE_USAGE_TEXT,
   VOICE_CANCELLED_TEXT,
+  WALLET_AMBIGUOUS_TEXT,
+  WALLET_MOVE_ASK_TEXT,
+  WALLET_MOVED_TEXT,
+  WALLET_NOT_FOUND_TEXT,
   VOICE_UNAVAILABLE_TEXT,
   WELCOME_TEXT,
   text,
@@ -314,7 +322,32 @@ async function handleText(input: string, user: UserRow, deps: HandlerDeps): Prom
   if (entries.some((e) => e.tags.length > 0) && !can(plan, "tags")) {
     return [text(TAGS_LOCKED_TEXT)];
   }
-  return saveEntries(entries, user, deps);
+  // "@บัตร": find each named wallet first, and record nothing if one cannot be told apart
+  const walletIds = new Map<ParsedEntry, string>();
+  if (entries.some((e) => e.walletHint)) {
+    const wallets = await ensureWallets(deps.db, user.id);
+    for (const e of entries) {
+      if (!e.walletHint) continue;
+      const found = resolveWallet(e.walletHint, wallets);
+      if (!found.ok) {
+        const names =
+          found.reason === "ambiguous"
+            ? wallets
+                .filter((w) => w.name.toLowerCase().startsWith(e.walletHint!.toLowerCase()))
+                .map((w) => w.name)
+            : wallets.map((w) => w.name);
+        return [
+          text(
+            found.reason === "ambiguous"
+              ? WALLET_AMBIGUOUS_TEXT(e.walletHint, names)
+              : WALLET_NOT_FOUND_TEXT(e.walletHint, names),
+          ),
+        ];
+      }
+      walletIds.set(e, found.wallet.id);
+    }
+  }
+  return saveEntries(entries, user, deps, walletIds);
 }
 
 /** "🐱 ค่าอาหารแมว" for a category that has an emoji, its plain name otherwise, null for none. */
@@ -431,6 +464,7 @@ async function saveEntries(
   entries: ParsedEntry[],
   user: UserRow,
   deps: HandlerDeps,
+  walletIds: Map<ParsedEntry, string> = new Map(),
 ): Promise<LineMessage[]> {
   const { db } = deps;
   const [settings, categories, memory] = await Promise.all([
@@ -439,7 +473,12 @@ async function saveEntries(
     loadMemoryFor(db, user, deps.now()),
   ]);
 
-  const confirmed: { tx: TxRow; entry: ParsedEntry; categoryId: string | null }[] = [];
+  const confirmed: {
+    tx: TxRow;
+    entry: ParsedEntry;
+    categoryId: string | null;
+    walletId: string | null;
+  }[] = [];
   const pending: { tx: TxRow; entry: ParsedEntry }[] = [];
 
   for (const parsed of entries) {
@@ -470,9 +509,10 @@ async function saveEntries(
       status: needsConfirm ? "pending_confirm" : "confirmed",
       rawText: entry.raw,
       tags: entry.tags,
+      accountId: walletIds.get(parsed) ?? null,
     });
     if (needsConfirm) pending.push({ tx, entry });
-    else confirmed.push({ tx, entry, categoryId });
+    else confirmed.push({ tx, entry, categoryId, walletId: walletIds.get(parsed) ?? null });
   }
 
   const messages: LineMessage[] = [];
@@ -481,7 +521,16 @@ async function saveEntries(
     if (confirmed.length <= MAX_CARDS_PER_REPLY) {
       for (const c of confirmed) {
         messages.push(
-          await confirmCard(c.tx, c.categoryId, categories, settings, user, deps, c.entry.tags),
+          await confirmCard(
+            c.tx,
+            c.categoryId,
+            categories,
+            settings,
+            user,
+            deps,
+            c.entry.tags,
+            c.walletId,
+          ),
         );
       }
     } else {
@@ -635,8 +684,15 @@ async function confirmCard(
   user: UserRow,
   deps: HandlerDeps,
   tags: string[] = [],
+  walletId: string | null = null,
 ): Promise<LineMessage> {
   const style = settings.confirm_style === "short" ? "short" : "full";
+  // The wallet only shows up once there is more than one to tell apart.
+  const wallets = await listWallets(deps.db, user.id).catch(() => []);
+  const multi = wallets.length > 1;
+  const wallet = multi
+    ? (wallets.find((w) => w.id === walletId) ?? wallets.find((w) => w.isDefault))
+    : undefined;
   let cycleTotal: number | null = null;
   if (style === "full" && categoryId) {
     const range = cycleRange(deps.now(), settings.budget_cycle, settings.cycle_start_day);
@@ -657,6 +713,8 @@ async function confirmCard(
     amountSatang: txAmountSatang(tx),
     occurredAt: new Date(tx.occurred_at),
     tags,
+    walletName: wallet ? walletLabel(wallet) : null,
+    canMoveWallet: multi,
     cycleTotalSatang: cycleTotal,
     cycleLabel:
       settings.budget_cycle === "weekly"
@@ -810,6 +868,18 @@ async function runCommand(
           today: fromBangkok(today.year, today.month, today.day),
           subtitle: `${formatThaiDate(cycle.from)} – ${formatThaiDate(new Date(cycle.to.getTime() - 1))}`,
           moreUrl: pageUrl("/summary"),
+        }),
+      ];
+    }
+
+    case "wallets": {
+      const wallets = await ensureWallets(db, user.id);
+      const plan = effectivePlan(user.plan, user.plan_expires_at, deps.now());
+      return [
+        buildWalletsCard({
+          wallets,
+          canAdd: wallets.length < walletCapacity(plan),
+          manageUrl: pageUrl("/wallets"),
         }),
       ];
     }
@@ -1005,6 +1075,19 @@ async function handlePostback(
   }
 
   if (action === "edit") return [text(EDIT_HINT_TEXT)];
+
+  // "💳 ย้ายกระเป๋า": list the wallets, then (a=wm) move the entry to the one tapped
+  if (action === "wl") {
+    const wallets = await listWallets(db, user.id);
+    if (wallets.length < 2) return [];
+    return [buildWalletChooser({ txId: id, wallets, currentId: null, text: WALLET_MOVE_ASK_TEXT })];
+  }
+  if (action === "wm") {
+    const target = (await listWallets(db, user.id)).find((w) => w.id === params.get("w"));
+    if (!target) return [text(NOT_FOUND_TEXT)];
+    const moved = await setEntryWallet(db, user.id, id, target.isDefault ? null : target.id);
+    return [text(moved ? WALLET_MOVED_TEXT(tx.title, walletLabel(target)) : NOT_FOUND_TEXT)];
+  }
 
   // "📷 แนบรูป" on an entry card: plan and cap first, then wait for the next image
   if (action === "ph") {

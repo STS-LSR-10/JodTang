@@ -1,7 +1,14 @@
 import { guard, json } from "@/lib/api";
 import { requireUser } from "@/lib/auth/require-user";
 import { MAX_RECURRING_RULES, POINTS_PER_PLUS_DAY } from "@/lib/config";
-import { can, effectivePlan, SLIP_LIMIT, slipsRemaining, type Feature } from "@/lib/plan";
+import {
+  can,
+  effectivePlan,
+  SLIP_LIMIT,
+  slipsRemaining,
+  walletCapacity,
+  type Feature,
+} from "@/lib/plan";
 import { getPaymentProvider } from "@/lib/payments";
 import { loadBillingState } from "@/lib/payments/billing-state";
 import { trialBlock } from "@/lib/payments/policy";
@@ -77,7 +84,7 @@ export async function GET(request: Request): Promise<Response> {
       redeem: { pointsPerDay: POINTS_PER_PLUS_DAY, ...redeemable(data.points) },
       referralCode: data.referral_code,
       referred: Boolean(data.referred_by),
-      limits: { recurringRules: MAX_RECURRING_RULES },
+      limits: { recurringRules: MAX_RECURRING_RULES, wallets: walletCapacity(plan) },
       // free trials still available (once per tier, and only while no plan is running)
       trial: {
         days: TRIAL_DAYS,

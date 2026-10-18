@@ -37,6 +37,7 @@ export async function buildXlsx(
     { header: HEADERS[4], key: "category", width: 18 },
     { header: HEADERS[5], key: "amount", width: 16, style: { numFmt: MONEY_FORMAT } },
     { header: HEADERS[6], key: "source", width: 14 },
+    { header: HEADERS[7], key: "wallet", width: 16 },
   ];
   for (const r of rows) {
     list.addRow({
@@ -47,6 +48,7 @@ export async function buildXlsx(
       category: r.categoryName ?? "ไม่ระบุหมวด",
       amount: baht(r.amountSatang),
       source: sourceLabel(r.source),
+      wallet: r.walletName ?? "",
     });
   }
   styleHeader(list);

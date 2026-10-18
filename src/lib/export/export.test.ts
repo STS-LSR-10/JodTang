@@ -1,7 +1,7 @@
 import ExcelJS from "exceljs";
 import { describe, expect, it } from "vitest";
 import { csvCell, toCsv } from "./csv";
-import { exportDate, exportTime, type ExportRow } from "./rows";
+import { exportDate, exportTime, HEADERS, rowCells, type ExportRow } from "./rows";
 import { summarizeByCategory, summarizeByMonth } from "./summary";
 import { buildXlsx } from "./xlsx";
 
@@ -46,8 +46,8 @@ describe("toCsv", () => {
     const csv = toCsv([row()]);
     expect(csv.charCodeAt(0)).toBe(0xfeff);
     const lines = csv.slice(1).split("\r\n");
-    expect(lines[0]).toBe("วันที่,เวลา,ประเภท,ชื่อรายการ,หมวด,จำนวนเงิน (บาท),ที่มา");
-    expect(lines[1]).toBe("2026-10-15,14:30,รายจ่าย,กาแฟ,อาหาร,30.50,ข้อความ");
+    expect(lines[0]).toBe("วันที่,เวลา,ประเภท,ชื่อรายการ,หมวด,จำนวนเงิน (บาท),ที่มา,กระเป๋า");
+    expect(lines[1]).toBe("2026-10-15,14:30,รายจ่าย,กาแฟ,อาหาร,30.50,ข้อความ,"); // wallet unknown: empty cell
     expect(lines[2]).toBe("");
   });
 
@@ -120,5 +120,21 @@ describe("buildXlsx", () => {
     const cell = wb.getWorksheet("รายการ")?.getRow(2).getCell(4);
     expect(cell?.value).toBe("=1+1");
     expect(cell?.type).toBe(ExcelJS.ValueType.String);
+  });
+});
+
+describe("the wallet column", () => {
+  it("is the last cell, empty when unknown, and the wallet's name when given", () => {
+    const base = {
+      date: new Date("2026-10-15T08:00:00Z"),
+      type: "expense" as const,
+      title: "x",
+      categoryName: null,
+      amountSatang: 100,
+      source: "text",
+    };
+    expect(rowCells(base).at(-1)).toBe("");
+    expect(rowCells({ ...base, walletName: "บัตรกสิกร" }).at(-1)).toBe("บัตรกสิกร");
+    expect(rowCells(base)).toHaveLength(HEADERS.length);
   });
 });

@@ -24,6 +24,8 @@ const item = (title: string, amountSatang: number, type: "expense" | "income" = 
   hasSlip: false,
   note: null,
   tags: [],
+  accountId: null,
+  accountName: null,
 });
 
 describe("buildCategorySpendCard", () => {

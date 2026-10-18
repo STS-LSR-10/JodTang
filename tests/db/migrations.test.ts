@@ -161,6 +161,155 @@ describe("entry photos (0015)", () => {
   });
 });
 
+describe("wallets (0019)", () => {
+  async function seed() {
+    const u = await newUser(db, `w-${Math.random()}`);
+    const other = await newUser(db, `w-other-${Math.random()}`);
+    const wallet = async (
+      user: string,
+      name: string,
+      kind: string,
+      isDefault = false,
+      opening = 0,
+    ) =>
+      (
+        await one<{ id: string }>(
+          db,
+          "insert into accounts (user_id,name,kind,is_default,opening_balance) values ($1,$2,$3::account_kind,$4,$5) returning id",
+          [user, name, kind, isDefault, opening],
+        )
+      ).id;
+    const main = await wallet(u, "เงินสด", "cash", true, 1000);
+    const bank = await wallet(u, "กสิกร", "bank", false, 5000);
+    const card = await wallet(u, "บัตร", "card", false, -2000);
+    const theirs = await wallet(other, "ของคนอื่น", "cash", true);
+    const ins = (
+      user: string,
+      account: string | null,
+      type: string,
+      amount: number,
+      status = "confirmed",
+    ) =>
+      db.query(
+        "insert into transactions (user_id,type,amount,title,account_id,status) values ($1,$2,$3,'x',$4,$5)",
+        [user, type, amount, account, status],
+      );
+    await ins(u, null, "expense", 100); // no wallet -> the main wallet
+    await ins(u, main, "income", 300);
+    await ins(u, bank, "expense", 1200);
+    await ins(u, bank, "income", 20_000);
+    await ins(u, card, "expense", 800);
+    await ins(u, bank, "expense", 999, "deleted");
+    await ins(u, bank, "expense", 888, "pending_confirm");
+    await ins(other, theirs, "expense", 5000);
+    return { u, main, bank, card };
+  }
+  const balances = (u: string) =>
+    rows<{
+      name: string;
+      kind: string;
+      is_default: boolean;
+      opening_balance: string;
+      income: string;
+      expense: string;
+      tx_count: number;
+    }>(
+      db,
+      "select name, kind, is_default, opening_balance::text, income::text, expense::text, tx_count::int from wallet_balances($1)",
+      [u],
+    );
+
+  it("adds up each wallet; entries with no wallet belong to the main one", async () => {
+    const { u } = await seed();
+    expect(await balances(u)).toEqual([
+      {
+        name: "เงินสด",
+        kind: "cash",
+        is_default: true,
+        opening_balance: "1000.00",
+        income: "300.00",
+        expense: "100.00",
+        tx_count: 2,
+      },
+      {
+        name: "กสิกร",
+        kind: "bank",
+        is_default: false,
+        opening_balance: "5000.00",
+        income: "20000.00",
+        expense: "1200.00",
+        tx_count: 2,
+      },
+      {
+        name: "บัตร",
+        kind: "card",
+        is_default: false,
+        opening_balance: "-2000.00",
+        income: "0",
+        expense: "800.00",
+        tx_count: 1,
+      },
+    ]);
+  });
+
+  it("the main wallet comes first, and another person's wallet never shows up", async () => {
+    const { u } = await seed();
+    const names = (await balances(u)).map((b) => b.name);
+    expect(names[0]).toBe("เงินสด");
+    expect(names).not.toContain("ของคนอื่น");
+  });
+
+  it("a person with no wallet has no rows (the app creates the main one on first use)", async () => {
+    const u = await newUser(db, `w-none-${Math.random()}`);
+    expect(await balances(u)).toEqual([]);
+  });
+
+  it("a name is used once per person, ignoring case, but another person may use it", async () => {
+    const { u } = await seed();
+    await expect(
+      db.query("insert into accounts (user_id,name) values ($1,'กสิกร')", [u]),
+    ).rejects.toThrow();
+    await db.query("insert into accounts (user_id,name) values ($1,'Wallet')", [u]);
+    await expect(
+      db.query("insert into accounts (user_id,name) values ($1,'wALLET')", [u]),
+    ).rejects.toThrow();
+    const v = await newUser(db, `w-v-${Math.random()}`);
+    await db.query("insert into accounts (user_id,name) values ($1,'Wallet')", [v]);
+  });
+
+  it("only one wallet can be the main one", async () => {
+    const { u } = await seed();
+    await expect(
+      db.query("insert into accounts (user_id,name,is_default) values ($1,'อีกใบ',true)", [u]),
+    ).rejects.toThrow();
+  });
+
+  it("savings is a kind of wallet", async () => {
+    const u = await newUser(db, `w-sav-${Math.random()}`);
+    await db.query("insert into accounts (user_id,name,kind) values ($1,'เงินเก็บ','savings')", [
+      u,
+    ]);
+    expect((await balances(u))[0]?.kind).toBe("savings");
+  });
+
+  it("deleting a wallet keeps its entries (they fall back to the main wallet)", async () => {
+    const { u, bank } = await seed();
+    const before = (await balances(u))[0]!;
+    expect(before.tx_count).toBe(2);
+    await db.query("delete from accounts where id = $1", [bank]);
+    const left = await one<{ n: number }>(
+      db,
+      "select count(*)::int as n from transactions where user_id = $1 and account_id is null",
+      [u],
+    );
+    expect(left.n).toBe(5); // the one that never had a wallet + the four that were in the bank wallet
+    const main = (await balances(u))[0]!;
+    expect(main.tx_count).toBe(4); // 2 + the 2 confirmed ones that came back (deleted/pending never count)
+    expect(main.income).toBe("20300.00");
+    expect(main.expense).toBe("1300.00");
+  });
+});
+
 describe("top_titles (0018)", () => {
   async function seed() {
     const u = await newUser(db, `tt-${Math.random()}`);

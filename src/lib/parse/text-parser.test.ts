@@ -346,3 +346,27 @@ describe("#tags", () => {
     expect(one("กาแฟ 30").tags).toEqual([]);
   });
 });
+
+describe("@wallet", () => {
+  it("takes the wallet word out of the title", () => {
+    const e = one("กาแฟ 45 @บัตร");
+    expect(e.walletHint).toBe("บัตร");
+    expect(e.title).toBe("กาแฟ");
+    expect(e.amountSatang).toBe(4500);
+  });
+
+  it("works at the start and together with a tag", () => {
+    const e = one("@ออมทรัพย์ เงินเดือน 20000 #งาน");
+    expect(e.walletHint).toBe("ออมทรัพย์");
+    expect(e.tags).toEqual(["งาน"]);
+    expect(e.title).toBe("เงินเดือน");
+  });
+
+  it("an entry without @ has no wallet", () => {
+    expect(one("กาแฟ 30").walletHint).toBeNull();
+  });
+
+  it("an email address is not a wallet", () => {
+    expect(one("ค่าเมล a@b 30").walletHint).toBeNull();
+  });
+});

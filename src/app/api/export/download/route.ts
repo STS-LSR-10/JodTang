@@ -9,6 +9,8 @@ import { can } from "@/lib/plan";
 import { getPlanInfo } from "@/lib/plan-server";
 import { getAdminClient } from "@/lib/supabase/admin";
 import { applyTxFilters } from "@/lib/tx-query";
+import { DEFAULT_WALLET_NAME } from "@/lib/wallet";
+import { listWallets } from "@/lib/wallet-repo";
 import { log } from "@/lib/log";
 
 export const runtime = "nodejs";
@@ -32,6 +34,8 @@ export async function GET(request: Request): Promise<Response> {
     }
 
     const db = getAdminClient();
+    const wallets = await listWallets(db, claims.userId);
+    const defaultWallet = wallets.find((w) => w.isDefault);
     const query = applyTxFilters(
       db
         .from("transactions")
@@ -39,6 +43,7 @@ export async function GET(request: Request): Promise<Response> {
         .eq("user_id", claims.userId)
         .eq("status", "confirmed"),
       claims.filters,
+      { defaultAccountId: defaultWallet?.id ?? null },
     )
       .order("occurred_at", { ascending: true })
       .limit(MAX_EXPORT_ROWS);
@@ -55,6 +60,8 @@ export async function GET(request: Request): Promise<Response> {
         categoryName: tx.categoryName,
         amountSatang: tx.amountSatang,
         source: tx.source,
+        // an entry with no wallet is in the main wallet
+        walletName: tx.accountName ?? defaultWallet?.name ?? DEFAULT_WALLET_NAME,
       };
     });
 

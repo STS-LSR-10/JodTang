@@ -11,6 +11,8 @@ export interface ParsedEntry {
   occurredAt: Date;
   /** Lower-case #tags found in the text (at most MAX_TAGS), already removed from the title. */
   tags: string[];
+  /** The word after "@" ("@บัตร"), already removed from the title; resolved to a wallet later. */
+  walletHint: string | null;
   /** True when the text named a past day (เมื่อวาน, 12/10 …); "วันนี้" or no date is false. */
   backdated: boolean;
   /** 0..1. Below CONFIRM_THRESHOLD the bot should ask before saving as confirmed. */
@@ -188,12 +190,25 @@ export function extractTags(line: string): { text: string; tags: string[] } {
   return { text: text.replace(/\s+/g, " ").trim(), tags };
 }
 
+const WALLET_RE = /(^|\s)@([^\s@#]{1,30})(?=\s|$)/gu;
+
+/** Pull "@wallet" words out of a line: the first is the hint, the rest are removed and ignored. */
+export function extractWalletHint(line: string): { text: string; hint: string | null } {
+  let hint: string | null = null;
+  const text = line.replace(WALLET_RE, (_m, lead: string, word: string) => {
+    hint ??= word;
+    return lead;
+  });
+  return { text: text.replace(/\s+/g, " ").trim(), hint };
+}
+
 function parseLine(segment: string, now: Date): ParsedEntry | null {
   const normalized = normalizeThaiDigits(segment).trim();
   if (!normalized) return null;
   if (URL_RE.test(normalized)) return null;
 
-  const { text: untagged, tags } = extractTags(normalized);
+  const { text: unwalleted, hint: walletHint } = extractWalletHint(normalized);
+  const { text: untagged, tags } = extractTags(unwalleted);
   const { text, date } = extractDate(untagged, now);
   const amount = findAmount(text);
   if (!amount) return null;
@@ -233,6 +248,7 @@ function parseLine(segment: string, now: Date): ParsedEntry | null {
     type,
     title: title || defaultTitle,
     tags,
+    walletHint,
     amountSatang: amount.satang,
     occurredAt: date ?? now,
     backdated: date !== null && date !== now,

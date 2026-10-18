@@ -274,6 +274,8 @@ export async function insertTransaction(
     source?: "text" | "manual" | "slip" | "voice";
     slipId?: string;
     tags?: string[];
+    /** Wallet to record in (omitted = the main wallet). */
+    accountId?: string | null;
   },
 ): Promise<TxRow> {
   const { data, error } = await db
@@ -291,6 +293,8 @@ export async function insertTransaction(
       slip_id: input.slipId ?? null,
       // only sent when there are tags, so plain entries keep working before migration 0014 is run
       ...(input.tags && input.tags.length > 0 ? { tags: input.tags } : {}),
+      // likewise only sent when a wallet was picked (works before migration 0019)
+      ...(input.accountId ? { account_id: input.accountId } : {}),
     })
     .select(TX_COLUMNS)
     .single();

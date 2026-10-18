@@ -10,6 +10,8 @@ export interface ExportRow {
   /** Integer satang, always > 0. */
   amountSatang: number;
   source: string;
+  /** The wallet's name (the main wallet's for entries that never had one). */
+  walletName?: string | null;
 }
 
 export const TYPE_LABEL: Record<TxType, string> = { expense: "รายจ่าย", income: "รายรับ" };
@@ -45,6 +47,7 @@ export const HEADERS = [
   "หมวด",
   "จำนวนเงิน (บาท)",
   "ที่มา",
+  "กระเป๋า",
 ] as const;
 
 /** One row as display strings, in HEADERS order. */
@@ -57,5 +60,6 @@ export function rowCells(row: ExportRow): string[] {
     row.categoryName ?? "ไม่ระบุหมวด",
     satangToString(row.amountSatang),
     sourceLabel(row.source),
+    row.walletName ?? "",
   ];
 }

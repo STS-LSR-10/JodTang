@@ -28,6 +28,10 @@ export interface ConfirmCardInput {
   cycleTotalSatang: number | null;
   /** e.g. "รายเดือน (วันที่ 1)"; shown under the category total. */
   cycleLabel?: string;
+  /** Wallet the entry went to, e.g. "💳 บัตร KTC" (shown only when there is more than one wallet). */
+  walletName?: string | null;
+  /** Offer the "ย้ายกระเป๋า" button (the user has two or more wallets). */
+  canMoveWallet?: boolean;
   /** Public PNG of the logo for the card header (omitted when the app URL is unknown). */
   logoUrl?: string;
 }
@@ -77,12 +81,28 @@ export function buildConfirmMessage(input: ConfirmCardInput): LineMessage {
   const category = input.categoryName ?? "ไม่ระบุหมวด";
   const tagsText = input.tags?.length ? ` ${input.tags.map((t) => `#${t}`).join(" ")}` : "";
 
+  const walletText = input.walletName ? ` · ${input.walletName}` : "";
+  const moveItem = input.canMoveWallet
+    ? [
+        {
+          type: "action",
+          action: {
+            type: "postback",
+            label: "💳 ย้ายกระเป๋า",
+            data: `a=wl&id=${input.txId}`,
+            displayText: "ย้ายกระเป๋า",
+          },
+        },
+      ]
+    : [];
+
   if (input.style === "short") {
     return {
       type: "text",
-      text: `จดแล้ว: ${input.title} ${amountText} · ${category}${tagsText}`,
+      text: `จดแล้ว: ${input.title} ${amountText} · ${category}${tagsText}${walletText}`,
       quickReply: {
         items: [
+          ...moveItem,
           {
             type: "action",
             action: {
@@ -212,6 +232,9 @@ export function buildConfirmMessage(input: ConfirmCardInput): LineMessage {
       color: COLOR.muted,
       margin: "md",
     },
+    ...(input.walletName
+      ? [{ type: "text", text: input.walletName, size: "sm", color: COLOR.muted, margin: "sm" }]
+      : []),
     ...(input.tags && input.tags.length > 0
       ? [
           {
@@ -343,6 +366,19 @@ export function buildConfirmMessage(input: ConfirmCardInput): LineMessage {
       displayText: "แนบรูป",
     },
   });
+  if (input.canMoveWallet) {
+    body.push({
+      type: "button",
+      style: "link",
+      height: "sm",
+      action: {
+        type: "postback",
+        label: "💳 ย้ายกระเป๋า",
+        data: `a=wl&id=${input.txId}`,
+        displayText: "ย้ายกระเป๋า",
+      },
+    });
+  }
 
   return {
     type: "flex",

@@ -17,6 +17,7 @@ import { Sheet } from "@/components/liff/sheet";
 import { EmptyState, ErrorState, LoadingBlock, PageHeader } from "@/components/liff/states";
 import { TxItem } from "@/components/liff/tx-item";
 import { useApi, useLiff } from "@/components/liff/liff-provider";
+import { WALLET_KIND_EMOJI, type WalletKind } from "@/lib/wallet";
 import type { TxDto } from "@/lib/dto";
 import { formatBaht } from "@/lib/money";
 import { satangToString } from "@/lib/money";
@@ -26,6 +27,10 @@ import { MAX_BULK, MAX_NOTE, MAX_TITLE } from "@/lib/tx-edit";
 import { cn } from "@/lib/utils";
 
 type TypeFilter = "all" | "expense" | "income";
+
+interface WalletsLite {
+  items: { id: string; name: string; kind: WalletKind; isDefault: boolean }[];
+}
 
 interface ListResponse {
   items: TxDto[];
@@ -89,13 +94,16 @@ function TransactionsView() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [moveOpen, setMoveOpen] = useState(false);
   const [bulkBusy, setBulkBusy] = useState(false);
+  const [walletId, setWalletId] = useState("");
+  const wallets = useApi<WalletsLite>("/api/wallets");
 
   const path = useMemo(() => {
     const p = new URLSearchParams({ limit: String(PAGE_SIZE) });
     if (type !== "all") p.set("type", type);
     if (q) p.set("q", q);
+    if (walletId) p.set("accountId", walletId);
     return `/api/transactions?${p.toString()}`;
-  }, [type, q]);
+  }, [type, q, walletId]);
 
   const list = useApi<ListResponse>(path);
 
@@ -254,6 +262,21 @@ function TransactionsView() {
             </button>
           ))}
         </div>
+        {(wallets.data?.items.length ?? 0) > 1 ? (
+          <select
+            value={walletId}
+            onChange={(e) => setWalletId(e.target.value)}
+            aria-label="กระเป๋า"
+            className="h-10 w-full rounded-2xl border border-border bg-surface px-3 text-sm"
+          >
+            <option value="">ทุกกระเป๋า</option>
+            {wallets.data?.items.map((w) => (
+              <option key={w.id} value={w.id}>
+                {WALLET_KIND_EMOJI[w.kind]} {w.name}
+              </option>
+            ))}
+          </select>
+        ) : null}
 
         <input
           type="search"
@@ -839,6 +862,9 @@ function EditSheet({
 }) {
   const { api } = useLiff();
   const categories = useApi<CategoriesResponse>("/api/categories");
+  const wallets = useApi<WalletsLite>("/api/wallets");
+  const walletItems = wallets.data?.items ?? [];
+  const mainWalletId = walletItems.find((w) => w.isDefault)?.id ?? "";
   const initial = useMemo(
     () => ({
       type: tx.type,
@@ -856,9 +882,13 @@ function EditSheet({
   const [categoryId, setCategoryId] = useState(initial.categoryId);
   const [when, setWhen] = useState(initial.when);
   const [note, setNote] = useState(initial.note);
+  const [pickedWallet, setPickedWallet] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // An entry without a wallet belongs to the main one.
+  const currentWallet = tx.accountId ?? mainWalletId;
+  const walletValue = pickedWallet ?? currentWallet;
   const typeChanged = type !== initial.type;
   const options = (categories.data?.items ?? []).filter((c) => c.type === type);
 
@@ -882,6 +912,7 @@ function EditSheet({
     }
     if (when !== initial.when) body.occurredAt = at.toISOString();
     if (note.trim() !== initial.note.trim()) body.note = note.trim() || null;
+    if (pickedWallet && pickedWallet !== currentWallet) body.accountId = pickedWallet;
     if (Object.keys(body).length === 0) return onClose();
 
     setSaving(true);
@@ -959,6 +990,20 @@ function EditSheet({
           aria-label="วันและเวลา"
           className={field}
         />
+        {walletItems.length > 1 ? (
+          <select
+            value={walletValue}
+            onChange={(e) => setPickedWallet(e.target.value)}
+            aria-label="กระเป๋า"
+            className={field}
+          >
+            {walletItems.map((w) => (
+              <option key={w.id} value={w.id}>
+                {WALLET_KIND_EMOJI[w.kind]} {w.name}
+              </option>
+            ))}
+          </select>
+        ) : null}
         <input
           value={note}
           onChange={(e) => setNote(e.target.value)}

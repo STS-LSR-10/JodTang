@@ -13,6 +13,8 @@ export interface EditInput {
   /** ISO 8601 with an offset. */
   occurredAt?: string;
   note?: string | null;
+  /** The wallet (already checked to be the person's own); null = the main wallet. */
+  accountId?: string | null;
 }
 
 export interface ExistingTx {
@@ -75,6 +77,8 @@ export function planEdit(input: {
     if (note.length > MAX_NOTE) return fail(`โน้ตยาวเกิน ${MAX_NOTE} ตัวอักษร`);
     patch.note = note === "" ? null : note;
   }
+
+  if (edit.accountId !== undefined) patch.account_id = edit.accountId;
 
   if (edit.occurredAt !== undefined) {
     const at = new Date(edit.occurredAt);

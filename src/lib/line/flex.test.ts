@@ -383,6 +383,8 @@ describe("search result card", () => {
     hasSlip: false,
     note: null,
     tags: [],
+    accountId: null,
+    accountName: null,
   });
   const totals = { incomeSatang: 10_000, expenseSatang: 10_550, count: 3 };
 

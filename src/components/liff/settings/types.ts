@@ -12,7 +12,7 @@ export interface Me {
   redeem: { pointsPerDay: number; days: number; cost: number };
   referralCode: string;
   referred: boolean;
-  limits: { recurringRules: number };
+  limits: { recurringRules: number; wallets: number };
   payments: { available: boolean; history: unknown[] };
 }
 

@@ -16,6 +16,7 @@ import { insertTransaction, loadCategories } from "@/lib/repo";
 import { LIMITS, limitOr429 } from "@/lib/rate-limit";
 import { getAdminClient } from "@/lib/supabase/admin";
 import { applyTxFilters, txFilterSchema } from "@/lib/tx-query";
+import { listWallets } from "@/lib/wallet-repo";
 import { log } from "@/lib/log";
 
 export const runtime = "nodejs";
@@ -40,6 +41,9 @@ export async function GET(request: Request): Promise<Response> {
     if (!parsed.success) return apiError("ตัวกรองไม่ถูกต้อง", 400);
     const f = parsed.data;
 
+    const defaultAccountId = f.accountId
+      ? ((await listWallets(getAdminClient(), auth.userId)).find((w) => w.isDefault)?.id ?? null)
+      : null;
     const query = applyTxFilters(
       getAdminClient()
         .from("transactions")
@@ -47,6 +51,7 @@ export async function GET(request: Request): Promise<Response> {
         .eq("user_id", auth.userId)
         .eq("status", "confirmed"),
       f,
+      { defaultAccountId },
     )
       .order("occurred_at", { ascending: false })
       .range(f.offset, f.offset + f.limit); // one extra row tells us if there is a next page

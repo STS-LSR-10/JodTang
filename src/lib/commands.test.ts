@@ -165,3 +165,13 @@ describe("parseCommand: insight", () => {
     expect(parseCommand("วิเคราะห์ตลาด 500")).toBeNull();
   });
 });
+
+describe("parseCommand: wallets", () => {
+  it.each(["กระเป๋า", "กระเป๋าเงิน", "ยอดเงิน", "Wallet", "  wallets  "])("%s", (input) => {
+    expect(parseCommand(input)).toEqual({ kind: "wallets" });
+  });
+
+  it("is not taken for an entry that merely starts with the word", () => {
+    expect(parseCommand("กระเป๋า 500")).toBeNull();
+  });
+});

@@ -12,6 +12,8 @@ import { RecurringCard } from "@/components/liff/settings/recurring-card";
 import { cardClass, type Me, type Settings } from "@/components/liff/settings/types";
 import { ErrorState, LoadingBlock, PageHeader } from "@/components/liff/states";
 import { cn } from "@/lib/utils";
+import { Wallet } from "lucide-react";
+import Link from "next/link";
 
 const CONFIRM_OPTIONS: { value: Settings["confirm_style"]; label: string; hint: string }[] = [
   { value: "full", label: "เต็ม", hint: "การ์ดพร้อมปุ่มแก้ไข/ลบ" },
@@ -157,6 +159,19 @@ export default function SettingsPage() {
 
             <ReminderCard me={me.data} settings={current} onSaved={setOverride} />
             <SummaryCard me={me.data} settings={current} onSaved={setOverride} />
+            <Link
+              href="/wallets"
+              className={`${cardClass} flex items-center gap-3 !space-y-0`}
+              aria-label="กระเป๋าเงิน"
+            >
+              <Wallet className="h-5 w-5 text-primary" aria-hidden />
+              <span className="flex-1">
+                <span className="block font-semibold">กระเป๋าเงิน</span>
+                <span className="block text-xs text-muted">
+                  แยกเงินสด บัญชี บัตร เงินเก็บ · มีได้ {me.data.limits.wallets} ใบ
+                </span>
+              </span>
+            </Link>
             <RecurringCard me={me.data} />
             <MemoryCard me={me.data} />
             <ReferralCard me={me.data} onChanged={me.reload} />

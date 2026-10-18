@@ -13,6 +13,21 @@ export const PLAN_LABEL: Record<Plan, string> = {
   ultimate: "Ultimate",
 };
 
+/** How many wallets a person can have, by plan. Null means no plan limit (the guard below still applies). */
+export const WALLET_LIMIT: Record<Plan, number | null> = {
+  free: 1,
+  plus: 5,
+  ultimate: null,
+};
+
+/** A guard against runaway creation for plans without a limit. */
+export const WALLET_HARD_CAP = 50;
+
+/** The number of wallets allowed on `plan`. */
+export function walletCapacity(plan: Plan): number {
+  return WALLET_LIMIT[plan] ?? WALLET_HARD_CAP;
+}
+
 /** Photos a person can attach to entries per month (a cost guard; same for every paid plan). */
 export const PHOTOS_PER_MONTH = 100;
 

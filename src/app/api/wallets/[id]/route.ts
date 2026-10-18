@@ -1,0 +1,77 @@
+import { z } from "zod";
+import { apiError, guard, json } from "@/lib/api";
+import { requireUser } from "@/lib/auth/require-user";
+import { LIMITS, limitOr429 } from "@/lib/rate-limit";
+import { getAdminClient } from "@/lib/supabase/admin";
+import { MAX_WALLET_NAME, parseOpeningBalance, WALLET_KINDS } from "@/lib/wallet";
+import { deleteWallet, ensureWallets, updateWallet } from "@/lib/wallet-repo";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
+type Params = { params: Promise<{ id: string }> };
+
+const patchSchema = z
+  .object({
+    name: z.string().trim().min(1).max(MAX_WALLET_NAME),
+    kind: z.enum(WALLET_KINDS),
+    openingBalance: z.union([z.string(), z.number()]).nullable(),
+    isDefault: z.literal(true),
+  })
+  .partial()
+  .refine((v) => Object.keys(v).length > 0, "empty");
+
+/** PATCH /api/wallets/:id — rename, change the kind or the opening balance, or make it the main wallet. */
+export async function PATCH(request: Request, { params }: Params): Promise<Response> {
+  return guard(async () => {
+    const auth = await requireUser(request);
+    if (auth instanceof Response) return auth;
+    const { id } = await params;
+    if (!z.string().uuid().safeParse(id).success) return apiError("ไม่พบกระเป๋านี้", 404);
+
+    const db = getAdminClient();
+    const limited = await limitOr429(db, "write", auth.userId, LIMITS.write);
+    if (limited) return limited;
+
+    const parsed = patchSchema.safeParse(await request.json().catch(() => null));
+    if (!parsed.success) return apiError("ข้อมูลไม่ถูกต้อง", 400);
+
+    const wallets = await ensureWallets(db, auth.userId);
+    if (!wallets.some((w) => w.id === id)) return apiError("ไม่พบกระเป๋านี้", 404);
+
+    let openingSatang: number | undefined;
+    if (parsed.data.openingBalance !== undefined) {
+      const opening = parseOpeningBalance(parsed.data.openingBalance);
+      if (opening === null) return apiError("ยอดตั้งต้นไม่ถูกต้อง", 400);
+      openingSatang = opening;
+    }
+    const result = await updateWallet(db, auth.userId, id, {
+      name: parsed.data.name,
+      kind: parsed.data.kind,
+      openingSatang,
+      makeDefault: parsed.data.isDefault,
+    });
+    if (result === "duplicate") return apiError("มีกระเป๋าชื่อนี้อยู่แล้ว", 409);
+    return json({ ok: true });
+  });
+}
+
+/** DELETE /api/wallets/:id — not the main wallet; its entries fall back to the main wallet. */
+export async function DELETE(request: Request, { params }: Params): Promise<Response> {
+  return guard(async () => {
+    const auth = await requireUser(request);
+    if (auth instanceof Response) return auth;
+    const { id } = await params;
+    if (!z.string().uuid().safeParse(id).success) return apiError("ไม่พบกระเป๋านี้", 404);
+
+    const db = getAdminClient();
+    const wallets = await ensureWallets(db, auth.userId);
+    const wallet = wallets.find((w) => w.id === id);
+    if (!wallet) return apiError("ไม่พบกระเป๋านี้", 404);
+    if (wallet.isDefault) {
+      return apiError("ลบกระเป๋าหลักไม่ได้ ตั้งกระเป๋าอื่นเป็นกระเป๋าหลักก่อนนะ", 400);
+    }
+    await deleteWallet(db, auth.userId, id);
+    return json({ ok: true, movedEntries: wallet.entryCount });
+  });
+}

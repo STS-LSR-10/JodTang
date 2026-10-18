@@ -31,6 +31,7 @@ export const HELP_TEXT = [
   "• สรุปวันนี้ · สรุปเดือนนี้ · สรุปหมวด · ล่าสุด",
   "• สรุปปี · เทียบเดือน (Professional ขึ้นไป) · พยากรณ์ · วิเคราะห์ (Ultimate)",
   "• สรุป 1/10 ถึง 15/10 · ค้นหา กาแฟ (Professional ขึ้นไป)",
+  "• กระเป๋า (ดูยอดแต่ละกระเป๋า) · จดลงกระเป๋า: กาแฟ 45 @บัตร",
   "• ลบล่าสุด · แก้ล่าสุด 45",
   "• ตังสะสม · รหัสชวน · ใช้รหัส ABCD1234",
 ].join("\n");
@@ -197,3 +198,11 @@ export const VOICE_CANCELLED_TEXT = "ยกเลิกแล้ว ไม่ไ
 export const voiceHeardText = (heard: string) => `ได้ยินว่า: "${heard}"`;
 export const voiceNoAmountText = (heard: string) =>
   `ได้ยินว่า "${heard}" แต่ไม่เจอจำนวนเงิน ลองพูดใหม่ เช่น "กาแฟ สามสิบบาท" หรือพิมพ์จดแทนได้นะ`;
+
+export const WALLET_NOT_FOUND_TEXT = (hint: string, names: string[]) =>
+  `ไม่พบกระเป๋า "${hint}" เลยยังไม่ได้จดรายการนี้\nกระเป๋าที่มี: ${names.join(" · ")}\nพิมพ์ชื่อใหม่อีกครั้ง หรือไม่ใส่ @ เพื่อจดลงกระเป๋าหลักนะ`;
+export const WALLET_AMBIGUOUS_TEXT = (hint: string, names: string[]) =>
+  `"${hint}" ตรงกับหลายกระเป๋า (${names.join(" · ")}) เลยยังไม่ได้จดรายการนี้\nพิมพ์ชื่อให้ชัดขึ้นอีกนิดนะ`;
+export const WALLET_MOVED_TEXT = (title: string, wallet: string) =>
+  `ย้าย "${title}" ไปที่ ${wallet} แล้ว`;
+export const WALLET_MOVE_ASK_TEXT = "ย้ายรายการนี้ไปกระเป๋าไหนดี?";

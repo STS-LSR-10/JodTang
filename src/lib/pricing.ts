@@ -53,6 +53,10 @@ export const FEATURE_GROUPS: FeatureGroup[] = [
       { label: "จดหลายรายการในข้อความเดียว", cells: [false, true, true] },
       { label: "ติดแท็ก #Tag", cells: [false, true, true] },
       { label: "แนบรูปประกอบรายการ", cells: [false, true, true] },
+      {
+        label: "กระเป๋าเงิน (เงินสด/บัญชี/บัตร/เงินเก็บ)",
+        cells: ["1 ใบ", "สูงสุด 5 ใบ", "ไม่จำกัด"],
+      },
       { label: "แยกรายการจากใบเสร็จ", cells: [false, false, true] },
       { label: "พิมพ์ประโยคยาวๆ ให้ AI ช่วยอ่าน", cells: [false, false, true] },
       { label: "จดด้วยเสียง", cells: [false, false, true] },
@@ -87,7 +91,7 @@ export const FEATURE_GROUPS: FeatureGroup[] = [
   {
     title: "เร็วๆ นี้",
     rows: [
-      { label: "จดในกลุ่ม / หลายบัญชี", cells: [false, false, true], soon: true },
+      { label: "จดในกลุ่ม", cells: [false, false, true], soon: true },
       { label: "จดด้วย PDF", cells: [false, false, true], soon: true },
       { label: "แนบสลิป ใบเสร็จ หลักฐาน", cells: [false, false, true], soon: true },
       { label: "รายการอัตโนมัติ 100 รายการ", cells: [false, false, true], soon: true },
@@ -108,7 +112,7 @@ export const PLAN_HIGHLIGHTS: Record<Plan, string[]> = {
     "ทุกอย่างใน Professional",
     "อ่านสลิปไม่จำกัด + แยกรายการจากใบเสร็จ",
     "พิมพ์ประโยคยาวๆ ให้ AI ช่วยอ่าน + จดด้วยเสียง",
-    "จดในกลุ่ม / หลายบัญชี (เร็วๆ นี้)",
+    "หลายกระเป๋าไม่จำกัด · จดในกลุ่ม (เร็วๆ นี้)",
     "จดด้วย PDF + แนบหลักฐาน (เร็วๆ นี้)",
   ],
 };
