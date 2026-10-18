@@ -181,3 +181,94 @@ test.describe("wallets page (360px)", () => {
     await expect(page.getByText("เลือกสองกระเป๋าที่ต่างกันนะ")).toBeVisible();
   });
 });
+
+test.describe("credit-card wallets (360px)", () => {
+  const CARD = wallet({
+    id: "w3",
+    name: "KTC",
+    kind: "card",
+    isDefault: false,
+    openingSatang: 0,
+    incomeSatang: 0,
+    expenseSatang: 4_500_000,
+    balanceSatang: -4_500_000,
+    creditLimitSatang: 5_000_000,
+    statementDay: 25,
+    dueDay: 10,
+    card: {
+      owedSatang: 4_500_000,
+      limitSatang: 5_000_000,
+      availableSatang: 500_000,
+      usedPercent: 90,
+      cycleSpentSatang: 120_000,
+      previousCycleSpentSatang: 80_000,
+      nextStatement: "2026-10-24T17:00:00Z",
+      nextDue: "2026-11-09T17:00:00Z",
+    },
+  });
+  const LIST = {
+    items: [wallet({}), CARD],
+    totalSatang: -4_370_000,
+    limit: 5,
+    canAdd: true,
+  };
+
+  test("shows the limit left, a usage bar and both statement cycles", async ({ page }) => {
+    await mockApi(page, {
+      "GET /api/me": ME_PLUS,
+      "GET /api/wallets": LIST,
+      "GET /api/transfers": { items: [] },
+    });
+    await page.goto("/wallets");
+
+    await expect(page.getByText("วงเงินคงเหลือ")).toBeVisible();
+    await expect(page.getByRole("progressbar", { name: "การใช้วงเงิน" })).toHaveAttribute(
+      "aria-valuenow",
+      "90",
+    );
+    await expect(page.getByText("ยอดใช้รอบที่แล้ว")).toBeVisible();
+    await expect(page.getByText("ครบกำหนดชำระ")).toBeVisible();
+    await expectNoHorizontalScroll(page);
+    await expectNoSeriousA11yViolations(page);
+  });
+
+  test("Professional: saving a card sends the limit and the two days", async ({ page }) => {
+    let body: unknown = null;
+    await mockApi(page, {
+      "GET /api/me": ME_PLUS,
+      "GET /api/wallets": LIST,
+      "GET /api/transfers": { items: [] },
+      "PATCH /api/wallets/w3": async (route: Route) => {
+        body = route.request().postDataJSON();
+        return { ok: true };
+      },
+    });
+    await page.goto("/wallets");
+
+    await page.getByRole("button", { name: "แก้ไข KTC" }).click();
+    await page.getByLabel("วงเงิน", { exact: true }).fill("60000");
+    await page.getByLabel("วันตัดรอบบิล").selectOption("20");
+    await page.getByRole("button", { name: "บันทึก" }).click();
+
+    await expect(page.getByRole("status")).toContainText("บันทึกแล้ว");
+    expect(body).toMatchObject({
+      kind: "card",
+      creditLimit: "60000",
+      statementDay: 20,
+      dueDay: 10,
+    });
+  });
+
+  test("Free: the card fields are replaced by an upgrade note", async ({ page }) => {
+    await mockApi(page, {
+      "GET /api/me": ME_FREE,
+      "GET /api/wallets": { ...LIST, items: [wallet({}), { ...CARD, card: null }] },
+      "GET /api/transfers": { items: [] },
+    });
+    await page.goto("/wallets");
+
+    await page.getByRole("button", { name: "แก้ไข KTC" }).click();
+    await expect(page.getByLabel("วงเงิน", { exact: true })).toHaveCount(0);
+    await expect(page.getByText("สำหรับแผน Professional").last()).toBeVisible();
+  });
+});

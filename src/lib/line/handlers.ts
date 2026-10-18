@@ -74,6 +74,9 @@ import { recordSmartEntries } from "./smart-entries";
 import { buildForecastCard } from "./forecast-flex";
 import { buildInsightCard } from "./insight-flex";
 import { buildTransferDone, buildWalletChooser, buildWalletsCard } from "./wallet-flex";
+import { buildCardsCard } from "./card-flex";
+import { limitAlert } from "@/lib/card";
+import { loadCardStatuses } from "@/lib/card-repo";
 import { createTransfer, deleteTransfer } from "@/lib/transfer-repo";
 import { ensureWallets, listWallets, setEntryWallet } from "@/lib/wallet-repo";
 import { balanceOf, resolveWallet, walletLabel } from "@/lib/wallet";
@@ -153,6 +156,9 @@ import {
   WALLET_MOVE_ASK_TEXT,
   WALLET_MOVED_TEXT,
   WALLET_NOT_FOUND_TEXT,
+  CARD_LOCKED_TEXT,
+  CARD_NONE_TEXT,
+  CARD_NO_DETAIL_TEXT,
   TRANSFER_CANCELLED_TEXT,
   TRANSFER_LOCKED_TEXT,
   TRANSFER_SAME_TEXT,
@@ -311,6 +317,10 @@ async function handleText(input: string, user: UserRow, deps: HandlerDeps): Prom
     // "โอนค่าเช่า 5000 ไป ..." that names no wallet is an ordinary entry, so it falls through
     const done = await runTransfer(command, user, deps);
     if (done) return done;
+  } else if (command?.kind === "cards") {
+    // "บัตร จอดรถ" that names no card of theirs is not a command
+    const done = await runCards(command, user, deps);
+    if (done) return done;
   } else if (command) {
     return runCommand(command, user, deps);
   }
@@ -359,6 +369,63 @@ async function handleText(input: string, user: UserRow, deps: HandlerDeps): Prom
     }
   }
   return saveEntries(entries, user, deps, walletIds);
+}
+
+/** "บัตร": the card summary. null when a typed name matches none of their cards. */
+async function runCards(
+  command: Extract<Command, { kind: "cards" }>,
+  user: UserRow,
+  deps: HandlerDeps,
+): Promise<LineMessage[] | null> {
+  const wallets = await ensureWallets(deps.db, user.id);
+  let cards = wallets.filter((w) => w.kind === "card");
+  if (command.name) {
+    const found = resolveWallet(command.name, cards);
+    if (!found.ok) return null;
+    cards = [found.wallet];
+  }
+  if (!can(effectivePlan(user.plan, user.plan_expires_at, deps.now()), "creditCard")) {
+    return [text(CARD_LOCKED_TEXT)];
+  }
+  if (cards.length === 0) return [text(CARD_NONE_TEXT)];
+  const statuses = await loadCardStatuses(deps.db, user.id, cards, deps.now());
+  const shown = cards.flatMap((wallet) => {
+    const status = statuses.get(wallet.id);
+    return status ? [{ wallet, status }] : [];
+  });
+  if (shown.length === 0) return [text(CARD_NO_DETAIL_TEXT)];
+  return [buildCardsCard({ cards: shown, manageUrl: pageUrl("/wallets") })];
+}
+
+/**
+ * 80% / 100% of a card's limit: after expenses were saved to cards, warn when the amount owed
+ * crossed a line. Entries to the same card in one message are added up first.
+ */
+async function cardLimitAlerts(
+  deps: HandlerDeps,
+  user: UserRow,
+  spent: { walletId: string | null; amountSatang: number }[],
+): Promise<string[]> {
+  if (!can(effectivePlan(user.plan, user.plan_expires_at, deps.now()), "creditCard")) return [];
+  try {
+    const wallets = await listWallets(deps.db, user.id);
+    const main = wallets.find((w) => w.isDefault);
+    const totals = new Map<string, number>();
+    for (const s of spent) {
+      const id = s.walletId ?? main?.id;
+      if (id) totals.set(id, (totals.get(id) ?? 0) + s.amountSatang);
+    }
+    const out: string[] = [];
+    for (const [id, amount] of totals) {
+      const wallet = wallets.find((w) => w.id === id);
+      const alert = wallet ? limitAlert(wallet, amount) : null;
+      if (alert) out.push(alert);
+    }
+    return out;
+  } catch (error) {
+    log.error("card_alert_failed", error);
+    return [];
+  }
 }
 
 /** "โอน 500 เงินสด>KTC": null when neither name is a wallet of theirs (then it is not a transfer). */
@@ -620,6 +687,15 @@ async function saveEntries(
   for (const c of confirmed) {
     alerts.push(...(await safeAlerts(deps, user.id, c.tx, c.categoryId)));
   }
+  alerts.push(
+    ...(await cardLimitAlerts(
+      deps,
+      user,
+      confirmed
+        .filter((c) => c.entry.type === "expense")
+        .map((c) => ({ walletId: c.walletId, amountSatang: c.entry.amountSatang })),
+    )),
+  );
   for (const a of alerts) messages.push(text(a));
   if (confirmed.length > 0) messages.push(...(await awardAndNotify(deps, user.id)));
   return messages;
@@ -938,6 +1014,9 @@ async function runCommand(
         }),
       ];
     }
+
+    case "cards": // handled in handleText; only reached by a direct call
+      return [text(CARD_NONE_TEXT)];
 
     case "transfer": // handled in handleText; only reached by a direct call
       return [text(TRANSFER_USAGE_TEXT)];

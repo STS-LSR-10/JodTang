@@ -35,6 +35,10 @@ export interface Wallet {
   transferInSatang: number;
   transferOutSatang: number;
   entryCount: number;
+  /** Credit-card wallets: the limit and the two days of the month (all optional). */
+  creditLimitSatang: number | null;
+  statementDay: number | null;
+  dueDay: number | null;
 }
 
 /** Opening balance + income - expense + transfers in - transfers out, in satang. */
@@ -67,6 +71,9 @@ export function walletToDto(w: Wallet) {
     transferOutSatang: w.transferOutSatang,
     balanceSatang: balanceOf(w),
     entryCount: w.entryCount,
+    creditLimitSatang: w.creditLimitSatang,
+    statementDay: w.statementDay,
+    dueDay: w.dueDay,
   };
 }
 
@@ -96,4 +103,13 @@ export function parseOpeningBalance(input: unknown): number | null {
   const text = String(input).replace(/,/g, "").trim();
   if (!/^-?\d{1,10}(\.\d{1,2})?$/.test(text)) return null;
   return toSatang(text);
+}
+
+/** A credit limit typed in baht as satang: null when empty, undefined when invalid or not above zero. */
+export function parseCreditLimit(input: unknown): number | null | undefined {
+  if (input === null || input === undefined || input === "") return null;
+  const text = String(input).replace(/,/g, "").trim();
+  if (!/^\d{1,10}(\.\d{1,2})?$/.test(text)) return undefined;
+  const satang = toSatang(text);
+  return satang > 0 ? satang : undefined;
 }

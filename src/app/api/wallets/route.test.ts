@@ -37,6 +37,9 @@ const wallet = (n: number): Wallet => ({
   expenseSatang: 0,
   transferInSatang: 0,
   transferOutSatang: 0,
+  creditLimitSatang: null,
+  statementDay: null,
+  dueDay: null,
   entryCount: 0,
 });
 const wallets = (n: number) => Array.from({ length: n }, (_, i) => wallet(i + 1));
@@ -117,5 +120,53 @@ describe("GET /api/wallets", () => {
   it("canAdd is false at the limit", async () => {
     const body = await (await get()).json();
     expect(body).toMatchObject({ limit: 1, canAdd: false });
+  });
+});
+
+describe("POST /api/wallets: credit-card fields", () => {
+  it("Professional saves the limit and the two days on a card", async () => {
+    plan = "plus";
+    existing = wallets(1);
+    const res = await post({
+      name: "KTC",
+      kind: "card",
+      creditLimit: "50,000",
+      statementDay: 25,
+      dueDay: 10,
+    });
+    expect(res.status).toBe(201);
+    expect(created[0]).toMatchObject({
+      kind: "card",
+      creditLimitSatang: 5_000_000,
+      statementDay: 25,
+      dueDay: 10,
+    });
+  });
+
+  it("Free can have a card wallet but cannot set the limit or days", async () => {
+    existing = [];
+    expect((await post({ name: "KTC", kind: "card" })).status).toBe(201);
+    const res = await post({ name: "KTC2", kind: "card", creditLimit: 50000 });
+    expect(res.status).toBe(403);
+    expect(await res.json()).toMatchObject({ upgrade: true });
+    expect(created).toHaveLength(1);
+  });
+
+  it("only a card can have them", async () => {
+    plan = "plus";
+    expect((await post({ name: "ธนาคาร", kind: "bank", creditLimit: 50000 })).status).toBe(400);
+  });
+
+  it.each([
+    { creditLimit: "0" },
+    { creditLimit: "abc" },
+    { creditLimit: "-5" },
+    { statementDay: 31 },
+    { statementDay: 0 },
+    { dueDay: 1.5 },
+  ])("%j is refused", async (extra) => {
+    plan = "plus";
+    expect((await post({ name: "KTC", kind: "card", ...extra })).status).toBe(400);
+    expect(created).toHaveLength(0);
   });
 });

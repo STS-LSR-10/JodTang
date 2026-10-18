@@ -175,3 +175,18 @@ describe("parseCommand: wallets", () => {
     expect(parseCommand("กระเป๋า 500")).toBeNull();
   });
 });
+
+describe("parseCommand: cards", () => {
+  it.each(["บัตร", "บัตรเครดิต", "  บัตร  "])("%s", (input) => {
+    expect(parseCommand(input)).toEqual({ kind: "cards", name: null });
+  });
+
+  it("with a card name", () => {
+    expect(parseCommand("บัตร KTC")).toEqual({ kind: "cards", name: "ktc" });
+  });
+
+  it("an entry that starts with the word is not a command", () => {
+    expect(parseCommand("บัตร 500")).toBeNull();
+    expect(parseCommand("บัตรจอดรถ 50")).toBeNull();
+  });
+});

@@ -17,6 +17,9 @@ interface BalanceRow {
   tx_count: number | string;
   transfer_in: number | string;
   transfer_out: number | string;
+  credit_limit: number | string | null;
+  statement_day: number | null;
+  due_day: number | null;
 }
 
 /** Every wallet of the person with its totals (the main wallet first). Empty if none was made yet. */
@@ -34,6 +37,10 @@ export async function listWallets(db: SupabaseClient, userId: string): Promise<W
     transferInSatang: toSatang(r.transfer_in ?? 0),
     transferOutSatang: toSatang(r.transfer_out ?? 0),
     entryCount: Number(r.tx_count),
+    creditLimitSatang:
+      r.credit_limit === null || r.credit_limit === undefined ? null : toSatang(r.credit_limit),
+    statementDay: r.statement_day ?? null,
+    dueDay: r.due_day ?? null,
   }));
 }
 
@@ -67,11 +74,27 @@ export async function ensureWallets(db: SupabaseClient, userId: string): Promise
   return listWallets(db, userId);
 }
 
+/** Columns for the card fields that were given (so plain wallets keep working before migration 0021). */
+function cardColumns(input: WalletPatch): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  if (input.creditLimitSatang !== undefined) {
+    out.credit_limit =
+      input.creditLimitSatang === null ? null : satangToString(input.creditLimitSatang);
+  }
+  if (input.statementDay !== undefined) out.statement_day = input.statementDay;
+  if (input.dueDay !== undefined) out.due_day = input.dueDay;
+  return out;
+}
+
 export interface WalletInput {
   name: string;
   kind: WalletKind;
   openingSatang: number;
   makeDefault?: boolean;
+  /** null clears; undefined leaves as is (card wallets only) */
+  creditLimitSatang?: number | null;
+  statementDay?: number | null;
+  dueDay?: number | null;
 }
 
 /**
@@ -128,6 +151,7 @@ export async function createWallet(
       kind: input.kind,
       opening_balance: satangToString(input.openingSatang),
       is_default: input.makeDefault === true,
+      ...cardColumns(input),
     })
     .select("id")
     .single();
@@ -153,6 +177,7 @@ export async function updateWallet(
   if (patch.kind !== undefined) row.kind = patch.kind;
   if (patch.openingSatang !== undefined) row.opening_balance = satangToString(patch.openingSatang);
   if (patch.makeDefault) row.is_default = true;
+  Object.assign(row, cardColumns(patch));
   if (Object.keys(row).length === 0) return "ok";
   const { error } = await db.from("accounts").update(row).eq("id", id).eq("user_id", userId);
   if (error) {

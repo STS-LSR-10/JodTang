@@ -310,6 +310,92 @@ describe("wallets (0019)", () => {
   });
 });
 
+describe("credit cards (0021)", () => {
+  async function seed() {
+    const u = await newUser(db, `cc-${Math.random()}`);
+    const main = (
+      await one<{ id: string }>(
+        db,
+        "insert into accounts (user_id,name,kind,is_default) values ($1,'เงินสด','cash'::account_kind,true) returning id",
+        [u],
+      )
+    ).id;
+    const card = (
+      await one<{ id: string }>(
+        db,
+        "insert into accounts (user_id,name,kind,credit_limit,statement_day,due_day) values ($1,'KTC','card'::account_kind,50000,25,10) returning id",
+        [u],
+      )
+    ).id;
+    const spend = (account: string | null, amount: number, at: string, status = "confirmed") =>
+      db.query(
+        "insert into transactions (user_id,type,amount,title,account_id,status,occurred_at) values ($1,'expense',$2,'x',$3,$4,$5)",
+        [u, amount, account, status, at],
+      );
+    await spend(card, 1000, "2026-09-26T05:00:00Z"); // previous statement cycle
+    await spend(card, 300, "2026-10-05T05:00:00Z");
+    await spend(card, 200, "2026-10-06T05:00:00Z");
+    await spend(card, 999, "2026-10-07T05:00:00Z", "deleted"); // ignored
+    await spend(main, 70, "2026-10-06T05:00:00Z"); // another wallet
+    await spend(null, 5, "2026-10-06T05:00:00Z"); // main wallet
+    return { u, main, card };
+  }
+  const between = (u: string, account: string, from: string, to: string) =>
+    one<{ v: string }>(db, "select wallet_expense_between($1,$2,$3,$4)::text as v", [
+      u,
+      account,
+      from,
+      to,
+    ]).then((r) => r.v);
+
+  it("the limit and the two days come back with the balances", async () => {
+    const { u } = await seed();
+    const card = (
+      await rows<{
+        name: string;
+        credit_limit: string | null;
+        statement_day: number | null;
+        due_day: number | null;
+      }>(
+        db,
+        "select name, credit_limit::text, statement_day::int, due_day::int from wallet_balances($1) where name = 'KTC'",
+        [u],
+      )
+    )[0];
+    expect(card).toEqual({ name: "KTC", credit_limit: "50000.00", statement_day: 25, due_day: 10 });
+  });
+
+  it("adds up the spending of one wallet inside a statement cycle", async () => {
+    const { u, card, main } = await seed();
+    expect(await between(u, card, "2026-09-25T00:00:00Z", "2026-10-25T00:00:00Z")).toBe("1500.00");
+    expect(await between(u, card, "2026-10-01T00:00:00Z", "2026-10-25T00:00:00Z")).toBe("500.00");
+    // the main wallet also owns entries that never got a wallet
+    expect(await between(u, main, "2026-10-01T00:00:00Z", "2026-10-25T00:00:00Z")).toBe("75.00");
+  });
+
+  it("another person's wallet gives nothing", async () => {
+    const { card } = await seed();
+    const stranger = await newUser(db, `cc-x-${Math.random()}`);
+    expect(await between(stranger, card, "2026-01-01T00:00:00Z", "2027-01-01T00:00:00Z")).toBe("0");
+  });
+
+  it("refuses a limit of zero and a statement day outside 1-28", async () => {
+    const { u } = await seed();
+    await expect(
+      db.query(
+        "insert into accounts (user_id,name,kind,credit_limit) values ($1,'A','card'::account_kind,0)",
+        [u],
+      ),
+    ).rejects.toThrow();
+    await expect(
+      db.query(
+        "insert into accounts (user_id,name,kind,statement_day) values ($1,'B','card'::account_kind,31)",
+        [u],
+      ),
+    ).rejects.toThrow();
+  });
+});
+
 describe("transfers (0020)", () => {
   async function seed() {
     const u = await newUser(db, `tr-${Math.random()}`);

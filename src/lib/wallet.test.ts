@@ -18,6 +18,9 @@ const w = (over: Partial<Wallet>): Wallet => ({
   expenseSatang: 0,
   transferInSatang: 0,
   transferOutSatang: 0,
+  creditLimitSatang: null,
+  statementDay: null,
+  dueDay: null,
   entryCount: 0,
   ...over,
 });

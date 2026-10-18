@@ -20,10 +20,24 @@ const wallet = (over: Partial<Wallet>): Wallet => ({
   expenseSatang: 0,
   transferInSatang: 0,
   transferOutSatang: 0,
+  creditLimitSatang: null,
+  statementDay: null,
+  dueDay: null,
   entryCount: 0,
   ...over,
 });
 
+vi.mock("@/lib/card-repo", async () => {
+  const { cardStatus } = await import("@/lib/card");
+  return {
+    loadCardStatuses: async (_db: unknown, _u: string, list: Wallet[], now: Date) =>
+      new Map(
+        list
+          .filter((w) => w.kind === "card" && (w.creditLimitSatang !== null || w.statementDay))
+          .map((w) => [w.id, cardStatus(w, { cycle: 12_000, previous: 8_000 }, now)]),
+      ),
+  };
+});
 vi.mock("@/lib/transfer-repo", () => ({
   createTransfer: async (_db: unknown, _u: string, input: Record<string, unknown>) => {
     transfers.push(input);
@@ -255,5 +269,118 @@ describe("transfers between wallets", () => {
     const { deps, reply } = setup();
     await handleEvent(postback("a=tc&id=nope"), deps);
     expect(sent(reply)).toContain("ไม่พบ");
+  });
+});
+
+describe("the บัตร command", () => {
+  const withCard = () => {
+    wallets = [
+      wallet({}),
+      wallet({
+        id: "w-card",
+        name: "KTC",
+        kind: "card",
+        isDefault: false,
+        expenseSatang: 4_500_000,
+        creditLimitSatang: 5_000_000,
+        statementDay: 25,
+        dueDay: 10,
+      }),
+    ];
+  };
+
+  it("shows each card with what is owed and the limit left", async () => {
+    withCard();
+    const { deps, reply } = setup();
+    await handleEvent(text("บัตร"), deps);
+    const json = sent(reply);
+    expect(json).toContain("💳 KTC");
+    expect(json).toContain("วงเงินคงเหลือ");
+    expect(json).toContain("ยอดใช้รอบนี้");
+  });
+
+  it("a name picks that card", async () => {
+    withCard();
+    const { deps, reply } = setup();
+    await handleEvent(text("บัตร ktc"), deps);
+    expect(sent(reply)).toContain("💳 KTC");
+  });
+
+  it("Free is told it needs Professional", async () => {
+    withCard();
+    plan = "free";
+    const { deps, reply } = setup();
+    await handleEvent(text("บัตร"), deps);
+    expect(sent(reply)).toContain("Professional");
+  });
+
+  it("without a card it explains how to add one", async () => {
+    wallets = [wallet({})];
+    const { deps, reply } = setup();
+    await handleEvent(text("บัตร"), deps);
+    expect(sent(reply)).toContain("ยังไม่มีกระเป๋าบัตรเครดิต");
+  });
+
+  it("a card with no limit or day has nothing to show beyond the balance", async () => {
+    wallets = [wallet({}), wallet({ id: "w-card", name: "KTC", kind: "card", isDefault: false })];
+    const { deps, reply } = setup();
+    await handleEvent(text("บัตร"), deps);
+    expect(sent(reply)).toContain("ยังไม่ได้ตั้งวงเงิน");
+  });
+
+  it("a name that is not one of their cards falls through to an ordinary message", async () => {
+    withCard();
+    const { deps, reply } = setup();
+    await handleEvent(text("บัตร จอดรถ"), deps);
+    expect(sent(reply)).not.toContain("วงเงินคงเหลือ");
+  });
+});
+
+describe("card limit alerts after recording", () => {
+  const cardAt = (expenseSatang: number) => {
+    wallets = [
+      wallet({}),
+      wallet({
+        id: "w-card",
+        name: "KTC",
+        kind: "card",
+        isDefault: false,
+        expenseSatang,
+        creditLimitSatang: 1_000_000,
+      }),
+    ];
+  };
+  const allSent = (reply: ReturnType<typeof setup>["reply"]) =>
+    JSON.stringify(reply.mock.calls.map((c) => c[1]));
+
+  it("warns at 80% of the limit when an expense on the card crosses it", async () => {
+    cardAt(850_000); // the balance already includes the entry being recorded (฿1,000)
+    const { deps, reply } = setup();
+    await handleEvent(text("ช้อปปิ้ง 1000 @ktc"), deps);
+    expect(allSent(reply)).toContain("ใช้วงเงินไปแล้ว 80%");
+  });
+
+  it("says the card is full when it crosses 100%", async () => {
+    cardAt(1_050_000);
+    const { deps, reply } = setup();
+    await handleEvent(text("ช้อปปิ้ง 3000 @ktc"), deps);
+    expect(allSent(reply)).toContain("เต็มวงเงินแล้ว");
+  });
+
+  it("is quiet for a small expense, for income, and for a Free plan", async () => {
+    cardAt(300_000);
+    let { deps, reply } = setup();
+    await handleEvent(text("กาแฟ 45 @ktc"), deps);
+    expect(allSent(reply)).not.toContain("วงเงิน");
+
+    cardAt(850_000);
+    ({ deps, reply } = setup());
+    await handleEvent(text("+1000 คืนเงิน @ktc"), deps);
+    expect(allSent(reply)).not.toContain("วงเงิน");
+
+    plan = "free";
+    ({ deps, reply } = setup());
+    await handleEvent(text("ช้อปปิ้ง 1000 @ktc"), deps);
+    expect(allSent(reply)).not.toContain("วงเงิน");
   });
 });

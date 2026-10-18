@@ -61,7 +61,8 @@ export type Feature =
   | "forecast"
   | "insight"
   | "customCategory"
-  | "transfer";
+  | "transfer"
+  | "creditCard";
 
 /** The lowest tier that has each feature (Ultimate always includes everything Professional has). */
 const MIN_PLAN: Record<Feature, "plus" | "ultimate"> = {
@@ -88,6 +89,7 @@ const MIN_PLAN: Record<Feature, "plus" | "ultimate"> = {
   insight: "ultimate",
   customCategory: "plus",
   transfer: "plus",
+  creditCard: "plus",
 };
 
 export function isPaidPlan(plan: Plan): boolean {

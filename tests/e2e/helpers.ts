@@ -89,6 +89,7 @@ export const ME_FREE = {
     recurring: false,
     multiAccount: false,
     transfer: false,
+    creditCard: false,
     merchantMemory: false,
     dailyReminder: false,
     advancedExport: false,

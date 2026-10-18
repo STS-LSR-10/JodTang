@@ -58,6 +58,7 @@ export const FEATURE_GROUPS: FeatureGroup[] = [
         cells: ["1 ใบ", "สูงสุด 5 ใบ", "ไม่จำกัด"],
       },
       { label: "โอนระหว่างกระเป๋า", cells: [false, true, true] },
+      { label: "วงเงินและยอดตามรอบบิลบัตรเครดิต", cells: [false, true, true] },
       { label: "แยกรายการจากใบเสร็จ", cells: [false, false, true] },
       { label: "พิมพ์ประโยคยาวๆ ให้ AI ช่วยอ่าน", cells: [false, false, true] },
       { label: "จดด้วยเสียง", cells: [false, false, true] },

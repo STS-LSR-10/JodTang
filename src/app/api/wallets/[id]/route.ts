@@ -4,6 +4,7 @@ import { requireUser } from "@/lib/auth/require-user";
 import { LIMITS, limitOr429 } from "@/lib/rate-limit";
 import { getAdminClient } from "@/lib/supabase/admin";
 import { MAX_WALLET_NAME, parseOpeningBalance, WALLET_KINDS } from "@/lib/wallet";
+import { cardFieldsOr400 } from "@/lib/wallet-card-input";
 import { deleteWallet, ensureWallets, updateWallet } from "@/lib/wallet-repo";
 
 export const runtime = "nodejs";
@@ -17,6 +18,9 @@ const patchSchema = z
     kind: z.enum(WALLET_KINDS),
     openingBalance: z.union([z.string(), z.number()]).nullable(),
     isDefault: z.literal(true),
+    creditLimit: z.union([z.string(), z.number()]).nullable(),
+    statementDay: z.number().int().min(1).max(28).nullable(),
+    dueDay: z.number().int().min(1).max(28).nullable(),
   })
   .partial()
   .refine((v) => Object.keys(v).length > 0, "empty");
@@ -37,7 +41,8 @@ export async function PATCH(request: Request, { params }: Params): Promise<Respo
     if (!parsed.success) return apiError("ข้อมูลไม่ถูกต้อง", 400);
 
     const wallets = await ensureWallets(db, auth.userId);
-    if (!wallets.some((w) => w.id === id)) return apiError("ไม่พบกระเป๋านี้", 404);
+    const current = wallets.find((w) => w.id === id);
+    if (!current) return apiError("ไม่พบกระเป๋านี้", 404);
 
     let openingSatang: number | undefined;
     if (parsed.data.openingBalance !== undefined) {
@@ -45,7 +50,16 @@ export async function PATCH(request: Request, { params }: Params): Promise<Respo
       if (opening === null) return apiError("ยอดตั้งต้นไม่ถูกต้อง", 400);
       openingSatang = opening;
     }
+    // a wallet that stops being a card forgets its limit and days
+    const kind = parsed.data.kind ?? current.kind;
+    const card =
+      kind !== "card" && current.kind === "card"
+        ? { creditLimitSatang: null, statementDay: null, dueDay: null }
+        : await cardFieldsOr400(db, auth.userId, parsed.data, kind);
+    if (card instanceof Response) return card;
+
     const result = await updateWallet(db, auth.userId, id, {
+      ...card,
       name: parsed.data.name,
       kind: parsed.data.kind,
       openingSatang,

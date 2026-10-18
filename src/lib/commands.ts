@@ -15,6 +15,7 @@ export type Command =
   | { kind: "forecast" }
   | { kind: "insight" }
   | { kind: "wallets" }
+  | { kind: "cards"; name: string | null }
   | { kind: "transfer"; amountSatang: number; from: string; to: string }
   | { kind: "summary"; scope: "today" | "month" }
   | { kind: "delete-latest" }
@@ -53,6 +54,9 @@ export function parseCommand(input: string): Command | null {
   if (["กระเป๋า", "กระเป๋าเงิน", "ยอดเงิน", "ยอดคงเหลือ", "wallet", "wallets"].includes(text)) {
     return { kind: "wallets" };
   }
+  // "บัตร" / "บัตรเครดิต" / "บัตร ktc" (a name has no digits: "บัตร 500" is an ordinary entry)
+  const cards = /^(?:บัตรเครดิต|บัตร)(?:\s+([^\d]+))?$/.exec(text);
+  if (cards) return { kind: "cards", name: cards[1]?.trim() || null };
   const transfer = parseTransferText(text);
   if (transfer) return { kind: "transfer", ...transfer };
   if (["พยากรณ์", "พยากรณ์เงิน", "พยากรณ์ปลายเดือน", "พยากรณ์ปลายรอบ"].includes(text)) {
