@@ -367,6 +367,18 @@ export function buildComposeCard(): LineMessage {
   return {
     type: "flex",
     altText: "พิมพ์บอกจดตังค์ได้เลย เช่น ข้าวมันไก่ 50 · เงินเดือน 20000",
+    // pick a category first, then only the amount is left to type (see buildCategoryKeyboardList)
+    quickReply: {
+      items: (
+        [
+          ["หมวดรายจ่าย", "expense"],
+          ["หมวดรายรับ", "income"],
+        ] as const
+      ).map(([label, t]) => ({
+        type: "action",
+        action: { type: "postback", label, data: `a=cp&t=${t}`, displayText: label },
+      })),
+    },
     contents: {
       type: "bubble",
       size: "mega",
@@ -435,6 +447,54 @@ export function buildComposeCard(): LineMessage {
           },
         ],
       },
+    },
+  };
+}
+
+export interface ComposeCategory {
+  name: string;
+  type: TxType;
+  sort_order: number;
+  is_hidden: boolean;
+}
+
+const MAX_COMPOSE_CATEGORIES = 13; // LINE allows 13 quick-reply buttons
+const MAX_COMPOSE_LABEL = 20; // LINE label limit
+const CATCH_ALL_NAME = "อื่นๆ"; // exists for both types, so a typed name could not tell them apart
+
+/**
+ * Quick Reply list of one type's categories. Tapping one opens the keyboard with the category
+ * name already in the box, so the person only types the amount ("อาหาร " + "50"); the text
+ * handler then reads the leading category name. Nothing is stored between the two taps.
+ */
+export function buildCategoryKeyboardList(
+  type: TxType,
+  categories: ComposeCategory[],
+): LineMessage {
+  const shown = categories
+    .filter((c) => c.type === type && !c.is_hidden && c.name !== CATCH_ALL_NAME)
+    .sort((a, b) => a.sort_order - b.sort_order)
+    .slice(0, MAX_COMPOSE_CATEGORIES);
+  if (shown.length === 0) {
+    return {
+      type: "text",
+      text: 'ยังไม่มีหมวดให้เลือก พิมพ์จดได้เลย เช่น "กาแฟ 30" นะ',
+    };
+  }
+  return {
+    type: "text",
+    text: "เลือกหมวด แล้วพิมพ์แค่ตัวเลขจำนวนเงินได้เลย เช่น 50",
+    quickReply: {
+      items: shown.map((c) => ({
+        type: "action",
+        action: {
+          type: "postback",
+          label: c.name.slice(0, MAX_COMPOSE_LABEL),
+          data: "a=cc",
+          inputOption: "openKeyboard",
+          fillInText: `${c.name} `,
+        },
+      })),
     },
   };
 }

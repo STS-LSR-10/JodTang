@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { categorizeByRules, type CategoryLite } from "./rules";
+import { categorizeByRules, matchLeadingCategory, type CategoryLite } from "./rules";
 
 function cat(p: Partial<CategoryLite> & { id: string; name: string }): CategoryLite {
   return {
@@ -101,5 +101,53 @@ describe("categorizeByRules", () => {
       categoryId: null,
       via: "none",
     });
+  });
+});
+
+describe("matchLeadingCategory", () => {
+  const id = (title: string, type: "expense" | "income" = "expense", list = categories) =>
+    matchLeadingCategory(title, type, list)?.id ?? null;
+
+  it("matches a title that is just the category name", () => {
+    expect(id("อาหาร")).toBe("food");
+    expect(id("เดินทาง")).toBe("fuel");
+    expect(id("ค่าน้ำ-ไฟ")).toBe("water");
+  });
+
+  it("matches a name followed by more words", () => {
+    expect(id("เดินทาง วิน")).toBe("fuel");
+  });
+
+  it("does not match when the name is only the start of a longer word", () => {
+    expect(id("อาหารเสริม")).toBeNull();
+  });
+
+  it("does not match a name in the middle of the title", () => {
+    expect(id("กิน อาหาร")).toBeNull();
+    expect(id("กาแฟ")).toBeNull();
+  });
+
+  it("picks income or expense by the parsed type when the name is shared", () => {
+    expect(id("อื่นๆ", "expense")).toBe("other");
+    expect(id("อื่นๆ", "income")).toBe("income-other");
+  });
+
+  it("reads an income category even when the parsed type said expense", () => {
+    expect(matchLeadingCategory("เงินเดือน", "expense", categories)?.type).toBe("income");
+  });
+
+  it("ignores hidden categories and prefers the person's own category on a tie", () => {
+    const list = [
+      cat({ id: "food", name: "อาหาร", is_hidden: true }),
+      cat({ id: "sys", name: "ของใช้" }),
+      cat({ id: "mine", name: "ของใช้", user_id: "u1" }),
+    ];
+    expect(id("อาหาร", "expense", list)).toBeNull();
+    expect(id("ของใช้", "expense", list)).toBe("mine");
+  });
+
+  it("prefers the longest name", () => {
+    const list = [cat({ id: "a", name: "ค่า" }), cat({ id: "b", name: "ค่า น้ำ" })];
+    expect(id("ค่า น้ำ", "expense", list)).toBe("b");
   });
 });

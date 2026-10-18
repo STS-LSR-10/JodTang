@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { buildComposeCard, buildConfirmMessage, buildTypeQuestion } from "./flex";
+import {
+  buildCategoryKeyboardList,
+  buildComposeCard,
+  buildConfirmMessage,
+  buildTypeQuestion,
+} from "./flex";
 import { buildCategoryChooser, buildSlipCard } from "./slip-flex";
 
 const base = {
@@ -127,5 +132,57 @@ describe("compose card", () => {
     expect(json).toContain('"inputOption":"openKeyboard"');
     expect(json).not.toContain("fillInText");
     expect(msg.altText).toBeTypeOf("string");
+  });
+});
+
+describe("compose quick replies", () => {
+  type Item = {
+    action: { label: string; data: string; fillInText?: string; inputOption?: string };
+  };
+  const items = (m: Record<string, unknown>) => (m.quickReply as { items: Item[] }).items;
+  const cat = (name: string, over: Record<string, unknown> = {}) => ({
+    name,
+    type: "expense" as const,
+    sort_order: 0,
+    is_hidden: false,
+    ...over,
+  });
+
+  it("the compose card offers expense and income category lists", () => {
+    const card = buildComposeCard();
+    expect(items(card).map((i) => i.action.data)).toEqual(["a=cp&t=expense", "a=cp&t=income"]);
+  });
+
+  it("each category button opens the keyboard with its name already typed", () => {
+    const m = buildCategoryKeyboardList("expense", [
+      cat("อาหาร"),
+      cat("เดินทาง", { sort_order: 1 }),
+    ]);
+    expect(items(m).map((i) => i.action.fillInText)).toEqual(["อาหาร ", "เดินทาง "]);
+    expect(items(m).every((i) => i.action.inputOption === "openKeyboard")).toBe(true);
+  });
+
+  it("lists only the chosen type, skips hidden and the shared อื่นๆ, and follows sort order", () => {
+    const m = buildCategoryKeyboardList("income", [
+      cat("ขายของ", { type: "income", sort_order: 5 }),
+      cat("เงินเดือน", { type: "income", sort_order: 1 }),
+      cat("งานพิเศษ", { type: "income", sort_order: 3, is_hidden: true }),
+      cat("อื่นๆ", { type: "income", sort_order: 99 }),
+      cat("อาหาร"),
+    ]);
+    expect(items(m).map((i) => i.action.label)).toEqual(["เงินเดือน", "ขายของ"]);
+  });
+
+  it("never offers more than 13 buttons (LINE limit) and cuts long labels to 20", () => {
+    const many = Array.from({ length: 20 }, (_, i) => cat(`หมวด${i}`, { sort_order: i }));
+    expect(items(buildCategoryKeyboardList("expense", many))).toHaveLength(13);
+    const long = buildCategoryKeyboardList("expense", [cat("ก".repeat(40))]);
+    expect(items(long)[0]?.action.label).toHaveLength(20);
+  });
+
+  it("falls back to a plain message when there is nothing to pick", () => {
+    const m = buildCategoryKeyboardList("expense", []);
+    expect(m.type).toBe("text");
+    expect(m.quickReply).toBeUndefined();
   });
 });

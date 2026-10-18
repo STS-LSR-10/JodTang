@@ -1,10 +1,15 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { budgetAlertsFor } from "@/lib/budget-alert";
 import { calendarMonthRange, cycleRange, dayRange } from "@/lib/budget-cycle";
-import { categorizeByRules, type CategoryLite } from "@/lib/categorize/rules";
+import { categorizeByRules, matchLeadingCategory, type CategoryLite } from "@/lib/categorize/rules";
 import { parseCommand, type Command } from "@/lib/commands";
 import { formatBaht } from "@/lib/money";
-import { CONFIRM_THRESHOLD, parseMessage, type ParsedEntry } from "@/lib/parse/text-parser";
+import {
+  CONFIRM_THRESHOLD,
+  LARGE_AMOUNT_SATANG,
+  parseMessage,
+  type ParsedEntry,
+} from "@/lib/parse/text-parser";
 import {
   categoryTotalSatang,
   ensureUser,
@@ -35,7 +40,12 @@ import {
 } from "@/lib/points";
 import { getSlip, learnMerchant } from "@/lib/slip-repo";
 import { handleSlipImage } from "@/lib/slips";
-import { buildComposeCard, buildConfirmMessage, buildTypeQuestion } from "./flex";
+import {
+  buildCategoryKeyboardList,
+  buildComposeCard,
+  buildConfirmMessage,
+  buildTypeQuestion,
+} from "./flex";
 import { buildCategoryChooser } from "./slip-flex";
 import {
   EDIT_HINT_TEXT,
@@ -211,13 +221,23 @@ async function saveEntries(
   const confirmed: { tx: TxRow; entry: ParsedEntry; categoryId: string | null }[] = [];
   const pending: { tx: TxRow; entry: ParsedEntry }[] = [];
 
-  for (const entry of entries) {
-    const { categoryId } = categorizeByRules({
-      title: entry.title,
-      type: entry.type,
-      categories,
-      memory,
-    });
+  for (const parsed of entries) {
+    // A title that starts with a category name ("อาหาร 50", picked from the quick-reply list)
+    // settles both the category and whether it is income or expense.
+    const chosen = matchLeadingCategory(parsed.title, parsed.type, categories);
+    const entry: ParsedEntry = chosen
+      ? {
+          ...parsed,
+          type: chosen.type,
+          confidence:
+            parsed.amountSatang >= LARGE_AMOUNT_SATANG
+              ? parsed.confidence
+              : Math.max(parsed.confidence, CONFIRM_THRESHOLD),
+        }
+      : parsed;
+    const categoryId = chosen
+      ? chosen.id
+      : categorizeByRules({ title: entry.title, type: entry.type, categories, memory }).categoryId;
     const needsConfirm = entry.confidence < CONFIRM_THRESHOLD;
     const tx = await insertTransaction(db, {
       userId: user.id,
@@ -446,6 +466,11 @@ async function handlePostback(
   const action = params.get("a");
   // Rich Menu "จดตังค์": answer with the how-to card; its button opens the keyboard (a=compose-go).
   if (action === "compose") return [buildComposeCard()];
+  // Quick Reply under that card: the categories of the chosen type (a=cc taps are silent).
+  if (action === "cp") {
+    const type = params.get("t") === "income" ? "income" : "expense";
+    return [buildCategoryKeyboardList(type, await loadCategories(deps.db, user.id))];
+  }
 
   const id = params.get("id");
   if (!action || !id) return [];

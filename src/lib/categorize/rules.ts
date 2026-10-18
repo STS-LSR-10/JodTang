@@ -77,3 +77,42 @@ export function categorizeByRules(input: {
   if (fallback) return { categoryId: fallback.id, via: "fallback" };
   return { categoryId: null, via: "none" };
 }
+
+/**
+ * The category a title starts with by name ("อาหาร", "เดินทาง วิน"), which the person picked from
+ * the quick-reply list or typed themselves. The name must end at a space or the end of the text,
+ * so "อาหารเสริม" is not read as "อาหาร". The longest name wins; when income and expense share a
+ * name ("อื่นๆ") the parsed type decides. Hidden categories are not matched.
+ */
+export function matchLeadingCategory(
+  title: string,
+  parsedType: TxType,
+  categories: CategoryLite[],
+): CategoryLite | null {
+  const text = normalizeText(title);
+  if (!text) return null;
+  let best: CategoryLite | null = null;
+  let bestLength = 0;
+  for (const c of categories) {
+    if (c.is_hidden) continue;
+    const name = normalizeText(c.name);
+    if (!name || !text.startsWith(name)) continue;
+    if (text.length > name.length && text[name.length] !== " ") continue;
+    const better =
+      name.length > bestLength ||
+      (name.length === bestLength &&
+        best !== null &&
+        c.type === parsedType &&
+        best.type !== parsedType) ||
+      (name.length === bestLength &&
+        best !== null &&
+        c.type === best.type &&
+        c.user_id !== null &&
+        best.user_id === null);
+    if (better) {
+      best = c;
+      bestLength = name.length;
+    }
+  }
+  return best;
+}

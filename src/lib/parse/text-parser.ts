@@ -24,7 +24,7 @@ export interface ParseResult {
 export const CONFIRM_THRESHOLD = 0.7;
 const MAX_TITLE_LENGTH = 60;
 const MAX_INT_DIGITS = 9; // longer digit runs are phone numbers / ids, not money
-const LARGE_AMOUNT_SATANG = 100_000_000; // 1,000,000 baht -> ask to confirm
+export const LARGE_AMOUNT_SATANG = 100_000_000; // 1,000,000 baht -> ask to confirm
 
 export const INCOME_KEYWORDS = [
   "เงินเดือน",
