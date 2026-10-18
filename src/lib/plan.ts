@@ -90,7 +90,7 @@ export type Feature =
   | "personalize";
 
 /** The lowest tier that has each feature (Ultimate always includes everything Professional has). */
-const MIN_PLAN: Record<Feature, "plus" | "ultimate"> = {
+export const MIN_PLAN: Record<Feature, "plus" | "ultimate"> = {
   savingsChart: "plus",
   recurring: "plus",
   multiAccount: "plus",

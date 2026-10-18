@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, Crown, Minus, Sparkles } from "lucide-react";
+import { Check, Crown, Sparkles } from "lucide-react";
 import { useState } from "react";
 import { useApi, useLiff } from "@/components/liff/liff-provider";
 import { Logo } from "@/components/logo";
@@ -8,12 +8,11 @@ import { PageHeader } from "@/components/liff/states";
 import { planAction, prepaidUpgradeFor } from "@/lib/payments/policy";
 import { PLAN_LABEL, type Plan } from "@/lib/plan";
 import {
-  FEATURE_GROUPS,
+  featuresForPlan,
   PLAN_HIGHLIGHTS,
   PRICES,
   yearlyPerDay,
   yearlySavingPercent,
-  type Cell,
   type PaidPlan,
   type Period,
 } from "@/lib/pricing";
@@ -324,7 +323,7 @@ export default function UpgradePage() {
           ยังไม่มีเงินสด? สะสมตังจากการจดทุกวันแล้วแลกเป็นวันใช้ Professional ได้ที่หน้าตั้งค่า
         </p>
 
-        <Comparison />
+        <PlanFeatures />
       </div>
     </main>
   );
@@ -409,81 +408,73 @@ function PlanCard({
   );
 }
 
-function CellView({ cell, soon }: { cell: Cell; soon?: boolean }) {
-  if (typeof cell === "string") return <span className="text-xs font-semibold">{cell}</span>;
-  if (!cell) {
-    return (
-      <>
-        <Minus className="mx-auto h-4 w-4 text-muted" aria-hidden />
-        <span className="sr-only">ไม่มี</span>
-      </>
-    );
-  }
-  if (soon) return <span className="text-xs font-semibold text-muted">เร็วๆ นี้</span>;
-  return (
-    <>
-      <Check className="mx-auto h-4 w-4 text-primary" aria-hidden />
-      <span className="sr-only">มี</span>
-    </>
-  );
-}
+const FEATURE_TABS: { plan: Plan; label: string }[] = [
+  { plan: "free", label: "Free" },
+  { plan: "plus", label: "Professional" },
+  { plan: "ultimate", label: "Ultimate" },
+];
 
-function Comparison() {
+/** What each plan can do: pick a plan to see its whole list (what it does not include is not shown). */
+function PlanFeatures() {
+  const [plan, setPlan] = useState<Plan>("plus");
+  const groups = featuresForPlan(plan);
   return (
     <section
-      aria-label="เปรียบเทียบแผน"
-      className="overflow-hidden rounded-3xl border border-border bg-surface"
+      aria-label="ทำอะไรได้บ้าง"
+      className="space-y-3 rounded-3xl border border-border bg-surface p-4"
     >
-      <table className="w-full table-fixed border-collapse text-sm">
-        <caption className="px-4 pb-1 pt-4 text-left text-base font-bold">ทำอะไรได้บ้าง?</caption>
-        <colgroup>
-          <col />
-          <col className="w-[72px]" />
-          <col className="w-[84px]" />
-          <col className="w-[72px]" />
-        </colgroup>
-        <thead>
-          <tr className="text-xs">
-            <th scope="col" className="sr-only">
-              ฟีเจอร์
-            </th>
-            <th scope="col" className="py-2 font-semibold">
-              Free
-            </th>
-            <th scope="col" className="py-2 font-semibold text-primary">
-              Pro
-            </th>
-            <th scope="col" className="py-2 font-semibold">
-              Ultimate
-            </th>
-          </tr>
-        </thead>
-        {FEATURE_GROUPS.map((group) => (
-          <tbody key={group.title}>
-            <tr>
-              <th
-                colSpan={4}
-                scope="colgroup"
-                className="bg-background px-4 py-1.5 text-left text-xs font-bold text-muted"
-              >
-                {group.title}
-              </th>
-            </tr>
-            {group.rows.map((row) => (
-              <tr key={row.label} className="border-t border-border">
-                <th scope="row" className="px-4 py-2.5 text-left text-sm font-normal">
-                  {row.label}
-                </th>
-                {row.cells.map((cell, i) => (
-                  <td key={i} className="px-1 py-2.5 text-center">
-                    <CellView cell={cell} soon={row.soon && i === 2} />
-                  </td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
+      <h2 className="text-base font-bold">ทำอะไรได้บ้าง?</h2>
+      <div role="tablist" aria-label="เลือกแผนเพื่อดูฟังก์ชัน" className="grid grid-cols-3 gap-1">
+        {FEATURE_TABS.map((t) => (
+          <button
+            key={t.plan}
+            type="button"
+            role="tab"
+            id={`features-tab-${t.plan}`}
+            aria-selected={plan === t.plan}
+            aria-controls="features-panel"
+            onClick={() => setPlan(t.plan)}
+            className={cn(
+              "min-h-11 rounded-2xl px-1 text-sm font-semibold",
+              plan === t.plan ? "bg-primary text-white" : "bg-background text-foreground",
+            )}
+          >
+            {t.label}
+          </button>
         ))}
-      </table>
+      </div>
+      <div
+        id="features-panel"
+        role="tabpanel"
+        aria-labelledby={`features-tab-${plan}`}
+        className="space-y-4"
+      >
+        {plan !== "free" ? (
+          <p className="text-xs text-muted">
+            {plan === "plus"
+              ? "ทุกอย่างของ Free และเพิ่มเติมด้านล่าง"
+              : "ทุกอย่างของ Professional และเพิ่มเติมด้านล่าง"}
+          </p>
+        ) : null}
+        {groups.map((group) => (
+          <div key={group.title}>
+            <h3 className="mb-1 text-xs font-bold text-muted">{group.title}</h3>
+            <ul className="space-y-1.5">
+              {group.items.map((item) => (
+                <li key={item.label} className="flex items-start gap-2 text-sm">
+                  <Check className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden />
+                  <span className="flex-1">{item.label}</span>
+                  {item.detail ? (
+                    <span className="shrink-0 text-xs font-semibold text-primary">
+                      {item.detail}
+                    </span>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
+      </div>
     </section>
   );
 }

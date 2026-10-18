@@ -23,12 +23,27 @@ test.describe("upgrade page (360px)", () => {
     await expectNoHorizontalScroll(page);
   });
 
-  test("comparison table lists upcoming Ultimate features as coming soon", async ({ page }) => {
+  test("lists what each plan can do, leaving out what it does not have", async ({ page }) => {
     await mockApi(page, { "GET /api/me": ME_FREE });
     await page.goto("/upgrade");
-    const table = page.getByRole("table");
-    await expect(table.getByRole("row", { name: /จดด้วย PDF/ })).toContainText("เร็วๆ นี้");
-    await expect(table.getByRole("row", { name: /อ่านสลิปอัตโนมัติ/ })).toContainText("5 ใบ/เดือน");
+    const panel = page.getByRole("tabpanel");
+
+    await page.getByRole("tab", { name: "Free" }).click();
+    await expect(panel.getByText("จดรายรับรายจ่ายด้วยข้อความ")).toBeVisible();
+    await expect(panel.getByText("ลองฟรี 1 ใบ")).toBeVisible();
+    await expect(panel.getByText("จดย้อนหลัง")).toHaveCount(0);
+    await expect(panel.getByText("จดด้วยเสียง")).toHaveCount(0);
+
+    await page.getByRole("tab", { name: "Professional" }).click();
+    await expect(panel.getByText("จดย้อนหลัง")).toBeVisible();
+    await expect(panel.getByText("5 ใบ/เดือน")).toBeVisible();
+    await expect(panel.getByText("จดด้วยเสียง")).toHaveCount(0);
+
+    await page.getByRole("tab", { name: "Ultimate" }).click();
+    await expect(panel.getByText("จดด้วยเสียง")).toBeVisible();
+    await expect(panel.getByText("จดย้อนหลัง")).toBeVisible();
+    await expect(panel.getByText("เร็วๆ นี้")).toHaveCount(0);
+    await expectNoHorizontalScroll(page);
   });
 
   test("checkout sends the chosen plan and period; the stub explains it is not open", async ({
@@ -282,7 +297,7 @@ test.describe("upgrade page (360px)", () => {
   test("has no serious accessibility violations", async ({ page }) => {
     await mockApi(page, { "GET /api/me": ME_FREE });
     await page.goto("/upgrade");
-    await expect(page.getByRole("table")).toBeVisible();
+    await expect(page.getByRole("tabpanel")).toBeVisible();
     await expectNoSeriousA11yViolations(page);
   });
 });

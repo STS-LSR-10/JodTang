@@ -1,4 +1,4 @@
-import type { Plan } from "@/lib/plan";
+import type { Feature, Plan } from "@/lib/plan";
 
 export type Period = "monthly" | "yearly";
 export type PaidPlan = Exclude<Plan, "free">;
@@ -32,10 +32,10 @@ export type Cell = boolean | string;
 
 export interface FeatureRow {
   label: string;
-  /** Free, Professional, Ultimate. */
+  /** Free, Professional, Ultimate. false = not included (the plan's list leaves it out). */
   cells: [Cell, Cell, Cell];
-  /** Not built yet: shown as "เร็วๆ นี้" instead of a tick. */
-  soon?: boolean;
+  /** The plan.ts feature this row describes; a test keeps the rows and the real gates in step. */
+  feature?: Feature;
 }
 
 export interface FeatureGroup {
@@ -45,75 +45,196 @@ export interface FeatureGroup {
 
 export const FEATURE_GROUPS: FeatureGroup[] = [
   {
-    title: "จด",
+    title: "จดรายการ",
     rows: [
-      { label: "จดด้วยข้อความ", cells: [true, true, true] },
-      { label: "อ่านสลิปอัตโนมัติ", cells: ["ลองฟรี 1 ใบ", "5 ใบ/เดือน", "ไม่จำกัด"] },
-      { label: "จดย้อนหลัง", cells: [false, true, true] },
-      { label: "จดหลายรายการในข้อความเดียว", cells: [false, true, true] },
-      { label: "ติดแท็ก #Tag", cells: [false, true, true] },
-      { label: "แนบรูปประกอบรายการ", cells: [false, true, true] },
       {
-        label: "กระเป๋าเงิน (เงินสด/บัญชี/บัตร/เงินเก็บ)",
-        cells: ["1 ใบ", "สูงสุด 5 ใบ", "ไม่จำกัด"],
+        label: "จดรายรับรายจ่ายด้วยข้อความ (เช่น กาแฟ 30, +500 ขายของ)",
+        cells: [true, true, true],
       },
-      { label: "โอนระหว่างกระเป๋า", cells: [false, true, true] },
-      { label: "วงเงินและยอดตามรอบบิลบัตรเครดิต", cells: [false, true, true] },
-      { label: "จดหนี้ ให้ยืม/ยืม (ตัดยอดกระเป๋า)", cells: [false, false, true] },
-      { label: "จดเงินต่างสกุล (แปลงเป็นบาทตามอัตราวันนั้น)", cells: [false, false, true] },
+      { label: "บอทจัดหมวดให้อัตโนมัติ ปรับหมวดหรือแก้ไขได้ทันที", cells: [true, true, true] },
+      { label: "ลบล่าสุด / แก้ล่าสุด และดู แก้ไข ลบรายการในหน้าเว็บ", cells: [true, true, true] },
+      { label: "การ์ดยืนยันหลังจด (เลือกแบบเต็ม แบบสั้น หรือปิดได้)", cells: [true, true, true] },
+      { label: "อ่านสลิปอัตโนมัติ", cells: ["ลองฟรี 1 ใบ", "5 ใบ/เดือน", "ไม่จำกัด"] },
+      {
+        label: "จดย้อนหลัง (พิมพ์วันที่หรือเลือกจากปฏิทิน)",
+        cells: [false, true, true],
+        feature: "backdate",
+      },
+      {
+        label: "จดหลายรายการในข้อความเดียว",
+        cells: [false, true, true],
+        feature: "multiEntry",
+      },
+      { label: "ติดแท็ก #Tag", cells: [false, true, true], feature: "tags" },
+      { label: "แนบรูปประกอบรายการ", cells: [false, true, true], feature: "entryPhoto" },
       { label: "แยกรายการจากใบเสร็จ", cells: [false, false, true] },
-      { label: "พิมพ์ประโยคยาวๆ ให้ AI ช่วยอ่าน", cells: [false, false, true] },
-      { label: "จดด้วยเสียง", cells: [false, false, true] },
-      { label: "ตั้งรายการจดอัตโนมัติ", cells: [false, "20 รายการ", "20 รายการ"] },
-      { label: "เตือนจดประจำวัน", cells: [false, true, true] },
+      {
+        label: "พิมพ์ประโยคยาวๆ ให้ AI ช่วยอ่าน",
+        cells: [false, false, true],
+        feature: "smartParse",
+      },
+      { label: "จดด้วยเสียง", cells: [false, false, true], feature: "voiceLog" },
+      {
+        label: "จดเงินต่างสกุล (แปลงเป็นบาทตามอัตราวันนั้น)",
+        cells: [false, false, true],
+        feature: "foreignCurrency",
+      },
+      {
+        label: "ตั้งรายการจดอัตโนมัติ (ค่าเช่า สมัครสมาชิก)",
+        cells: [false, "20 รายการ", "20 รายการ"],
+        feature: "recurring",
+      },
+      { label: "เตือนจดประจำวัน", cells: [false, true, true], feature: "dailyReminder" },
+      {
+        label: "บอทจำร้านค้า → หมวด",
+        cells: [false, true, true],
+        feature: "merchantMemory",
+      },
+      {
+        label: "สร้างหมวดของตัวเอง + เลือกอีโมจิ",
+        cells: [false, true, true],
+        feature: "customCategory",
+      },
     ],
   },
   {
-    title: "หมวดและงบ",
+    title: "กระเป๋าเงินและหนี้",
     rows: [
-      { label: "ตั้งหมวดและงบรวม", cells: [true, true, true] },
-      { label: "งบแยกตามหมวดหมู่", cells: [false, true, true] },
-      { label: "เตือนเมื่อใช้งบ 80% / 100%", cells: [false, true, true] },
-      { label: "งบรายวัน + บอทเตือนทันทีเมื่อใช้เกิน", cells: [false, true, true] },
-      { label: "เป้าหมายการออม (กระปุก + กราฟ)", cells: [false, "5 ใบ", "20 ใบ"] },
-      { label: "เตือนวันครบกำหนดจ่ายบิล (บัตรเครดิต ค่าไฟ ฯลฯ)", cells: [false, false, true] },
-      { label: "สมุดกลุ่ม LINE: ดึงบอทเข้ากลุ่ม ช่วยกันจด แยกคนจ่าย", cells: [false, false, true] },
-      { label: "หารค่าใช้จ่ายทริป สรุปว่าใครโอนคืนใครกี่บาท", cells: [false, false, true] },
-      { label: "ล็อกหน้าเว็บด้วย PIN 4–6 หลัก", cells: [false, true, true] },
-      { label: "ธีมสีการ์ด 5 แบบ + นิสัยบอท 4 แบบ", cells: [false, true, true] },
+      {
+        label: "กระเป๋าเงิน (เงินสด/บัญชี/บัตร/เงินเก็บ) และจดลงกระเป๋าด้วย @ชื่อ",
+        cells: ["1 ใบ", "สูงสุด 5 ใบ", "ไม่จำกัด"],
+        feature: "multiAccount",
+      },
+      { label: "โอนระหว่างกระเป๋า", cells: [false, true, true], feature: "transfer" },
+      {
+        label: "วงเงินและยอดตามรอบบิลบัตรเครดิต",
+        cells: [false, true, true],
+        feature: "creditCard",
+      },
       {
         label: "กระเป๋าร่วมกับแฟน/ครอบครัว (จดจากแชทตัวเอง ยอดเดียวกัน)",
         cells: [false, "2 คน", "สูงสุด 10 คน"],
+        feature: "sharedWallet",
       },
-      { label: "สร้างหมวดของตัวเอง + เลือกอีโมจิ", cells: [false, true, true] },
-      { label: "บอทจำร้านค้า → หมวด", cells: [false, true, true] },
+      {
+        label: "จดหนี้ ให้ยืม/ยืม (ตัดยอดกระเป๋า)",
+        cells: [false, false, true],
+        feature: "debts",
+      },
+      {
+        label: "เตือนวันครบกำหนดจ่ายบิล (บัตรเครดิต ค่าไฟ ฯลฯ)",
+        cells: [false, false, true],
+        feature: "billReminder",
+      },
     ],
   },
   {
-    title: "รายงาน",
+    title: "งบและเป้าหมาย",
     rows: [
-      { label: "สรุปวันนี้ / เดือนนี้", cells: [true, true, true] },
-      { label: "สรุปช่วงวันเอง", cells: [false, true, true] },
-      { label: "ค้นหาพร้อมยอดรวม", cells: [false, true, true] },
-      { label: "สรุปรายปี", cells: [false, true, true] },
-      { label: "พยากรณ์เงินปลายเดือน", cells: [false, false, true] },
-      { label: "AI Insight วิเคราะห์การใช้จ่าย", cells: [false, false, true] },
-      { label: "เทียบเดือนต่อเดือนรายหมวด", cells: [false, true, true] },
-      { label: "หน้าวิเคราะห์ (กราฟแท่ง / โดนัท)", cells: [false, true, true] },
-      { label: "ส่งออก CSV", cells: [false, true, true] },
-      { label: "Excel พร้อมชีตสรุป", cells: [false, true, true] },
-      { label: "กราฟเก็บออม", cells: [false, true, true] },
+      { label: "ตั้งงบรวมต่อรอบ (รายเดือน/รายสัปดาห์)", cells: [true, true, true] },
+      { label: "งบแยกตามหมวดหมู่", cells: [false, true, true], feature: "categoryBudget" },
+      {
+        label: "เตือนเมื่อใช้งบ 80% / 100%",
+        cells: [false, true, true],
+        feature: "budgetAlert",
+      },
+      {
+        label: "งบรายวัน + บอทเตือนทันทีเมื่อใช้เกิน",
+        cells: [false, true, true],
+        feature: "dailyBudget",
+      },
+      {
+        label: "เป้าหมายการออม (กระปุก + กราฟ)",
+        cells: [false, "5 ใบ", "20 ใบ"],
+        feature: "savingsGoal",
+      },
+      {
+        label: "หารค่าใช้จ่ายทริป สรุปว่าใครโอนคืนใครกี่บาท",
+        cells: [false, false, true],
+      },
+      {
+        label: "สมุดกลุ่ม LINE: ดึงบอทเข้ากลุ่ม ช่วยกันจด แยกคนจ่าย",
+        cells: [false, false, true],
+        feature: "groupLedger",
+      },
     ],
   },
   {
-    title: "เร็วๆ นี้",
+    title: "รายงานและส่งออก",
     rows: [
-      { label: "จดด้วย PDF", cells: [false, false, true], soon: true },
-      { label: "แนบสลิป ใบเสร็จ หลักฐาน", cells: [false, false, true], soon: true },
-      { label: "รายการอัตโนมัติ 100 รายการ", cells: [false, false, true], soon: true },
+      { label: "สรุปวันนี้ / เดือนนี้ / รายหมวด / รายการล่าสุด", cells: [true, true, true] },
+      { label: "สรุปช่วงวันเอง", cells: [false, true, true], feature: "customRange" },
+      { label: "ค้นหาพร้อมยอดรวม", cells: [false, true, true], feature: "searchTotals" },
+      { label: "สรุปรายปี", cells: [false, true, true], feature: "yearSummary" },
+      {
+        label: "เทียบเดือนต่อเดือนรายหมวด",
+        cells: [false, true, true],
+        feature: "categoryCompare",
+      },
+      {
+        label: "หน้าวิเคราะห์ (กราฟแท่ง / โดนัท)",
+        cells: [false, true, true],
+        feature: "dashboard",
+      },
+      { label: "กราฟเก็บออม", cells: [false, true, true], feature: "savingsChart" },
+      {
+        label: "สรุปรายสัปดาห์ / รายเดือนส่งให้ในแชทอัตโนมัติ",
+        cells: [false, true, true],
+        feature: "autoSummary",
+      },
+      { label: "ส่งออก CSV", cells: [false, true, true], feature: "export" },
+      { label: "Excel พร้อมชีตสรุป", cells: [false, true, true], feature: "advancedExport" },
+      {
+        label: "พยากรณ์เงินปลายเดือน",
+        cells: [false, false, true],
+        feature: "forecast",
+      },
+      {
+        label: "AI Insight วิเคราะห์การใช้จ่าย",
+        cells: [false, false, true],
+        feature: "insight",
+      },
+    ],
+  },
+  {
+    title: "ความปลอดภัยและส่วนตัว",
+    rows: [
+      {
+        label: "ล้างข้อมูลเพื่อเริ่มต้นใหม่ / ลบบัญชีและข้อมูลทั้งหมด",
+        cells: [true, true, true],
+      },
+      { label: "ล็อกหน้าเว็บด้วย PIN 4–6 หลัก", cells: [false, true, true], feature: "pinLock" },
+      {
+        label: "ธีมสีการ์ด 5 แบบ + นิสัยบอท 4 แบบ",
+        cells: [false, true, true],
+        feature: "personalize",
+      },
+    ],
+  },
+  {
+    title: "ตังสะสมและชวนเพื่อน",
+    rows: [
+      { label: "ตังสะสมจากการจดต่อเนื่อง แลกเป็นวันใช้ Professional", cells: [true, true, true] },
+      { label: "ชวนเพื่อนรับโบนัสตังสะสมทั้งสองฝ่าย", cells: [true, true, true] },
     ],
   },
 ];
+
+/** The features a plan has, by group; what the plan does not include is left out. */
+export function featuresForPlan(
+  plan: Plan,
+): { title: string; items: { label: string; detail: string | null }[] }[] {
+  const column = plan === "free" ? 0 : plan === "plus" ? 1 : 2;
+  return FEATURE_GROUPS.map((group) => ({
+    title: group.title,
+    items: group.rows
+      .filter((row) => row.cells[column] !== false)
+      .map((row) => {
+        const cell = row.cells[column];
+        return { label: row.label, detail: typeof cell === "string" ? cell : null };
+      }),
+  })).filter((group) => group.items.length > 0);
+}
 
 /** Short selling points shown on each plan card. */
 export const PLAN_HIGHLIGHTS: Record<Plan, string[]> = {
@@ -129,7 +250,7 @@ export const PLAN_HIGHLIGHTS: Record<Plan, string[]> = {
     "อ่านสลิปไม่จำกัด + แยกรายการจากใบเสร็จ",
     "พิมพ์ประโยคยาวๆ ให้ AI ช่วยอ่าน + จดด้วยเสียง",
     "หลายกระเป๋าไม่จำกัด · สมุดกลุ่ม LINE แยกคนจ่าย",
-    "จดด้วย PDF + แนบหลักฐาน (เร็วๆ นี้)",
+    "พยากรณ์เงินปลายเดือน + AI Insight · กระเป๋าร่วมสูงสุด 10 คน",
   ],
 };
 
