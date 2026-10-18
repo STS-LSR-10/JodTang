@@ -3,6 +3,7 @@ import { json } from "@/lib/api";
 import { isCronAuthorized } from "@/lib/cron-auth";
 import { getServerEnv } from "@/lib/env";
 import { createLineClient } from "@/lib/line/client";
+import { runBillReminders } from "@/lib/bill-run";
 import { runReminders } from "@/lib/reminder-run";
 import { runSummaries } from "@/lib/summary-run";
 import { getAdminClient } from "@/lib/supabase/admin";
@@ -41,7 +42,12 @@ export async function GET(request: Request): Promise<Response> {
       log.error("cron_summaries_failed", error);
       return null;
     });
-    return json({ ok: true, ...summary, summaries });
+    // bill reminders (Ultimate) also run hourly; a failure must not hide the other results
+    const bills = await runBillReminders(db, line.push, now).catch((error: unknown) => {
+      log.error("cron_bills_failed", error);
+      return null;
+    });
+    return json({ ok: true, ...summary, summaries, bills });
   } catch (error) {
     log.error("cron_reminders_failed", error);
     return json({ ok: false }, 500);

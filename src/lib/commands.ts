@@ -1,5 +1,6 @@
 import type { DaySpec } from "@/lib/summary-range";
 import { parseDebtText, type DebtCommand } from "@/lib/debt";
+import { parseBillText, type BillCommand } from "@/lib/bill";
 import { parseGoalText, type GoalCommand } from "@/lib/goal";
 import { parseTransferText } from "@/lib/transfer";
 import { normalizeThaiDigits, parseAmountToSatang } from "@/lib/parse/thai-number";
@@ -22,6 +23,7 @@ export type Command =
   | { kind: "daily-budget"; action: "show" | "set" | "clear" | "usage"; amountSatang?: number }
   | DebtCommand
   | GoalCommand
+  | BillCommand
   | { kind: "transfer"; amountSatang: number; from: string; to: string }
   | { kind: "summary"; scope: "today" | "month" }
   | { kind: "delete-latest" }
@@ -80,6 +82,8 @@ export function parseCommand(input: string): Command | null {
   const transfer = parseTransferText(text);
   if (transfer) return { kind: "transfer", ...transfer };
   // names keep their case, so the debt phrases read the original text
+  const bill = parseBillText(normalizeThaiDigits(input).trim().replace(/\s+/g, " "));
+  if (bill) return bill;
   const goal = parseGoalText(normalizeThaiDigits(input).trim().replace(/\s+/g, " "));
   if (goal) return goal;
   const debt = parseDebtText(normalizeThaiDigits(input).trim().replace(/\s+/g, " "));

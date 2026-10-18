@@ -51,6 +51,7 @@ const FEATURES: Feature[] = [
   "budgetAlert",
   "dailyBudget",
   "savingsGoal",
+  "billReminder",
 ];
 
 export async function GET(request: Request): Promise<Response> {

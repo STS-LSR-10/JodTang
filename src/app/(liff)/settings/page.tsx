@@ -12,7 +12,7 @@ import { RecurringCard } from "@/components/liff/settings/recurring-card";
 import { cardClass, type Me, type Settings } from "@/components/liff/settings/types";
 import { ErrorState, LoadingBlock, PageHeader } from "@/components/liff/states";
 import { cn } from "@/lib/utils";
-import { PiggyBank, Wallet } from "lucide-react";
+import { CalendarClock, PiggyBank, Wallet } from "lucide-react";
 import Link from "next/link";
 
 const CONFIRM_OPTIONS: { value: Settings["confirm_style"]; label: string; hint: string }[] = [
@@ -182,6 +182,19 @@ export default function SettingsPage() {
                 <span className="block font-semibold">เป้าหมายการออม</span>
                 <span className="block text-xs text-muted">
                   กระปุกออมสิน ตั้งเป้า ดูความคืบหน้า · Professional ขึ้นไป
+                </span>
+              </span>
+            </Link>
+            <Link
+              href="/bills"
+              className={`${cardClass} flex items-center gap-3 !space-y-0`}
+              aria-label="บิลที่ต้องจ่าย"
+            >
+              <CalendarClock className="h-5 w-5 text-primary" aria-hidden />
+              <span className="flex-1">
+                <span className="block font-semibold">เตือนจ่ายบิล</span>
+                <span className="block text-xs text-muted">
+                  บอทเตือนก่อนวันครบกำหนด · แผน Ultimate
                 </span>
               </span>
             </Link>

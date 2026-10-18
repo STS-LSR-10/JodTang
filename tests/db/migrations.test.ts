@@ -310,6 +310,81 @@ describe("wallets (0019)", () => {
   });
 });
 
+describe("bills (0026)", () => {
+  async function seed() {
+    const u = await newUser(db, `b-${Math.random()}`);
+    const bill = (
+      name: string,
+      over: {
+        cadence?: string;
+        day?: number;
+        month?: number | null;
+        hour?: number;
+        amount?: number | null;
+      } = {},
+    ) =>
+      db.query(
+        "insert into bills (user_id,name,amount,cadence,day_of_month,month_of_year,next_due_on,remind_hour) values ($1,$2,$3,$4,$5,$6,'2026-11-15',$7)",
+        [
+          u,
+          name,
+          over.amount ?? null,
+          over.cadence ?? "monthly",
+          over.day ?? 15,
+          over.month ?? null,
+          over.hour ?? 9,
+        ],
+      );
+    return { u, bill };
+  }
+
+  it("keeps a bill with the defaults: remind 1 day before at 09:00", async () => {
+    const { u, bill } = await seed();
+    await bill("ค่าไฟ", { amount: 1250 });
+    const b = await one<{
+      remind_days: number[];
+      remind_hour: number;
+      is_active: boolean;
+      amount: string;
+    }>(db, "select remind_days, remind_hour, is_active, amount::text from bills where user_id=$1", [
+      u,
+    ]);
+    expect(b).toEqual({ remind_days: [1], remind_hour: 9, is_active: true, amount: "1250.00" });
+  });
+
+  it("a name is used once among live bills (ignoring case), and may be reused once switched off", async () => {
+    const { u, bill } = await seed();
+    await bill("Rent");
+    await expect(bill("rent")).rejects.toThrow();
+    await db.query("update bills set is_active = false where user_id = $1", [u]);
+    await bill("Rent");
+  });
+
+  it.each([
+    ["a day of 0 or 32", { day: 32 }],
+    ["an hour of 24", { hour: 24 }],
+    ["a month of 13", { month: 13, cadence: "yearly" }],
+    ["a zero amount", { amount: 0 }],
+    ["an unknown cadence", { cadence: "weekly" }],
+  ])("refuses %s", async (_name, over) => {
+    const { bill } = await seed();
+    await expect(bill("x", over)).rejects.toThrow();
+  });
+
+  it("remembers which reminders were sent: the same key only once", async () => {
+    const { u } = await seed();
+    const key = "b1:2026-11-15:1";
+    await db.query("insert into bill_reminders (user_id,key) values ($1,$2)", [u, key]);
+    await expect(
+      db.query("insert into bill_reminders (user_id,key) values ($1,$2)", [u, key]),
+    ).rejects.toThrow();
+    await db.query("insert into bill_reminders (user_id,key) values ($1,$2)", [
+      u,
+      "b1:2026-11-15:0",
+    ]);
+  });
+});
+
 describe("savings goals (0025)", () => {
   async function seed() {
     const u = await newUser(db, `g-${Math.random()}`);

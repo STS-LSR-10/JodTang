@@ -76,6 +76,17 @@ import { buildForecastCard } from "./forecast-flex";
 import { buildInsightCard } from "./insight-flex";
 import { buildTransferDone, buildWalletChooser, buildWalletsCard } from "./wallet-flex";
 import { buildCardsCard } from "./card-flex";
+import { buildBillsCard } from "./bill-flex";
+import {
+  MAX_ACTIVE_BILLS,
+  addDays as addBillDays,
+  cardBills,
+  firstDue,
+  resolveBill,
+  todayKey as billTodayKey,
+} from "@/lib/bill";
+import { recordBillExpense, settleBill } from "@/lib/bill-actions";
+import { claimReminder, createBill, getBill, listBills, updateBill } from "@/lib/bill-repo";
 import { buildGoalDone, buildGoalReachedCard, buildGoalsCard } from "./goal-flex";
 import { dueSpecToDate, goalProgress, resolveGoal } from "@/lib/goal";
 import { addDeposit, createGoal, listGoals, undoDeposit } from "@/lib/goal-repo";
@@ -182,6 +193,15 @@ import {
   WALLET_MOVED_TEXT,
   WALLET_NOT_FOUND_TEXT,
   CARD_LOCKED_TEXT,
+  BILL_EMPTY_TEXT,
+  BILL_EXISTS_TEXT,
+  BILL_GONE_TEXT,
+  BILL_LOCKED_TEXT,
+  BILL_RECORDED_ALREADY_TEXT,
+  BILL_SNOOZED_TEXT,
+  BILL_USAGE_TEXT,
+  billAmbiguousText,
+  billFullText,
   GOAL_BAD_DUE_TEXT,
   GOAL_EMPTY_TEXT,
   GOAL_EXISTS_TEXT,
@@ -365,6 +385,10 @@ async function handleText(input: string, user: UserRow, deps: HandlerDeps): Prom
   if (command?.kind === "transfer") {
     // "โอนค่าเช่า 5000 ไป ..." that names no wallet is an ordinary entry, so it falls through
     const done = await runTransfer(command, user, deps);
+    if (done) return done;
+  } else if (command?.kind === "bill-new" || command?.kind === "bill-pay") {
+    // "จ่ายบิล ค่าน้ำมัน 500" that names none of their bills is an ordinary entry
+    const done = await runBill(command, user, deps);
     if (done) return done;
   } else if (
     command?.kind === "goal-new" ||
@@ -568,6 +592,89 @@ async function runDebt(
         .join("\n"),
     }),
   ];
+}
+
+/** "<d>/<m>/<y พ.ศ.>" for a YYYY-MM-DD date. */
+const billDate = (key: string) => {
+  const [y, m, d] = key.split("-").map(Number);
+  return `${d}/${m}/${(y ?? 1970) + 543}`;
+};
+
+/** New bill / "จ่ายบิล <ชื่อ>". null when it is not about a bill of theirs (then an ordinary message). */
+async function runBill(
+  command: Extract<Command, { kind: "bill-new" | "bill-pay" }>,
+  user: UserRow,
+  deps: HandlerDeps,
+): Promise<LineMessage[] | null> {
+  const { db } = deps;
+  const allowed = can(effectivePlan(user.plan, user.plan_expires_at, deps.now()), "billReminder");
+  if (command.kind === "bill-new" && !allowed) return [text(BILL_LOCKED_TEXT)];
+  if (!allowed) return null;
+  const today = billTodayKey(deps.now());
+  const bills = await listBills(db, user.id);
+
+  if (command.kind === "bill-new") {
+    if (bills.length >= MAX_ACTIVE_BILLS) return [text(billFullText(MAX_ACTIVE_BILLS))];
+    const nextDueOn = firstDue(command.cadence, command.dayOfMonth, command.monthOfYear, today);
+    const id = await createBill(db, user.id, { ...command, nextDueOn });
+    if (id === "duplicate") return [text(BILL_EXISTS_TEXT)];
+    const cadence =
+      command.cadence === "monthly"
+        ? `ทุกเดือนวันที่ ${command.dayOfMonth}`
+        : command.cadence === "yearly"
+          ? `ทุกปี ${command.dayOfMonth}/${command.monthOfYear}`
+          : "ครั้งเดียว";
+    return [
+      text(
+        [
+          `ตั้งเตือนบิลแล้ว: ${command.name}${command.amountSatang ? ` ประมาณ ฿${formatBaht(command.amountSatang)}` : ""}`,
+          `${cadence} · ครบถัดไป ${billDate(nextDueOn)}`,
+          `เตือน ${command.remindDays.map((d) => (d === 0 ? "ในวันนั้น" : `ก่อน ${d} วัน`)).join(" และ ")} เวลา ${String(command.remindHour).padStart(2, "0")}:00 น.`,
+        ].join("\n"),
+      ),
+    ];
+  }
+
+  const found = resolveBill(command.name, bills);
+  if (!found.ok) {
+    if (found.reason === "none") return null;
+    const names = bills
+      .filter((b) => b.name.toLowerCase().startsWith(command.name.toLowerCase()))
+      .map((b) => b.name);
+    return [text(billAmbiguousText(command.name, names))];
+  }
+  return billPaid(found.bill, user, deps, true);
+}
+
+/** Paid (or skipped) a bill: move it on, and offer to record the expense when it has an amount. */
+async function billPaid(
+  bill: import("@/lib/bill").BillDto,
+  user: UserRow,
+  deps: HandlerDeps,
+  paid: boolean,
+): Promise<LineMessage[]> {
+  const { nextDueOn } = await settleBill(deps.db, user.id, bill, deps.now());
+  const lines = [
+    paid ? `จ่าย${bill.name}แล้ว` : `ข้ามรอบนี้ของ${bill.name}แล้ว`,
+    nextDueOn ? `ครบกำหนดรอบถัดไป ${billDate(nextDueOn)}` : "บิลนี้ครั้งเดียว ปิดให้แล้ว",
+  ];
+  const message: LineMessage = { type: "text", text: lines.join("\n") };
+  if (paid && bill.amountSatang) {
+    message.quickReply = {
+      items: [
+        {
+          type: "action",
+          action: {
+            type: "postback",
+            label: `📝 จดรายจ่าย ฿${formatBaht(bill.amountSatang)}`.slice(0, 20),
+            data: `a=be&id=${bill.id}&d=${bill.nextDueOn}`,
+            displayText: "จดเป็นรายจ่าย",
+          },
+        },
+      ],
+    };
+  }
+  return [message];
 }
 
 /** New goal / put in / take out. null when it is not about a goal of theirs (then an ordinary message). */
@@ -1401,6 +1508,26 @@ async function runCommand(
       ];
     }
 
+    case "bills": {
+      if (!can(effectivePlan(user.plan, user.plan_expires_at, deps.now()), "billReminder")) {
+        return [text(BILL_LOCKED_TEXT)];
+      }
+      const today = billTodayKey(deps.now());
+      const wallets = await listWallets(db, user.id).catch(() => []);
+      const all = [...(await listBills(db, user.id)), ...cardBills(wallets, today)].sort((a, b) =>
+        a.nextDueOn.localeCompare(b.nextDueOn),
+      );
+      if (all.length === 0) return [text(BILL_EMPTY_TEXT)];
+      return [buildBillsCard({ bills: all, today, manageUrl: pageUrl("/bills") })];
+    }
+
+    case "bill-new-usage":
+      return [text(BILL_USAGE_TEXT)];
+
+    case "bill-new":
+    case "bill-pay": // handled in handleText; only reached by a direct call
+      return [text(BILL_USAGE_TEXT)];
+
     case "goals": {
       if (!can(effectivePlan(user.plan, user.plan_expires_at, deps.now()), "savingsGoal")) {
         return [text(GOAL_LOCKED_TEXT)];
@@ -1653,6 +1780,45 @@ async function handlePostback(
     if (!transferId) return [];
     const removed = await deleteTransfer(deps.db, user.id, transferId);
     return [text(removed ? TRANSFER_CANCELLED_TEXT : NOT_FOUND_TEXT)];
+  }
+
+  // The buttons under a bill reminder (a=bp paid, a=bk skip, a=bz remind tomorrow, a=be record it)
+  if (action === "bp" || action === "bk" || action === "bz" || action === "be") {
+    const billId = params.get("id") ?? "";
+    const dueOn = params.get("d") ?? "";
+    const bill = await getBill(deps.db, user.id, billId);
+    if (!bill) return [text(BILL_GONE_TEXT)];
+
+    if (action === "be") {
+      if (!bill.amountSatang) return [text(BILL_GONE_TEXT)];
+      // once per paid round: a second tap must not record it twice
+      if (!(await claimReminder(deps.db, user.id, `${bill.id}:rec:${dueOn}`))) {
+        return [text(BILL_RECORDED_ALREADY_TEXT)];
+      }
+      const { tx, categoryId } = await recordBillExpense(
+        deps.db,
+        user,
+        bill,
+        bill.amountSatang,
+        deps.now(),
+      );
+      const [settings, categories] = await Promise.all([
+        getSettings(deps.db, user.id),
+        loadCategories(deps.db, user.id),
+      ]);
+      return [await confirmCard(tx, categoryId, categories, settings, user, deps)];
+    }
+
+    if (!bill.isActive) return [text(BILL_GONE_TEXT)];
+    if (action === "bz") {
+      await updateBill(deps.db, user.id, bill.id, {
+        snoozedOn: addBillDays(billTodayKey(deps.now()), 1),
+      });
+      return [text(BILL_SNOOZED_TEXT)];
+    }
+    // a stale button (this round was already settled) must not skip the next round too
+    if (bill.nextDueOn !== dueOn) return [text(BILL_GONE_TEXT)];
+    return billPaid(bill, user, deps, action === "bp");
   }
 
   // "↩ ยกเลิก" under a deposit into a goal: the id is a deposit, g is its goal

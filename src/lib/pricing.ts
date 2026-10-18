@@ -76,6 +76,7 @@ export const FEATURE_GROUPS: FeatureGroup[] = [
       { label: "เตือนเมื่อใช้งบ 80% / 100%", cells: [false, true, true] },
       { label: "งบรายวัน + บอทเตือนทันทีเมื่อใช้เกิน", cells: [false, true, true] },
       { label: "เป้าหมายการออม (กระปุก + กราฟ)", cells: [false, "5 ใบ", "20 ใบ"] },
+      { label: "เตือนวันครบกำหนดจ่ายบิล (บัตรเครดิต ค่าไฟ ฯลฯ)", cells: [false, false, true] },
       { label: "สร้างหมวดของตัวเอง + เลือกอีโมจิ", cells: [false, true, true] },
       { label: "บอทจำร้านค้า → หมวด", cells: [false, true, true] },
     ],

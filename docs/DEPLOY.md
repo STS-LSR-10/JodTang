@@ -126,6 +126,7 @@ GitHub Actions (รายชั่วโมง) ──► /api/cron/reminders �
 | `rate_limit_unavailable` | ตัวจำกัดอัตราพัง (ระบบปล่อยผ่าน ไม่ปิดกั้น) | รัน migration `0007` |
 | `budget_alert_failed` / `award_failed` | ส่วนเสริมล้ม (การจดไม่ถูกขัดขวาง) | ตรวจ migration `0004`/`0006` |
 | `cron_recurring_failed` / `cron_reminders_failed` | cron ล้ม | ตรวจ `CRON_SECRET` และ DB |
+| `cron_bills_failed` / `bill_reminder_failed` / `bill_reminder_push_failed` | เตือนจ่ายบิล (Ultimate) ล้ม / push หาผู้ใช้ไม่สำเร็จ (บัญชีบล็อกบอท) ระบบบันทึกว่าส่งแล้วก่อน จึงไม่ retry ซ้ำทุกชั่วโมง | ตรวจ migration `0026_bills.sql` และว่า GitHub Actions รายชั่วโมงยิง `/api/cron/reminders` ได้ (เตือนบิลใช้ endpoint เดียวกับเตือนจดประจำวัน) |
 | `account_deleted` | มีผู้ใช้ลบข้อมูล (นับไฟล์เท่านั้น) | ปกติ |
 | `api_error` | API ตอบ 500 | ดู `message` |
 
