@@ -212,6 +212,84 @@ describe("parseMessage: rejects", () => {
   });
 });
 
+describe("a date anywhere in the line", () => {
+  const YESTERDAY = "2026-10-14T05:00:00.000Z"; // NOW is 15 Oct 15:00 in Bangkok
+
+  it.each([
+    ["จ่ายค่าทุเรียน เมื่อวาน 300", "จ่ายค่าทุเรียน"],
+    ["เมื่อวาน ทุเรียน 300", "ทุเรียน"],
+    ["ทุเรียน 300 เมื่อวาน", "ทุเรียน"],
+    ["จ่ายค่าทุเรียน 300 เมื่อวาน", "จ่ายค่าทุเรียน"],
+    ["เมื่อวานจ่ายค่าทุเรียน 300", "จ่ายค่าทุเรียน"],
+    ["ซื้อทุเรียนเมื่อวาน 300", "ซื้อทุเรียน"],
+    ["จ่ายค่าทุเรียนเมื่อวานนี้ 300", "จ่ายค่าทุเรียน"],
+  ])("%s is yesterday, whatever the position", (text, title) => {
+    const e = one(text);
+    expect(e.title).toBe(title);
+    expect(e.amountSatang).toBe(30_000);
+    expect(e.backdated).toBe(true);
+    expect(e.occurredAt.toISOString()).toBe(YESTERDAY);
+  });
+
+  it("เมื่อวานซืน in the middle is two days ago, not yesterday plus a stray word", () => {
+    const e = one("ค่าน้ำมัน เมื่อวานซืน 500");
+    expect(e.title).toBe("ค่าน้ำมัน");
+    expect(e.occurredAt.toISOString()).toBe("2026-10-13T05:00:00.000Z");
+  });
+
+  it("วันนี้ in the middle keeps the current time and is not a backdate", () => {
+    const e = one("ซื้อของ วันนี้ 80");
+    expect(e.title).toBe("ซื้อของ");
+    expect(e.backdated).toBe(false);
+    expect(e.occurredAt.getTime()).toBe(NOW.getTime());
+  });
+
+  it("never leaves a double space or the day word in the title", () => {
+    const e = one("กาแฟ   เมื่อวาน   45");
+    expect(e.title).toBe("กาแฟ");
+    expect(e.title).not.toContain("เมื่อวาน");
+  });
+
+  it("works with a #tag and a sign next to it", () => {
+    const e = one("#trip ซื้อทุเรียน เมื่อวาน -300");
+    expect(e.tags).toEqual(["trip"]);
+    expect(e.title).toBe("ซื้อทุเรียน");
+    expect(e.type).toBe("expense");
+    expect(e.occurredAt.toISOString()).toBe(YESTERDAY);
+  });
+
+  it("a DD/MM in the middle counts when it cannot be a fraction", () => {
+    const e = one("ค่าไฟ 12/10 1200");
+    expect(e.title).toBe("ค่าไฟ");
+    expect(e.amountSatang).toBe(120_000);
+    expect(e.occurredAt.toISOString()).toBe("2026-10-12T05:00:00.000Z");
+    expect(one("ซื้อของ 25/3 500").occurredAt.toISOString()).toBe("2026-03-25T05:00:00.000Z");
+  });
+
+  it("a DD/MM/YYYY in the middle counts", () => {
+    expect(one("ค่าห้อง 5/6/2026 3000").occurredAt.toISOString()).toBe("2026-06-05T05:00:00.000Z");
+  });
+
+  it("a fraction in the middle stays in the title and does not become a date", () => {
+    const e = one("ข้าว 1/2 จาน 50");
+    expect(e.title).toBe("ข้าว 1/2 จาน");
+    expect(e.backdated).toBe(false);
+    expect(e.amountSatang).toBe(5000);
+    expect(one("หมู 3/4 กก. 120").backdated).toBe(false);
+  });
+
+  it("an ambiguous mid-line 5/6 stays text, but still works at the start or end", () => {
+    expect(one("ค่าห้อง 5/6 3000").backdated).toBe(false);
+    expect(one("5/6 ค่าห้อง 3000").occurredAt.toISOString()).toBe("2026-06-05T05:00:00.000Z");
+    expect(one("ค่าห้อง 3000 5/6").occurredAt.toISOString()).toBe("2026-06-05T05:00:00.000Z");
+  });
+
+  it("each line of a multi-line message has its own date", () => {
+    const { entries } = parseMessage("กาแฟ เมื่อวาน 45\nข้าว 60", NOW);
+    expect(entries.map((e) => e.backdated)).toEqual([true, false]);
+  });
+});
+
 describe("the date picker's prefix", () => {
   it("reads DD/MM/YYYY plus a typed item as a backdated entry on that day", () => {
     const e = one("12/10/2026 กาแฟ 60");

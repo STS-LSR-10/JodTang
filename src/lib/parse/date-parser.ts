@@ -7,12 +7,21 @@ export interface DateExtraction {
   date: Date | null;
 }
 
-const LEAD_WORD = /^(เมื่อวานซืน|เมื่อวาน|วันนี้)\s*/;
-const TRAIL_WORD = /\s+(เมื่อวานซืน|เมื่อวาน|วันนี้)$/;
+// A day word anywhere in the line ("จ่ายค่าทุเรียน เมื่อวาน 300", "ซื้อของวันนี้ 80"). Longest first,
+// so "เมื่อวานซืน" and "เมื่อวานนี้" are not read as "เมื่อวาน" plus leftovers.
+const DAY_WORD = /(เมื่อวานซืน|เมื่อวานนี้|เมื่อวาน|วันนี้)/;
 const LEAD_DMY = /^(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?(?=\s|$)\s*/;
 const TRAIL_DMY = /(?<=^|\s)(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?$/;
 
-const WORD_OFFSETS: Record<string, number> = { วันนี้: 0, เมื่อวาน: 1, เมื่อวานซืน: 2 };
+const WORD_OFFSETS: Record<string, number> = {
+  วันนี้: 0,
+  เมื่อวาน: 1,
+  เมื่อวานนี้: 1,
+  เมื่อวานซืน: 2,
+};
+
+// A DD/MM in the middle of a line, set apart by spaces.
+const MID_DMY = /(?<=^|\s)(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?(?=\s|$)/g;
 
 function atDay(now: Date, year: number, month: number, day: number): Date {
   const today = bangkokParts(now);
@@ -48,19 +57,35 @@ function resolveDmy(dayStr: string, monthStr: string, yearStr: string | undefine
   return atDay(now, year, month, day);
 }
 
-/** Extract a leading/trailing date phrase: วันนี้, เมื่อวาน, เมื่อวานซืน, DD/MM, DD/MM/YY(YY, พ.ศ. ok). */
+/** Cut `length` characters at `index` out of a line and close the gap with one space. */
+function cutOut(line: string, index: number, length: number): string {
+  return `${line.slice(0, index)} ${line.slice(index + length)}`.replace(/\s+/g, " ").trim();
+}
+
+/**
+ * Mid-line "1/2" is far more likely a fraction ("ข้าว 1/2 จาน 50") than a date, so there only a
+ * DD/MM that cannot be one counts: it names a year, or its day is above 12, or its month is above 8
+ * ("12/10", "25/3"; not "1/2", "3/4", "5/6"). At the start or end of the line any DD/MM counts.
+ */
+function plausibleMidDate(day: number, month: number, hasYear: boolean): boolean {
+  return hasYear || day > 12 || month > 8;
+}
+
+/**
+ * Extract a date phrase from anywhere in the line: วันนี้, เมื่อวาน, เมื่อวานนี้, เมื่อวานซืน,
+ * DD/MM, DD/MM/YY(YY, พ.ศ. ok). The phrase is cut out of the returned text.
+ */
 export function extractDate(line: string, now: Date): DateExtraction {
   const trimmed = line.trim();
 
-  let m = LEAD_WORD.exec(trimmed);
-  if (m?.[1]) {
-    return { text: trimmed.slice(m[0].length).trim(), date: resolveWord(m[1], now) };
+  const word = DAY_WORD.exec(trimmed);
+  if (word?.[1]) {
+    return {
+      text: cutOut(trimmed, word.index, word[0].length),
+      date: resolveWord(word[1], now),
+    };
   }
-  m = TRAIL_WORD.exec(trimmed);
-  if (m?.[1]) {
-    return { text: trimmed.slice(0, m.index).trim(), date: resolveWord(m[1], now) };
-  }
-  m = LEAD_DMY.exec(trimmed);
+  let m = LEAD_DMY.exec(trimmed);
   if (m?.[1] && m[2]) {
     const date = resolveDmy(m[1], m[2], m[3], now);
     if (date) return { text: trimmed.slice(m[0].length).trim(), date };
@@ -69,6 +94,13 @@ export function extractDate(line: string, now: Date): DateExtraction {
   if (m?.[1] && m[2]) {
     const date = resolveDmy(m[1], m[2], m[3], now);
     if (date) return { text: trimmed.slice(0, m.index).trim(), date };
+  }
+  for (const mid of trimmed.matchAll(MID_DMY)) {
+    const [whole, d, mo, y] = mid;
+    if (!d || !mo || !whole) continue;
+    if (!plausibleMidDate(Number(d), Number(mo), y !== undefined)) continue;
+    const date = resolveDmy(d, mo, y, now);
+    if (date) return { text: cutOut(trimmed, mid.index, whole.length), date };
   }
   return { text: trimmed, date: null };
 }

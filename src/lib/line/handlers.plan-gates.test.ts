@@ -68,7 +68,12 @@ beforeEach(() => {
 });
 
 describe("backdating in text messages", () => {
-  it.each(["เมื่อวาน กาแฟ 45", "12/10 ค่าไฟ 1200"])("is locked for Free: %s", async (input) => {
+  it.each([
+    "เมื่อวาน กาแฟ 45",
+    "12/10 ค่าไฟ 1200",
+    "จ่ายค่าทุเรียน เมื่อวาน 300",
+    "ค่าไฟ 12/10 1200",
+  ])("is locked for Free: %s", async (input) => {
     const { deps, reply } = setup();
     await handleEvent(message(input), deps);
     expect(repliedText(reply)).toBe(BACKDATE_LOCKED_TEXT);
