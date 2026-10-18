@@ -76,6 +76,10 @@ import { buildForecastCard } from "./forecast-flex";
 import { buildInsightCard } from "./insight-flex";
 import { buildTransferDone, buildWalletChooser, buildWalletsCard } from "./wallet-flex";
 import { buildCardsCard } from "./card-flex";
+import { buildGoalDone, buildGoalReachedCard, buildGoalsCard } from "./goal-flex";
+import { dueSpecToDate, goalProgress, resolveGoal } from "@/lib/goal";
+import { addDeposit, createGoal, listGoals, undoDeposit } from "@/lib/goal-repo";
+import { goalCapacity } from "@/lib/plan";
 import { dailyBudgetStatus } from "@/lib/daily-budget";
 import { convertToSatang, formatForeign, formatRate } from "@/lib/fx";
 import { getRate } from "@/lib/fx-repo";
@@ -178,6 +182,15 @@ import {
   WALLET_MOVED_TEXT,
   WALLET_NOT_FOUND_TEXT,
   CARD_LOCKED_TEXT,
+  GOAL_BAD_DUE_TEXT,
+  GOAL_EMPTY_TEXT,
+  GOAL_EXISTS_TEXT,
+  GOAL_LOCKED_TEXT,
+  GOAL_UNDO_BLOCKED_TEXT,
+  GOAL_UNDONE_TEXT,
+  goalAmbiguousText,
+  goalFullText,
+  goalOverdrawText,
   DAILY_BUDGET_CLEARED_TEXT,
   DAILY_BUDGET_LOCKED_TEXT,
   DAILY_BUDGET_NONE_TEXT,
@@ -352,6 +365,14 @@ async function handleText(input: string, user: UserRow, deps: HandlerDeps): Prom
   if (command?.kind === "transfer") {
     // "โอนค่าเช่า 5000 ไป ..." that names no wallet is an ordinary entry, so it falls through
     const done = await runTransfer(command, user, deps);
+    if (done) return done;
+  } else if (
+    command?.kind === "goal-new" ||
+    command?.kind === "goal-deposit" ||
+    command?.kind === "goal-withdraw"
+  ) {
+    // "ออม ทอง 500" that names none of their goals is an ordinary entry
+    const done = await runGoal(command, user, deps);
     if (done) return done;
   } else if (command?.kind === "debt-new" || command?.kind === "debt-pay") {
     // "สมชายคืน 200" with no such debt (or "ยืม..." that is not one) is an ordinary message
@@ -547,6 +568,84 @@ async function runDebt(
         .join("\n"),
     }),
   ];
+}
+
+/** New goal / put in / take out. null when it is not about a goal of theirs (then an ordinary message). */
+async function runGoal(
+  command: Extract<Command, { kind: "goal-new" | "goal-deposit" | "goal-withdraw" }>,
+  user: UserRow,
+  deps: HandlerDeps,
+): Promise<LineMessage[] | null> {
+  const { db } = deps;
+  const plan = effectivePlan(user.plan, user.plan_expires_at, deps.now());
+  const allowed = can(plan, "savingsGoal");
+  if (command.kind === "goal-new" && !allowed) return [text(GOAL_LOCKED_TEXT)];
+  if (!allowed) return null;
+
+  const goals = (await listGoals(db, user.id, deps.now())).filter((g) => !g.archived);
+
+  if (command.kind === "goal-new") {
+    if (goals.length >= goalCapacity(plan)) return [text(goalFullText(goalCapacity(plan)))];
+    const dueOn = command.due ? dueSpecToDate(command.due, (s) => resolveDue(s, deps.now())) : null;
+    if (command.due && !dueOn) return [text(GOAL_BAD_DUE_TEXT)];
+    const id = await createGoal(db, user.id, {
+      name: command.name,
+      targetSatang: command.targetSatang,
+      dueOn,
+    });
+    if (id === "duplicate") return [text(GOAL_EXISTS_TEXT)];
+    return [
+      text(
+        [
+          `สร้างเป้าหมายแล้ว: ${command.name} ฿${formatBaht(command.targetSatang)}`,
+          dueOn ? `ภายใน ${dueOn.split("-").reverse().join("/")}` : "",
+          `หยอดกระปุกด้วย "ออม ${command.name} 1000" ได้เลย`,
+        ]
+          .filter(Boolean)
+          .join("\n"),
+      ),
+    ];
+  }
+
+  const found = resolveGoal(command.name, goals);
+  if (!found.ok) {
+    if (found.reason === "none") return null;
+    const names = goals
+      .filter((g) => g.name.toLowerCase().startsWith(command.name.toLowerCase()))
+      .map((g) => g.name);
+    return [text(goalAmbiguousText(command.name, names))];
+  }
+  const goal = found.goal;
+  const out = command.kind === "goal-withdraw";
+  if (out && command.amountSatang > goal.savedSatang) {
+    return [text(goalOverdrawText(goal.name, formatBaht(goal.savedSatang)))];
+  }
+
+  const depositId = await addDeposit(db, user.id, goal.id, {
+    amountSatang: out ? -command.amountSatang : command.amountSatang,
+    occurredAt: deps.now(),
+  });
+  const saved = goal.savedSatang + (out ? -command.amountSatang : command.amountSatang);
+  const after = {
+    ...goal,
+    savedSatang: saved,
+    ...goalProgress({ ...goal, savedSatang: saved }, deps.now()),
+  };
+  const reached = !goal.done && after.done;
+  const messages: LineMessage[] = [
+    buildGoalDone({
+      undoData: `a=gx&id=${depositId}&g=${goal.id}`,
+      text: [
+        out
+          ? `ถอนแล้ว ฿${formatBaht(command.amountSatang)} จาก ${goal.name}`
+          : `หยอดแล้ว ฿${formatBaht(command.amountSatang)} → ${goal.name}`,
+        `สะสม ฿${formatBaht(saved)} จาก ฿${formatBaht(goal.targetSatang)} (${after.percent}%)`,
+        after.done ? "ครบเป้าแล้ว" : `เหลืออีก ฿${formatBaht(after.remainingSatang)}`,
+      ].join("\n"),
+    }),
+  ];
+  if (reached) messages.push(buildGoalReachedCard(after));
+  return messages;
 }
 
 /** The daily limit in satang when they have one and their plan allows it, else null. */
@@ -1302,6 +1401,20 @@ async function runCommand(
       ];
     }
 
+    case "goals": {
+      if (!can(effectivePlan(user.plan, user.plan_expires_at, deps.now()), "savingsGoal")) {
+        return [text(GOAL_LOCKED_TEXT)];
+      }
+      const goals = (await listGoals(db, user.id, deps.now())).filter((g) => !g.archived);
+      if (goals.length === 0) return [text(GOAL_EMPTY_TEXT)];
+      return [buildGoalsCard({ goals, manageUrl: pageUrl("/goals") })];
+    }
+
+    case "goal-new":
+    case "goal-deposit":
+    case "goal-withdraw": // handled in handleText; only reached by a direct call
+      return [text(GOAL_EMPTY_TEXT)];
+
     case "daily-budget": {
       const plan = effectivePlan(user.plan, user.plan_expires_at, deps.now());
       if (command.action === "usage") return [text(DAILY_BUDGET_USAGE_TEXT)];
@@ -1540,6 +1653,25 @@ async function handlePostback(
     if (!transferId) return [];
     const removed = await deleteTransfer(deps.db, user.id, transferId);
     return [text(removed ? TRANSFER_CANCELLED_TEXT : NOT_FOUND_TEXT)];
+  }
+
+  // "↩ ยกเลิก" under a deposit into a goal: the id is a deposit, g is its goal
+  if (action === "gx") {
+    const result = await undoDeposit(
+      deps.db,
+      user.id,
+      params.get("g") ?? "",
+      params.get("id") ?? "",
+    );
+    return [
+      text(
+        result === "ok"
+          ? GOAL_UNDONE_TEXT
+          : result === "blocked"
+            ? GOAL_UNDO_BLOCKED_TEXT
+            : NOT_FOUND_TEXT,
+      ),
+    ];
   }
 
   // "↩ ยกเลิก" under a debt or a repayment

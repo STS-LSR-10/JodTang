@@ -36,6 +36,7 @@ export const HELP_TEXT = [
   "• บัตร (วงเงิน/ยอดตามรอบบิลของบัตรเครดิต, Professional ขึ้นไป)",
   "• เงินต่างสกุล (Ultimate): ราเมน 1500 JPY · ตั๋ว 200 USD · ชา 80 เยน (แปลงเป็นบาทตามอัตราของวันนั้น)",
   "• หนี้ (Ultimate): ให้ยืม สมชาย 500 · ยืม แม่ 2000 คืน 25/10 · สมชายคืน 200 · คืนแม่ 1000",
+  "• เป้าหมาย (ดูกระปุกออม) · เป้าหมาย ใหม่ เที่ยวญี่ปุ่น 30000 · ออม เที่ยวญี่ปุ่น 2000 · ถอน เที่ยวญี่ปุ่น 500 — Professional ขึ้นไป",
   "• งบวัน 500 (ตั้งงบรายวัน) · งบวัน (ดูสถานะ) · งบวัน ปิด — Professional ขึ้นไป",
   "• ลบล่าสุด · แก้ล่าสุด 45",
   "• ตังสะสม · รหัสชวน · ใช้รหัส ABCD1234",
@@ -250,3 +251,17 @@ export const DAILY_BUDGET_NONE_TEXT =
 export const DAILY_BUDGET_CLEARED_TEXT = "ปิดงบรายวันแล้ว";
 export const dailyBudgetSetText = (baht: string) =>
   `ตั้งงบรายวัน ฿${baht} แล้ว ถ้าวันไหนใช้เกิน บอทจะเตือนทันทีนะ`;
+export const GOAL_LOCKED_TEXT =
+  'เป้าหมายการออม (กระปุก) เป็นฟีเจอร์ของแผน Professional ขึ้นไป ลองทดลองใช้ฟรี 7 วันได้ที่เมนู "อัปเกรด" นะ';
+export const GOAL_EMPTY_TEXT =
+  'ยังไม่มีเป้าหมายการออม ลองพิมพ์ "เป้าหมาย ใหม่ เที่ยวญี่ปุ่น 30000" (ใส่วันที่ได้ เช่น "ภายใน 31/3") แล้วหยอดกระปุกด้วย "ออม เที่ยวญี่ปุ่น 2000" นะ';
+export const goalFullText = (limit: number) =>
+  `มีเป้าหมายได้ ${limit} ใบแล้ว ลบอันที่ไม่ใช้ในหน้าเป้าหมาย${limit < 20 ? " หรืออัปเกรดเป็น Ultimate เพื่อมีได้ 20 ใบ" : ""}นะ`;
+export const GOAL_EXISTS_TEXT = "มีเป้าหมายชื่อนี้อยู่แล้ว ใช้ชื่ออื่นหรือหยอดกระปุกเดิมได้เลยนะ";
+export const GOAL_BAD_DUE_TEXT = "วันที่ไม่ถูกต้อง ลองใช้รูปแบบ 31/3 หรือ ภายใน 90 วัน นะ";
+export const goalAmbiguousText = (name: string, names: string[]) =>
+  `"${name}" ตรงกับหลายเป้าหมาย (${names.join(" · ")}) พิมพ์ชื่อให้ชัดขึ้นอีกนิดนะ`;
+export const goalOverdrawText = (name: string, savedBaht: string) =>
+  `ถอนเกินยอดที่ออมไว้ไม่ได้ ${name} มี ฿${savedBaht} ลองพิมพ์ยอดที่ไม่เกินนี้นะ`;
+export const GOAL_UNDONE_TEXT = "ยกเลิกรายการหยอดกระปุกแล้ว";
+export const GOAL_UNDO_BLOCKED_TEXT = "ยกเลิกรายการนี้ไม่ได้ เพราะมีการถอนที่ตามมา";

@@ -20,3 +20,8 @@ export const SavingsChart = dynamic(
   () => import("@/components/liff/charts").then((m) => m.SavingsChart),
   { ssr: false, loading: Loading },
 );
+
+export const GoalChart = dynamic(
+  () => import("@/components/liff/charts").then((m) => m.GoalChart),
+  { ssr: false, loading: Loading },
+);

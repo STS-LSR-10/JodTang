@@ -310,6 +310,88 @@ describe("wallets (0019)", () => {
   });
 });
 
+describe("savings goals (0025)", () => {
+  async function seed() {
+    const u = await newUser(db, `g-${Math.random()}`);
+    const other = await newUser(db, `g-other-${Math.random()}`);
+    const goal = async (user: string, name: string, target = 30000) =>
+      (
+        await one<{ id: string }>(
+          db,
+          "insert into savings_goals (user_id,name,target_amount) values ($1,$2,$3) returning id",
+          [user, name, target],
+        )
+      ).id;
+    const deposit = (user: string, goalId: string, amount: number) =>
+      db.query("insert into savings_deposits (user_id,goal_id,amount) values ($1,$2,$3)", [
+        user,
+        goalId,
+        amount,
+      ]);
+    return { u, other, goal, deposit };
+  }
+  const balances = (u: string) =>
+    rows<{ name: string; saved: string; target_amount: string; archived: boolean }>(
+      db,
+      "select name, saved::text, target_amount::text, (archived_at is not null) as archived from goal_balances($1)",
+      [u],
+    );
+
+  it("adds deposits and withdrawals into what is saved", async () => {
+    const { u, goal, deposit } = await seed();
+    const g = await goal(u, "เที่ยวญี่ปุ่น");
+    await deposit(u, g, 2000);
+    await deposit(u, g, 500);
+    await deposit(u, g, -300);
+    expect(await balances(u)).toEqual([
+      { name: "เที่ยวญี่ปุ่น", saved: "2200.00", target_amount: "30000.00", archived: false },
+    ]);
+  });
+
+  it("a goal with no deposits has saved nothing; archived goals come last", async () => {
+    const { u, goal } = await seed();
+    const old = await goal(u, "เก่า");
+    await goal(u, "ใหม่");
+    await db.query("update savings_goals set archived_at = now() where id = $1", [old]);
+    const list = await balances(u);
+    expect(list.map((b) => [b.name, b.saved, b.archived])).toEqual([
+      ["ใหม่", "0", false],
+      ["เก่า", "0", true],
+    ]);
+  });
+
+  it("a name is used once per person among live goals (ignoring case), but can be reused once archived", async () => {
+    const { u, other, goal } = await seed();
+    const a = await goal(u, "Japan");
+    await expect(goal(u, "japan")).rejects.toThrow();
+    await goal(other, "Japan"); // somebody else may use it
+    await db.query("update savings_goals set archived_at = now() where id = $1", [a]);
+    await goal(u, "Japan");
+  });
+
+  it("deleting a goal deletes its deposits; zero deposits and zero targets are refused", async () => {
+    const { u, goal, deposit } = await seed();
+    const g = await goal(u, "x");
+    await deposit(u, g, 100);
+    await expect(deposit(u, g, 0)).rejects.toThrow();
+    await expect(goal(u, "y", 0)).rejects.toThrow();
+    await db.query("delete from savings_goals where id = $1", [g]);
+    const left = await one<{ n: string }>(
+      db,
+      "select count(*)::text as n from savings_deposits where goal_id = $1",
+      [g],
+    );
+    expect(left.n).toBe("0");
+  });
+
+  it("another person's goals never show up", async () => {
+    const { u, other, goal, deposit } = await seed();
+    const g = await goal(other, "ของคนอื่น");
+    await deposit(other, g, 999);
+    expect(await balances(u)).toEqual([]);
+  });
+});
+
 describe("daily budget (0024)", () => {
   it("is empty until set, then holds a positive amount", async () => {
     const u = await newUser(db, `db-${Math.random()}`);

@@ -11,6 +11,7 @@ import {
   Cell,
   ComposedChart,
   Line,
+  ReferenceLine,
   Pie,
   PieChart,
   ResponsiveContainer,
@@ -107,6 +108,35 @@ export function SavingsChart({ points }: { points: SavingsPoint[] }) {
               <Cell key={i} fill={p.net >= 0 ? INCOME_FILL : EXPENSE_FILL} />
             ))}
           </Bar>
+          <Line type="monotone" dataKey="total" stroke={LINE} strokeWidth={3} dot={{ r: 3 }} />
+        </ComposedChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
+export interface GoalPoint {
+  label: string;
+  total: number; // baht saved so far
+}
+
+/** Money saved over time towards a goal, with the target as a dashed line. */
+export function GoalChart({ points, target }: { points: GoalPoint[]; target: number }) {
+  return (
+    <div className="h-48 w-full" role="img" aria-label="กราฟยอดออมสะสม">
+      <ResponsiveContainer width="100%" height="100%">
+        <ComposedChart data={points} margin={{ top: 4, right: 4, bottom: 0, left: -12 }}>
+          <CartesianGrid vertical={false} strokeOpacity={0.25} />
+          <XAxis dataKey="label" tickLine={false} axisLine={false} fontSize={11} />
+          <YAxis
+            tickLine={false}
+            axisLine={false}
+            fontSize={11}
+            tickFormatter={compact}
+            domain={[0, Math.max(target, ...points.map((p) => p.total))]}
+          />
+          <Tooltip formatter={(v) => [money(v), "ออมสะสม"]} />
+          <ReferenceLine y={target} stroke={EXPENSE_FILL} strokeDasharray="4 4" />
           <Line type="monotone" dataKey="total" stroke={LINE} strokeWidth={3} dot={{ r: 3 }} />
         </ComposedChart>
       </ResponsiveContainer>

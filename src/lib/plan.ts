@@ -23,6 +23,10 @@ export const WALLET_LIMIT: Record<Plan, number | null> = {
 /** A guard against runaway creation for plans without a limit. */
 export const WALLET_HARD_CAP = 50;
 
+/** Live savings goals ("piggy banks") a plan may have at once. */
+const GOAL_LIMIT: Record<Plan, number> = { free: 0, plus: 5, ultimate: 20 };
+export const goalCapacity = (plan: Plan): number => GOAL_LIMIT[plan];
+
 /** The number of wallets allowed on `plan`. */
 export function walletCapacity(plan: Plan): number {
   return WALLET_LIMIT[plan] ?? WALLET_HARD_CAP;
@@ -67,7 +71,8 @@ export type Feature =
   | "foreignCurrency"
   | "categoryBudget"
   | "budgetAlert"
-  | "dailyBudget";
+  | "dailyBudget"
+  | "savingsGoal";
 
 /** The lowest tier that has each feature (Ultimate always includes everything Professional has). */
 const MIN_PLAN: Record<Feature, "plus" | "ultimate"> = {
@@ -100,6 +105,7 @@ const MIN_PLAN: Record<Feature, "plus" | "ultimate"> = {
   categoryBudget: "plus",
   budgetAlert: "plus",
   dailyBudget: "plus",
+  savingsGoal: "plus",
 };
 
 export function isPaidPlan(plan: Plan): boolean {

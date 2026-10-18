@@ -60,7 +60,7 @@ const DUE_DMY = /\s*(?:คืน|ครบกำหนด|ครบ|กำหน
 const DUE_TOMORROW = /\s*(?:คืน|ครบกำหนด|ภายใน)?\s*พรุ่งนี้/;
 const DUE_DAYS = /\s*(?:ภายใน|อีก)\s*(\d{1,3})\s*วัน/;
 
-function takeDue(text: string): { text: string; due: DueSpec | null } {
+export function takeDue(text: string): { text: string; due: DueSpec | null } {
   let m = DUE_DMY.exec(text);
   if (m?.[1] && m[2]) {
     return {
@@ -102,7 +102,7 @@ export function resolveDue(spec: DueSpec, now: Date): Date | null {
     : null;
 }
 
-function personAmount(rest: string): { person: string; amountSatang: number } | null {
+export function personAmount(rest: string): { person: string; amountSatang: number } | null {
   const m = PERSON_THEN_AMOUNT.exec(rest.trim());
   if (!m?.[1] || !m[2]) return null;
   const person = cleanPerson(m[1].replace(/^เงิน\s+/, ""));
