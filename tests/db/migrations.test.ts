@@ -2261,3 +2261,39 @@ describe("card theme and bot manner (0032)", () => {
     );
   });
 });
+
+describe("upsell helpers (0033)", () => {
+  it("a free slip read can be taken only up to the limit, and given back", async () => {
+    const u = await newUser(db, `ups-${Math.random()}`);
+    const take = async () =>
+      (await one<{ ok: boolean }>(db, "select take_teaser_slip($1, 1) as ok", [u])).ok;
+    expect(await take()).toBe(true);
+    expect(await take()).toBe(false);
+    await db.query("select refund_teaser_slip($1)", [u]);
+    expect(await take()).toBe(true);
+    await db.query("select refund_teaser_slip($1)", [u]);
+    await db.query("select refund_teaser_slip($1)", [u]); // never below zero
+    const left = await one<{ n: number }>(
+      db,
+      "select teaser_slips_used as n from upsell_state where user_id = $1",
+      [u],
+    );
+    expect(left.n).toBe(0);
+  });
+
+  it("an upgrade card is claimed once per feature per day", async () => {
+    const u = await newUser(db, `ups-${Math.random()}`);
+    const claim = async (f: string, day: string) =>
+      (
+        await one<{ ok: boolean }>(db, "select claim_upsell_card($1, $2, $3::date) as ok", [
+          u,
+          f,
+          day,
+        ])
+      ).ok;
+    expect(await claim("backdate", "2026-10-18")).toBe(true);
+    expect(await claim("backdate", "2026-10-18")).toBe(false);
+    expect(await claim("slip", "2026-10-18")).toBe(true);
+    expect(await claim("backdate", "2026-10-19")).toBe(true);
+  });
+});

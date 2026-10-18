@@ -150,6 +150,7 @@ import {
   buildTypeQuestion,
 } from "./flex";
 import { buildCategoryChooser } from "./slip-flex";
+import { startTrialFromChat, upsellReply } from "./upsell-reply";
 import {
   EDIT_HINT_TEXT,
   EDIT_USAGE_TEXT,
@@ -468,7 +469,8 @@ async function handleText(input: string, user: UserRow, deps: HandlerDeps): Prom
     entries = converted;
   }
   if (entries.some((e) => e.backdated) && !can(plan, "backdate")) {
-    return [text(BACKDATE_LOCKED_TEXT)];
+    // Nothing is saved; the card offers the upgrade, or recording it as today instead.
+    return upsellReply(deps.db, user.id, deps.now(), "backdate", BACKDATE_LOCKED_TEXT, input);
   }
   if (entries.length > 1 && !can(plan, "multiEntry")) return [text(MULTI_ENTRY_LOCKED_TEXT)];
   if (entries.some((e) => e.tags.length > 0) && !can(plan, "tags")) {
@@ -1813,6 +1815,25 @@ async function handlePostback(
   const action = params.get("a");
   // Rich Menu "จดตังค์": answer with the how-to card; its button opens the keyboard (a=compose-go).
   if (action === "compose") return [buildComposeCard()];
+  // "ทดลองใช้ฟรี 7 วัน" on an upgrade card: the same trial as on the web, started in the chat.
+  if (action === "trial") {
+    return startTrialFromChat(deps.db, user.id, deps.now(), formatThaiDate);
+  }
+  // "จดเป็นวันนี้แทน" on the backdate card: the same text again, with every entry dated today.
+  if (action === "bdt") {
+    const original = params.get("t") ?? "";
+    const redo = parseMessage(original, deps.now()).entries.map((e) => ({
+      ...e,
+      occurredAt: deps.now(),
+      backdated: false,
+    }));
+    if (redo.length === 0) return [text(NOT_UNDERSTOOD_TEXT)];
+    const plan = effectivePlan(user.plan, user.plan_expires_at, deps.now());
+    // Only the date is changed; anything else Free cannot do (several entries, tags) still applies.
+    if (redo.length > 1 && !can(plan, "multiEntry")) return [text(MULTI_ENTRY_LOCKED_TEXT)];
+    if (redo.some((e) => e.tags.length > 0) && !can(plan, "tags")) return [text(TAGS_LOCKED_TEXT)];
+    return saveEntries(redo, user, deps, new Map());
+  }
   // "📆 ช่วงวันเอง" under a summary card: pick the first day, then the last (Professional and above).
   // The first day travels in the button's data, so nothing is stored between the two taps.
   if (action === "sr" || action === "sr1" || action === "sr2") {

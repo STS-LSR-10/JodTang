@@ -6,6 +6,19 @@ import { handleSlipImage, type SlipDeps } from "./slips";
 
 let plan = "free";
 let used = 0;
+let teaserLeft = true;
+const refunds: number[] = [];
+vi.mock("@/lib/upsell", () => ({
+  takeTeaserSlip: async () => {
+    const ok = teaserLeft;
+    teaserLeft = false;
+    return ok;
+  },
+  refundTeaserSlip: async () => {
+    refunds.push(1);
+  },
+  claimUpsellCard: async () => false,
+}));
 vi.mock("@/lib/slip-repo", async (original) => ({
   ...(await original<typeof import("@/lib/slip-repo")>()),
   getUserPlanRow: async () => ({ plan, plan_expires_at: null }),
@@ -32,13 +45,23 @@ const run = async () => {
 beforeEach(() => {
   plan = "free";
   used = 0;
+  teaserLeft = true;
+  refunds.length = 0;
   fetchImage.mockClear();
 });
 
 describe("slip quota by plan", () => {
-  it("Free is told slips need Professional, and nothing is downloaded", async () => {
+  it("Free gets one free read; a read that fails gives it back", async () => {
+    await expect(run()).rejects.toThrow("stop after the quota check");
+    expect(fetchImage).toHaveBeenCalledTimes(1);
+    expect(refunds).toHaveLength(1);
+  });
+
+  it("Free with the free read used up is pitched an upgrade, and nothing is downloaded", async () => {
+    teaserLeft = false;
     expect(await run()).toBe(SLIP_LOCKED_TEXT);
     expect(fetchImage).not.toHaveBeenCalled();
+    expect(refunds).toHaveLength(0);
   });
 
   it("Professional is stopped at 5 slips a month", async () => {

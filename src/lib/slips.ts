@@ -10,6 +10,7 @@ import {
   NOT_A_SLIP_TEXT,
   SLIP_LOCKED_TEXT,
   SLIP_QUOTA_TEXT,
+  SLIP_TEASER_TEXT,
   SLIP_UNREADABLE_TEXT,
   text,
 } from "@/lib/line/messages";
@@ -27,6 +28,9 @@ import {
   insertSlip,
   SLIP_BUCKET,
 } from "@/lib/slip-repo";
+import { refundTeaserSlip, takeTeaserSlip } from "@/lib/upsell";
+import { upsellReply } from "@/lib/line/upsell-reply";
+import { log } from "@/lib/log";
 import type { LineMessage } from "@/lib/types";
 
 export interface SlipDeps {
@@ -64,106 +68,124 @@ export async function handleSlipImage(
   // 1. quota (failed reads are never inserted, so they never count)
   const planRow = await getUserPlanRow(db, user.id);
   const plan = effectivePlan(planRow.plan, planRow.plan_expires_at, now);
-  if (SLIP_LIMIT[plan] === 0) return [text(SLIP_LOCKED_TEXT)];
-  const remaining = slipsRemaining(plan, await countSlipsThisMonth(db, user.id, now));
-  if (remaining !== null && remaining <= 0) return [text(SLIP_QUOTA_TEXT)];
-
-  // 2. download
-  let image: SlipImage;
+  // Free: one free read per account for life (a taste); after that the upgrade pitch. A read that
+  // does not end up recorded gives the free read back (see the `finally` below).
+  let teaser = false;
+  if (SLIP_LIMIT[plan] === 0) {
+    teaser = await takeTeaserSlip(db, user.id);
+    if (!teaser) return upsellReply(db, user.id, now, "slip", SLIP_LOCKED_TEXT);
+  }
+  let recorded = false;
   try {
-    image = await deps.fetchImage(messageId);
-  } catch (error) {
-    if (error instanceof ImageError) {
-      return [text(error.reason === "too_large" ? IMAGE_TOO_LARGE_TEXT : IMAGE_ERROR_TEXT)];
+    const messages = await readSlip();
+    return teaser && recorded ? [...messages, text(SLIP_TEASER_TEXT)] : messages;
+  } finally {
+    if (teaser && !recorded)
+      await refundTeaserSlip(db, user.id).catch((e) => log.error("teaser_refund_failed", e));
+  }
+
+  async function readSlip(): Promise<LineMessage[]> {
+    const remaining = slipsRemaining(plan, await countSlipsThisMonth(db, user.id, now));
+    if (!teaser && remaining !== null && remaining <= 0) return [text(SLIP_QUOTA_TEXT)];
+
+    // 2. download
+    let image: SlipImage;
+    try {
+      image = await deps.fetchImage(messageId);
+    } catch (error) {
+      if (error instanceof ImageError) {
+        return [text(error.reason === "too_large" ? IMAGE_TOO_LARGE_TEXT : IMAGE_ERROR_TEXT)];
+      }
+      throw error;
     }
-    throw error;
-  }
 
-  // 3. same picture sent before?
-  const hash = sha256(image.bytes);
-  const sameImage = await findSlipByHash(db, user.id, hash);
-  if (sameImage) return alreadyRecorded(db, user.id, sameImage.id);
+    // 3. same picture sent before?
+    const hash = sha256(image.bytes);
+    const sameImage = await findSlipByHash(db, user.id, hash);
+    if (sameImage) return alreadyRecorded(db, user.id, sameImage.id);
 
-  // 4. private storage (path is scoped by user id)
-  const path = `${user.id}/${hash}.${extensionFor(image.mimeType)}`;
-  const upload = await db.storage
-    .from(SLIP_BUCKET)
-    .upload(path, image.bytes, { contentType: image.mimeType, upsert: true });
-  if (upload.error) throw new Error(`upload slip: ${upload.error.message}`);
+    // 4. private storage (path is scoped by user id)
+    const path = `${user.id}/${hash}.${extensionFor(image.mimeType)}`;
+    const upload = await db.storage
+      .from(SLIP_BUCKET)
+      .upload(path, image.bytes, { contentType: image.mimeType, upsert: true });
+    if (upload.error) throw new Error(`upload slip: ${upload.error.message}`);
 
-  const discardUpload = async () => {
-    await db.storage.from(SLIP_BUCKET).remove([path]);
-  };
+    const discardUpload = async () => {
+      await db.storage.from(SLIP_BUCKET).remove([path]);
+    };
 
-  // 5. OCR + validation
-  let result;
-  try {
-    result = sanitizeSlip(await deps.ocr.extract(image, { items: plan === "ultimate" }), now);
-  } catch (error) {
-    await discardUpload().catch(() => undefined);
-    throw error;
-  }
-  if (!result.ok) {
-    await discardUpload().catch(() => undefined);
-    return [text(result.reason === "not_slip" ? NOT_A_SLIP_TEXT : SLIP_UNREADABLE_TEXT)];
-  }
-  const data = result.data;
-
-  // 6. same slip photographed again? (reference numbers are unique per user)
-  if (data.reference) {
-    const sameRef = await findSlipByRef(db, user.id, data.reference);
-    if (sameRef) {
+    // 5. OCR + validation
+    let result;
+    try {
+      result = sanitizeSlip(await deps.ocr.extract(image, { items: plan === "ultimate" }), now);
+    } catch (error) {
       await discardUpload().catch(() => undefined);
-      return alreadyRecorded(db, user.id, sameRef.id);
+      throw error;
     }
-  }
+    if (!result.ok) {
+      await discardUpload().catch(() => undefined);
+      return [text(result.reason === "not_slip" ? NOT_A_SLIP_TEXT : SLIP_UNREADABLE_TEXT)];
+    }
+    const data = result.data;
 
-  // 7. record the slip and a pending transaction
-  const slip = await insertSlip(db, { userId: user.id, storagePath: path, sha256: hash, data });
-  if (!slip) {
-    await discardUpload().catch(() => undefined);
-    return [text(ALREADY_RECORDED_TEXT)];
-  }
+    // 6. same slip photographed again? (reference numbers are unique per user)
+    if (data.reference) {
+      const sameRef = await findSlipByRef(db, user.id, data.reference);
+      if (sameRef) {
+        await discardUpload().catch(() => undefined);
+        return alreadyRecorded(db, user.id, sameRef.id);
+      }
+    }
 
-  const title = data.payeeName ?? data.memo ?? "โอนเงิน";
-  const [categories, memory] = await Promise.all([
-    loadCategories(db, user.id),
-    loadMemoryFor(db, user, now),
-  ]);
-  const { categoryId } = categorizeByRules({
-    title: [data.payeeName, data.memo].filter(Boolean).join(" ") || title,
-    type: "expense",
-    categories,
-    memory,
-  });
+    // 7. record the slip and a pending transaction
+    const slip = await insertSlip(db, { userId: user.id, storagePath: path, sha256: hash, data });
+    if (!slip) {
+      await discardUpload().catch(() => undefined);
+      return [text(ALREADY_RECORDED_TEXT)];
+    }
 
-  const occurredAt = data.paidAt ?? now;
-  const tx = await insertTransaction(db, {
-    userId: user.id,
-    type: "expense",
-    title,
-    amountSatang: data.amountSatang,
-    categoryId,
-    occurredAt,
-    status: "pending_confirm",
-    rawText: title,
-    source: "slip",
-    slipId: slip.id,
-  });
+    recorded = true;
+    const title = data.payeeName ?? data.memo ?? "โอนเงิน";
+    const [categories, memory] = await Promise.all([
+      loadCategories(db, user.id),
+      loadMemoryFor(db, user, now),
+    ]);
+    const { categoryId } = categorizeByRules({
+      title: [data.payeeName, data.memo].filter(Boolean).join(" ") || title,
+      type: "expense",
+      categories,
+      memory,
+    });
 
-  return [
-    buildSlipCard({
-      txId: tx.id,
+    const occurredAt = data.paidAt ?? now;
+    const tx = await insertTransaction(db, {
+      userId: user.id,
+      type: "expense",
       title,
-      payeeBank: data.payeeBank,
-      payeeAccountLast4: data.payeeAccountLast4,
       amountSatang: data.amountSatang,
+      categoryId,
       occurredAt,
-      dateKnown: data.paidAt !== null,
-      categoryName: categories.find((c) => c.id === categoryId)?.name ?? null,
-      reference: data.reference,
-      // product lines are an Ultimate feature: others never get (or pay for) them
-      items: plan === "ultimate" && data.kind === "receipt" ? data.items : [],
-    }),
-  ];
+      status: "pending_confirm",
+      rawText: title,
+      source: "slip",
+      slipId: slip.id,
+    });
+
+    return [
+      buildSlipCard({
+        txId: tx.id,
+        title,
+        payeeBank: data.payeeBank,
+        payeeAccountLast4: data.payeeAccountLast4,
+        amountSatang: data.amountSatang,
+        occurredAt,
+        dateKnown: data.paidAt !== null,
+        categoryName: categories.find((c) => c.id === categoryId)?.name ?? null,
+        reference: data.reference,
+        // product lines are an Ultimate feature: others never get (or pay for) them
+        items: plan === "ultimate" && data.kind === "receipt" ? data.items : [],
+      }),
+    ];
+  }
 }
