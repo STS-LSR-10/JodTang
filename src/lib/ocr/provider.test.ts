@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { createSlipOcrProvider, extractJson, type SlipImage } from "./provider";
+import { createSlipOcrProvider, extractJson, slipPrompt, type SlipImage } from "./provider";
 
 const image: SlipImage = { bytes: new Uint8Array([1, 2, 3]), mimeType: "image/jpeg" };
 const SLIP = { is_slip: true, amount: 120 };
@@ -88,5 +88,38 @@ describe("errors", () => {
       fakeFetch(200, {}),
     );
     expect(p.name).toBe("openai:x");
+  });
+});
+
+describe("product lines are only asked for on request", () => {
+  it("the plain prompt does not mention items; the receipt prompt does", () => {
+    expect(slipPrompt(false)).not.toContain("items");
+    expect(slipPrompt(true)).toContain("items");
+  });
+
+  it("gemini sends the plain prompt by default and the receipt prompt with items: true", async () => {
+    const f = fakeFetch(200, {
+      candidates: [{ content: { parts: [{ text: JSON.stringify(SLIP) }] } }],
+    });
+    const p = createSlipOcrProvider({ provider: "gemini", apiKey: "k" }, f);
+    await p.extract(image);
+    await p.extract(image, { items: true });
+    const calls = (f as unknown as ReturnType<typeof vi.fn>).mock.calls as [string, RequestInit][];
+    const promptOf = (i: number) =>
+      JSON.parse(String(calls[i]?.[1].body)).contents[0].parts[0].text as string;
+    expect(promptOf(0)).not.toContain("items");
+    expect(promptOf(1)).toContain("items");
+  });
+
+  it("anthropic's tool schema only has the items field when asked", async () => {
+    const f = fakeFetch(200, { content: [{ type: "tool_use", input: SLIP }] });
+    const p = createSlipOcrProvider({ provider: "anthropic", apiKey: "k" }, f);
+    await p.extract(image);
+    await p.extract(image, { items: true });
+    const calls = (f as unknown as ReturnType<typeof vi.fn>).mock.calls as [string, RequestInit][];
+    const props = (i: number) =>
+      Object.keys(JSON.parse(String(calls[i]?.[1].body)).tools[0].input_schema.properties);
+    expect(props(0)).not.toContain("items");
+    expect(props(1)).toContain("items");
   });
 });

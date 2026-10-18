@@ -13,6 +13,16 @@ export const rawSlipSchema = z.object({
   payer_bank: z.string().nullable().optional(),
   reference: z.string().nullable().optional(),
   memo: z.string().nullable().optional(),
+  /** Receipt lines (only asked for Ultimate users). */
+  items: z
+    .array(
+      z.object({
+        name: z.string().nullable().optional(),
+        amount: z.union([z.number(), z.string()]).nullable().optional(),
+      }),
+    )
+    .nullable()
+    .optional(),
 });
 
 /** JSON Schema twin of `rawSlipSchema`, for providers with structured output / tool use. */
@@ -38,9 +48,33 @@ export const SLIP_JSON_SCHEMA = {
     payer_bank: { type: ["string", "null"] },
     reference: { type: ["string", "null"], description: "Transaction / reference number" },
     memo: { type: ["string", "null"], description: "Note written by the sender" },
+    items: {
+      type: ["array", "null"],
+      description: "Receipt lines, one per product, in printed order (receipts only)",
+      items: {
+        type: "object",
+        properties: {
+          name: { type: ["string", "null"], description: "Product name as printed" },
+          amount: {
+            type: ["number", "null"],
+            description: "Price of that line in THB (quantity already multiplied)",
+          },
+        },
+      },
+    },
   },
   required: ["is_slip"],
 } as const;
+
+/** One product line of a receipt. */
+export interface ReceiptItem {
+  name: string;
+  /** Integer satang, always > 0. */
+  amountSatang: number;
+}
+
+export const MAX_RECEIPT_ITEMS = 30;
+const MAX_ITEM_NAME = 60;
 
 export interface SlipData {
   kind: "transfer" | "receipt" | "other";
@@ -55,6 +89,8 @@ export interface SlipData {
   payerBank: string | null;
   reference: string | null;
   memo: string | null;
+  /** Product lines (empty unless the reader was asked for them and found some). */
+  items: ReceiptItem[];
 }
 
 export type SlipRejection = "not_slip" | "unreadable" | "invalid_amount";
@@ -122,6 +158,30 @@ export function sanitizeSlip(raw: unknown, now: Date = new Date()): SlipResult {
       payerBank: clean(r.payer_bank, 40),
       reference,
       memo: clean(r.memo, 60),
+      items: sanitizeItems(r.items),
     },
   };
+}
+
+/** Keep readable lines only (a name and a positive amount), at most MAX_RECEIPT_ITEMS. */
+export function sanitizeItems(
+  raw: { name?: string | null; amount?: number | string | null }[] | null | undefined,
+): ReceiptItem[] {
+  const items: ReceiptItem[] = [];
+  for (const line of raw ?? []) {
+    const name = clean(line.name, MAX_ITEM_NAME);
+    const amountSatang = parseAmount(line.amount);
+    if (name && amountSatang !== null) items.push({ name, amountSatang });
+    if (items.length >= MAX_RECEIPT_ITEMS) break;
+  }
+  return items;
+}
+
+/** Product lines as saved in `slips.ocr_json.items` ({ name, amount: "12.50" }). */
+export function parseStoredItems(ocrJson: unknown): ReceiptItem[] {
+  const parsed = z
+    .object({ items: z.array(z.object({ name: z.string(), amount: z.string() })).optional() })
+    .safeParse(ocrJson);
+  if (!parsed.success) return [];
+  return sanitizeItems(parsed.data.items);
 }

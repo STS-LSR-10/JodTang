@@ -1,6 +1,8 @@
 import { formatBaht } from "@/lib/money";
 import { formatThaiDate } from "@/lib/thai-date";
 import type { LineMessage } from "@/lib/types";
+import type { ReceiptItem } from "@/lib/ocr/slip-schema";
+import { planReceiptSplit } from "@/lib/receipt-split";
 import { COLOR, row } from "./flex";
 import { PICK_CATEGORY_TEXT } from "./messages";
 
@@ -15,7 +17,11 @@ export interface SlipCardInput {
   dateKnown: boolean;
   categoryName: string | null;
   reference: string | null;
+  /** Receipt product lines (Ultimate only; empty for everyone else). */
+  items?: ReceiptItem[];
 }
+
+const MAX_SHOWN_ITEMS = 8;
 
 /** Review card for a slip that still needs the user's confirmation (confirm / edit / cancel). */
 export function buildSlipCard(input: SlipCardInput): LineMessage {
@@ -45,6 +51,39 @@ export function buildSlipCard(input: SlipCardInput): LineMessage {
       color: COLOR.muted,
       wrap: true,
     });
+  }
+
+  const items = input.items ?? [];
+  const split = planReceiptSplit(input.amountSatang, items);
+  if (items.length > 0) {
+    body.push({ type: "separator", margin: "md" });
+    body.push({
+      type: "text",
+      text: "รายการในใบเสร็จ",
+      size: "sm",
+      weight: "bold",
+      color: COLOR.text,
+    });
+    for (const item of items.slice(0, MAX_SHOWN_ITEMS)) {
+      body.push(row(item.name, `฿${formatBaht(item.amountSatang)}`));
+    }
+    if (items.length > MAX_SHOWN_ITEMS) {
+      body.push({
+        type: "text",
+        text: `และอีก ${items.length - MAX_SHOWN_ITEMS} รายการ`,
+        size: "xs",
+        color: COLOR.muted,
+      });
+    }
+    if (!split.ok && split.reason === "over_total") {
+      body.push({
+        type: "text",
+        text: "ยอดรายการรวมเกินยอดรวมของใบ (อาจมีส่วนลดท้ายบิล) จดเป็นยอดรวมใบเดียวนะ",
+        size: "xs",
+        color: COLOR.muted,
+        wrap: true,
+      });
+    }
   }
 
   const button = (
@@ -95,6 +134,7 @@ export function buildSlipCard(input: SlipCardInput): LineMessage {
         spacing: "sm",
         contents: [
           button("ยืนยัน", "sc", "primary", COLOR.primary),
+          ...(split.ok ? [button(`แยก ${items.length} รายการ`, "sp", "secondary")] : []),
           {
             type: "box",
             layout: "horizontal",

@@ -465,3 +465,39 @@ export async function claimEvent(db: SupabaseClient, eventId: string): Promise<b
 export async function releaseEvent(db: SupabaseClient, eventId: string): Promise<void> {
   await db.from("line_events").delete().eq("event_id", eventId);
 }
+
+/**
+ * Take a pending entry out of play exactly once: only the call that finds it still
+ * "pending_confirm" gets the row, so a double tap cannot split the same receipt twice.
+ */
+export async function claimPendingTransaction(
+  db: SupabaseClient,
+  userId: string,
+  txId: string,
+): Promise<TxRow | null> {
+  const { data, error } = await db
+    .from("transactions")
+    .update({ status: "deleted" })
+    .eq("id", txId)
+    .eq("user_id", userId)
+    .eq("status", "pending_confirm")
+    .select(TX_COLUMNS)
+    .maybeSingle();
+  if (error) fail("claim pending transaction", error);
+  return (data as TxRow | null) ?? null;
+}
+
+/** Undo `claimPendingTransaction` when what should follow it failed. */
+export async function releasePendingTransaction(
+  db: SupabaseClient,
+  userId: string,
+  txId: string,
+): Promise<void> {
+  const { error } = await db
+    .from("transactions")
+    .update({ status: "pending_confirm" })
+    .eq("id", txId)
+    .eq("user_id", userId)
+    .eq("status", "deleted");
+  if (error) fail("release pending transaction", error);
+}

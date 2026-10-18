@@ -16,10 +16,12 @@ import {
   getLatestConfirmed,
   getSettings,
   getTransaction,
+  claimPendingTransaction,
   insertTransaction,
   loadCategories,
   loadMemoryFor,
   periodSummary,
+  releasePendingTransaction,
   txAmountSatang,
   updateTransaction,
   type SettingsRow,
@@ -38,7 +40,8 @@ import {
   recentDailyKeys,
   redeemable,
 } from "@/lib/points";
-import { getSlip, learnMerchant } from "@/lib/slip-repo";
+import { getSlip, getSlipItems, learnMerchant } from "@/lib/slip-repo";
+import { planReceiptSplit } from "@/lib/receipt-split";
 import { handleSlipImage } from "@/lib/slips";
 import { handlePhotoImage, photoBlockedReply } from "@/lib/photos";
 import { getLivePhotoWait, getPhotoTx, startPhotoWait } from "@/lib/photo-repo";
@@ -63,6 +66,9 @@ import {
   NOT_UNDERSTOOD_TEXT,
   PHOTO_ASK_REPLACE_TEXT,
   PHOTO_ASK_TEXT,
+  SPLIT_LOCKED_TEXT,
+  SPLIT_UNAVAILABLE_TEXT,
+  splitDoneText,
   NOTHING_TO_DELETE_TEXT,
   REFERRAL_BONUS_TEXT,
   REFERRAL_FAIL_TEXT,
@@ -311,6 +317,76 @@ async function saveEntries(
 }
 
 /**
+ * Turn a pending receipt into one confirmed entry per product line (plus a remainder line when the
+ * lines come to less than the total). The pending entry is claimed first, so a double tap splits once;
+ * if anything fails afterwards the receipt goes back to waiting and the partial entries are removed.
+ */
+async function splitReceipt(tx: TxRow, user: UserRow, deps: HandlerDeps): Promise<LineMessage[]> {
+  const { db } = deps;
+  if (tx.status !== "pending_confirm" || !tx.slip_id) return [text(NOT_FOUND_TEXT)];
+  const plan = effectivePlan(user.plan, user.plan_expires_at, deps.now());
+  if (plan !== "ultimate") return [text(SPLIT_LOCKED_TEXT)];
+
+  const split = planReceiptSplit(txAmountSatang(tx), await getSlipItems(db, user.id, tx.slip_id));
+  if (!split.ok) return [text(SPLIT_UNAVAILABLE_TEXT)];
+
+  const claimed = await claimPendingTransaction(db, user.id, tx.id);
+  if (!claimed) return [text(NOT_FOUND_TEXT)];
+
+  const created: TxRow[] = [];
+  try {
+    const [categories, memory] = await Promise.all([
+      loadCategories(db, user.id),
+      loadMemoryFor(db, user, deps.now()),
+    ]);
+    for (const line of split.lines) {
+      const { categoryId } = categorizeByRules({
+        title: line.name,
+        type: tx.type,
+        categories,
+        memory,
+      });
+      created.push(
+        await insertTransaction(db, {
+          userId: user.id,
+          type: tx.type,
+          title: line.name,
+          amountSatang: line.amountSatang,
+          categoryId,
+          occurredAt: new Date(tx.occurred_at),
+          status: "confirmed",
+          rawText: line.name,
+          source: "slip",
+          slipId: tx.slip_id,
+        }),
+      );
+    }
+    const messages: LineMessage[] = [
+      text(
+        splitDoneText(
+          split.lines.map((l) => ({ title: l.name, amountBaht: formatBaht(l.amountSatang) })),
+          formatBaht(txAmountSatang(tx)),
+        ),
+      ),
+    ];
+    for (const t of created) {
+      for (const alert of await safeAlerts(deps, user.id, t, t.category_id)) {
+        messages.push(text(alert));
+      }
+    }
+    messages.push(...(await awardAndNotify(deps, user.id)));
+    return messages;
+  } catch (error) {
+    // put everything back so the person can try again or confirm the whole receipt
+    for (const t of created) {
+      await updateTransaction(db, user.id, t.id, { status: "deleted" }).catch(() => undefined);
+    }
+    await releasePendingTransaction(db, user.id, tx.id).catch(() => undefined);
+    throw error;
+  }
+}
+
+/**
  * After an entry is confirmed: the day's point, and the one-time referral bonus on the first
  * activity of a referred user. Silent unless a bonus was just paid. Never throws.
  */
@@ -521,6 +597,9 @@ async function handlePostback(
     await startPhotoWait(db, user.id, id, deps.now());
     return [buildPhotoAsk(current?.photo_path ? PHOTO_ASK_REPLACE_TEXT : PHOTO_ASK_TEXT)];
   }
+
+  // "แยก n รายการ" on a receipt card (Ultimate): one entry per product line
+  if (action === "sp") return splitReceipt(tx, user, deps);
 
   if (action === "pt") {
     if (tx.status !== "pending_confirm") return [text(NOT_FOUND_TEXT)];

@@ -1,4 +1,4 @@
-import type { SlipImage, SlipOcrProvider } from "./provider";
+import type { ExtractOptions, SlipImage, SlipOcrProvider } from "./provider";
 import { rawSlipSchema, sanitizeSlip } from "./slip-schema";
 
 /**
@@ -37,13 +37,13 @@ export function createSlipReaderChain(
 
   return {
     name: readers.map((r) => r.name).join(" > "),
-    async extract(image: SlipImage) {
+    async extract(image: SlipImage, extractOptions?: ExtractOptions) {
       let lastError: unknown;
       let lastUnusable: { value: unknown } | undefined;
 
       for (const reader of readers) {
         try {
-          const raw = await reader.extract(image);
+          const raw = await reader.extract(image, extractOptions);
           if (isUsableReply(raw, now())) return raw;
           lastUnusable = { value: raw };
           options.onSkip?.(reader.name, "unusable reply");

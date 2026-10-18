@@ -98,7 +98,7 @@ export async function handleSlipImage(
   // 5. OCR + validation
   let result;
   try {
-    result = sanitizeSlip(await deps.ocr.extract(image), now);
+    result = sanitizeSlip(await deps.ocr.extract(image, { items: plan === "ultimate" }), now);
   } catch (error) {
     await discardUpload().catch(() => undefined);
     throw error;
@@ -162,6 +162,8 @@ export async function handleSlipImage(
       dateKnown: data.paidAt !== null,
       categoryName: categories.find((c) => c.id === categoryId)?.name ?? null,
       reference: data.reference,
+      // product lines are an Ultimate feature: others never get (or pay for) them
+      items: plan === "ultimate" && data.kind === "receipt" ? data.items : [],
     }),
   ];
 }

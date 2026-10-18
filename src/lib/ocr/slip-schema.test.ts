@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { sanitizeSlip } from "./slip-schema";
+import { MAX_RECEIPT_ITEMS, parseStoredItems, sanitizeSlip } from "./slip-schema";
 
 const NOW = new Date("2026-10-15T08:00:00Z");
 
@@ -82,5 +82,51 @@ describe("sanitizeSlip", () => {
     const d = ok({ ...valid, payee_name: "  " + "ก".repeat(200) + "  ", memo: "   " });
     expect(d.payeeName).toHaveLength(60);
     expect(d.memo).toBeNull();
+  });
+});
+
+describe("receipt items", () => {
+  const receipt = { ...valid, kind: "receipt", amount: 100 };
+
+  it("keeps readable lines and drops the rest", () => {
+    const d = ok({
+      ...receipt,
+      items: [
+        { name: "นมสด", amount: 25.5 },
+        { name: "  ขนมปัง  ", amount: "30" },
+        { name: "ไม่มีราคา", amount: null },
+        { name: "", amount: 10 },
+        { name: "ติดลบ", amount: -5 },
+        { amount: 12 },
+      ],
+    });
+    expect(d.items).toEqual([
+      { name: "นมสด", amountSatang: 2550 },
+      { name: "ขนมปัง", amountSatang: 3000 },
+    ]);
+  });
+
+  it("is empty when the reader gave none", () => {
+    expect(ok(receipt).items).toEqual([]);
+    expect(ok({ ...receipt, items: null }).items).toEqual([]);
+  });
+
+  it("is capped", () => {
+    const many = Array.from({ length: 50 }, (_, i) => ({ name: `สินค้า ${i}`, amount: 1 }));
+    expect(ok({ ...receipt, items: many }).items).toHaveLength(MAX_RECEIPT_ITEMS);
+  });
+
+  it("reads back what was stored in ocr_json", () => {
+    expect(
+      parseStoredItems({
+        items: [
+          { name: "นม", amount: "25.50" },
+          { name: "x", amount: "0" },
+        ],
+      }),
+    ).toEqual([{ name: "นม", amountSatang: 2550 }]);
+    expect(parseStoredItems({ kind: "receipt" })).toEqual([]);
+    expect(parseStoredItems(null)).toEqual([]);
+    expect(parseStoredItems({ items: "nope" })).toEqual([]);
   });
 });

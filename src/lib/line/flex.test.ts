@@ -214,3 +214,52 @@ describe("compose quick replies", () => {
     expect(m.quickReply).toBeUndefined();
   });
 });
+
+describe("receipt card with product lines", () => {
+  const card = (items: { name: string; amountSatang: number }[], amountSatang = 10_000) =>
+    JSON.stringify(
+      buildSlipCard({
+        txId: base.txId,
+        title: "เซเว่น",
+        payeeBank: null,
+        payeeAccountLast4: null,
+        amountSatang,
+        occurredAt: new Date("2026-10-15T08:00:00Z"),
+        dateKnown: true,
+        categoryName: "อาหาร",
+        reference: null,
+        items,
+      }),
+    );
+  const two = [
+    { name: "นมสด", amountSatang: 3000 },
+    { name: "ขนมปัง", amountSatang: 7000 },
+  ];
+
+  it("lists the lines and offers to split them", () => {
+    const json = card(two);
+    expect(json).toContain("รายการในใบเสร็จ");
+    expect(json).toContain("นมสด");
+    expect(json).toContain(`"data":"a=sp&id=${base.txId}"`);
+    expect(json).toContain("แยก 2 รายการ");
+  });
+
+  it("shows at most 8 lines and says how many more", () => {
+    const many = Array.from({ length: 11 }, (_, i) => ({ name: `สินค้า${i}`, amountSatang: 100 }));
+    const json = card(many, 5000);
+    expect(json).toContain("และอีก 3 รายการ");
+    expect(json).not.toContain("สินค้า9");
+  });
+
+  it("has no split button when the lines exceed the total, and says why", () => {
+    const json = card(two, 9000);
+    expect(json).not.toContain("a=sp");
+    expect(json).toContain("เกินยอดรวม");
+  });
+
+  it("is the old card when there are no lines", () => {
+    const json = card([]);
+    expect(json).not.toContain("รายการในใบเสร็จ");
+    expect(json).not.toContain("a=sp");
+  });
+});

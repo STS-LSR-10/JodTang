@@ -3,7 +3,7 @@ import { normalizeText } from "@/lib/categorize/rules";
 import { satangToString } from "@/lib/money";
 import type { Plan } from "@/lib/plan";
 import { fromBangkok, bangkokParts } from "@/lib/thai-date";
-import type { SlipData } from "@/lib/ocr/slip-schema";
+import { parseStoredItems, type ReceiptItem, type SlipData } from "@/lib/ocr/slip-schema";
 
 export const SLIP_BUCKET = "slips";
 
@@ -96,6 +96,22 @@ export async function getSlip(
   return (data as SlipRow | null) ?? null;
 }
 
+/** The receipt's product lines saved with the slip (empty when there are none). */
+export async function getSlipItems(
+  db: SupabaseClient,
+  userId: string,
+  slipId: string,
+): Promise<ReceiptItem[]> {
+  const { data, error } = await db
+    .from("slips")
+    .select("ocr_json")
+    .eq("user_id", userId)
+    .eq("id", slipId)
+    .maybeSingle();
+  if (error) fail("load slip items", error);
+  return parseStoredItems((data as { ocr_json?: unknown } | null)?.ocr_json);
+}
+
 /** Returns the new slip, or null when the unique (user, ref|hash) constraint says it already exists. */
 export async function insertSlip(
   db: SupabaseClient,
@@ -119,6 +135,8 @@ export async function insertSlip(
         payer_bank: d.payerBank,
         reference: d.reference,
         memo: d.memo,
+        // product lines (Ultimate receipts); empty array otherwise
+        items: d.items.map((i) => ({ name: i.name, amount: satangToString(i.amountSatang) })),
       },
       slip_ref: d.reference,
       amount: satangToString(d.amountSatang),

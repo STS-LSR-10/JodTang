@@ -8,7 +8,12 @@ export interface SlipImage {
 /** Reads a slip image and returns the (untrusted) structured fields. Swap providers freely. */
 export interface SlipOcrProvider {
   readonly name: string;
-  extract(image: SlipImage): Promise<unknown>;
+  /** `items: true` also asks for the product lines of a receipt (costs more output, Ultimate only). */
+  extract(image: SlipImage, options?: ExtractOptions): Promise<unknown>;
+}
+
+export interface ExtractOptions {
+  items?: boolean;
 }
 
 export type AiProviderName = "gemini" | "anthropic" | "openai";
@@ -29,18 +34,43 @@ export const DEFAULT_MODELS: Record<AiProviderName, string> = {
 
 const TIMEOUT_MS = 30_000;
 
-export const SLIP_PROMPT = [
-  "You read Thai bank transfer slips, PromptPay/e-wallet slips and shop receipts.",
-  "Return ONLY a JSON object that matches this JSON Schema, with no extra text:",
-  JSON.stringify(SLIP_JSON_SCHEMA),
-  "Rules:",
+const BASE_RULES = [
   "- is_slip=false if the image is not a payment slip or receipt (then other fields may be null).",
   "- amount is the money actually paid, in THB, as a number (no currency symbol).",
   "- paid_at must be ISO 8601 with +07:00 and a Gregorian year. Thai slips often use the Buddhist",
   "  era (2569 = 2026) and Thai month names; convert them. Use null if the date is unreadable.",
   "- payee_* describe the RECIPIENT (the person or shop that received the money), not the sender.",
   "- Never invent values. Use null for anything you cannot read.",
-].join("\n");
+];
+
+const ITEMS_RULES = [
+  "- For a shop receipt also fill items: one entry per product line in printed order, with name as",
+  "  printed and amount = the price of that line in THB (quantity already multiplied, discounts on",
+  "  the line applied). Skip subtotal, VAT, service charge, change and payment lines. Use null for",
+  "  items on anything that is not a shop receipt.",
+];
+
+/** The JSON Schema without the product lines, for readers that were not asked for them. */
+const { items: _items, ...PLAIN_PROPERTIES } = SLIP_JSON_SCHEMA.properties;
+void _items;
+export const PLAIN_SLIP_JSON_SCHEMA = { ...SLIP_JSON_SCHEMA, properties: PLAIN_PROPERTIES };
+
+/**
+ * The reading prompt. Product lines (and the schema field for them) are only included when
+ * `withItems` is set, so readers that were not asked for them are not tempted to spend output on it.
+ */
+export function slipPrompt(withItems = false): string {
+  return [
+    "You read Thai bank transfer slips, PromptPay/e-wallet slips and shop receipts.",
+    "Return ONLY a JSON object that matches this JSON Schema, with no extra text:",
+    JSON.stringify(withItems ? SLIP_JSON_SCHEMA : PLAIN_SLIP_JSON_SCHEMA),
+    "Rules:",
+    ...BASE_RULES,
+    ...(withItems ? ITEMS_RULES : []),
+  ].join("\n");
+}
+
+export const SLIP_PROMPT = slipPrompt(false);
 
 export function toBase64(bytes: Uint8Array): string {
   return Buffer.from(bytes).toString("base64");
@@ -76,7 +106,7 @@ function geminiProvider(cfg: AiConfig, fetchImpl: typeof fetch): SlipOcrProvider
   const model = cfg.model ?? DEFAULT_MODELS.gemini;
   return {
     name: `gemini:${model}`,
-    async extract(image) {
+    async extract(image, options) {
       const data = (await postJson(
         "gemini",
         `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
@@ -85,7 +115,7 @@ function geminiProvider(cfg: AiConfig, fetchImpl: typeof fetch): SlipOcrProvider
           contents: [
             {
               parts: [
-                { text: SLIP_PROMPT },
+                { text: slipPrompt(options?.items) },
                 { inline_data: { mime_type: image.mimeType, data: toBase64(image.bytes) } },
               ],
             },
@@ -104,21 +134,21 @@ function anthropicProvider(cfg: AiConfig, fetchImpl: typeof fetch): SlipOcrProvi
   const model = cfg.model ?? DEFAULT_MODELS.anthropic;
   return {
     name: `anthropic:${model}`,
-    async extract(image) {
+    async extract(image, options) {
       const data = (await postJson(
         "anthropic",
         "https://api.anthropic.com/v1/messages",
         { "x-api-key": cfg.apiKey, "anthropic-version": "2023-06-01" },
         {
           model,
-          max_tokens: 1024,
+          max_tokens: options?.items ? 2048 : 1024,
           temperature: 0,
           // Forcing a tool call gives schema-shaped structured output.
           tools: [
             {
               name: "record_slip",
               description: "Record the fields read from the payment slip",
-              input_schema: SLIP_JSON_SCHEMA,
+              input_schema: options?.items ? SLIP_JSON_SCHEMA : PLAIN_SLIP_JSON_SCHEMA,
             },
           ],
           tool_choice: { type: "tool", name: "record_slip" },
@@ -134,7 +164,7 @@ function anthropicProvider(cfg: AiConfig, fetchImpl: typeof fetch): SlipOcrProvi
                     data: toBase64(image.bytes),
                   },
                 },
-                { type: "text", text: SLIP_PROMPT },
+                { type: "text", text: slipPrompt(options?.items) },
               ],
             },
           ],
@@ -153,7 +183,7 @@ function openaiProvider(cfg: AiConfig, fetchImpl: typeof fetch): SlipOcrProvider
   const model = cfg.model ?? DEFAULT_MODELS.openai;
   return {
     name: `openai:${model}`,
-    async extract(image) {
+    async extract(image, options) {
       const data = (await postJson(
         "openai",
         "https://api.openai.com/v1/chat/completions",
@@ -166,7 +196,7 @@ function openaiProvider(cfg: AiConfig, fetchImpl: typeof fetch): SlipOcrProvider
             {
               role: "user",
               content: [
-                { type: "text", text: SLIP_PROMPT },
+                { type: "text", text: slipPrompt(options?.items) },
                 {
                   type: "image_url",
                   image_url: { url: `data:${image.mimeType};base64,${toBase64(image.bytes)}` },

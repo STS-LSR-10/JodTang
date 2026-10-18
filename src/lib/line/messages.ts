@@ -94,6 +94,18 @@ export const MULTI_ENTRY_LOCKED_TEXT =
 export const TAGS_LOCKED_TEXT =
   'การติดแท็ก (เช่น "หมูกระทะ 500 #ปาร์ตี้") เป็นฟีเจอร์ของแผน Professional ขึ้นไป ยังไม่ได้จดรายการนี้นะ ลองทดลองใช้ฟรี 7 วันได้ที่เมนู "อัปเกรด" หรือพิมพ์จดโดยไม่ใส่แท็กได้เลย';
 
+// ───── receipt split ─────
+export const SPLIT_LOCKED_TEXT =
+  'การแยกรายการจากใบเสร็จเป็นฟีเจอร์เฉพาะแผน Ultimate กด "ยืนยัน" เพื่อจดเป็นยอดรวมใบเดียวได้เลยนะ';
+export const SPLIT_UNAVAILABLE_TEXT =
+  'ใบนี้แยกรายการไม่ได้ (อ่านรายการได้ไม่พอ หรือยอดรายการเกินยอดรวม) กด "ยืนยัน" เพื่อจดเป็นยอดรวมใบเดียวนะ';
+export const splitDoneText = (lines: { title: string; amountBaht: string }[], totalBaht: string) =>
+  [
+    `แยกเป็น ${lines.length} รายการแล้ว (รวม ฿${totalBaht})`,
+    ...lines.slice(0, 12).map((l) => `• ${l.title} ฿${l.amountBaht}`),
+    ...(lines.length > 12 ? [`และอีก ${lines.length - 12} รายการ`] : []),
+  ].join("\n");
+
 // ───── photos attached to entries ─────
 export const PHOTO_LOCKED_TEXT =
   'การแนบรูปประกอบรายการเป็นฟีเจอร์ของแผน Professional ขึ้นไป ลองทดลองใช้ฟรี 7 วันได้ที่เมนู "อัปเกรด" นะ';

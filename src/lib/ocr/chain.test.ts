@@ -84,3 +84,14 @@ describe("createSlipReaderChain", () => {
     expect(() => createSlipReaderChain([])).toThrow();
   });
 });
+
+describe("createSlipReaderChain options", () => {
+  it("passes the extract options on to every reader it tries", async () => {
+    const a = boom("a");
+    const b = ok("b", GOOD);
+    const chain = createSlipReaderChain([a, b], { now: NOW });
+    await chain.extract(image, { items: true });
+    expect(a.extract).toHaveBeenCalledWith(image, { items: true });
+    expect(b.extract).toHaveBeenCalledWith(image, { items: true });
+  });
+});
