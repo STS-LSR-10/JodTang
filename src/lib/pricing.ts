@@ -70,6 +70,8 @@ export const FEATURE_GROUPS: FeatureGroup[] = [
   {
     title: "รายงาน",
     rows: [
+      { label: "สรุปวันนี้ / เดือนนี้", cells: [true, true, true] },
+      { label: "สรุปช่วงวันเอง", cells: [false, true, true] },
       { label: "ส่งออก CSV", cells: [true, true, true] },
       { label: "Excel พร้อมชีตสรุป", cells: [false, true, true] },
       { label: "กราฟเก็บออม", cells: [false, true, true] },

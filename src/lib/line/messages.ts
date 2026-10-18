@@ -29,6 +29,7 @@ export const HELP_TEXT = [
   "",
   "คำสั่งสั้น",
   "• สรุปวันนี้ · สรุปเดือนนี้",
+  "• สรุป 1/10 ถึง 15/10 (Professional ขึ้นไป)",
   "• ลบล่าสุด · แก้ล่าสุด 45",
   "• ตังสะสม · รหัสชวน · ใช้รหัส ABCD1234",
 ].join("\n");
@@ -93,6 +94,22 @@ export const MULTI_ENTRY_LOCKED_TEXT =
 
 export const TAGS_LOCKED_TEXT =
   'การติดแท็ก (เช่น "หมูกระทะ 500 #ปาร์ตี้") เป็นฟีเจอร์ของแผน Professional ขึ้นไป ยังไม่ได้จดรายการนี้นะ ลองทดลองใช้ฟรี 7 วันได้ที่เมนู "อัปเกรด" หรือพิมพ์จดโดยไม่ใส่แท็กได้เลย';
+
+// ───── custom date range summary ─────
+export const SUMMARY_RANGE_LOCKED_TEXT =
+  'การสรุปช่วงวันเองเป็นฟีเจอร์ของแผน Professional ขึ้นไป ลองทดลองใช้ฟรี 7 วันได้ที่เมนู "อัปเกรด" นะ ตอนนี้พิมพ์ "สรุปเดือนนี้" ได้เลย';
+export const SUMMARY_RANGE_USAGE_TEXT = [
+  "ระบุช่วงวันที่ให้ครบทั้งวันเริ่มและวันสิ้นสุด เช่น",
+  "• สรุป 1/10 ถึง 15/10",
+  "• สรุป 25/9 - 24/10",
+  "• สรุป 1/1/2569 ถึง วันนี้",
+  'หรือกดปุ่ม "📆 ช่วงวันเอง" ใต้การ์ดสรุปแล้วเลือกจากปฏิทิน',
+].join("\n");
+export const SUMMARY_RANGE_BAD_DATE_TEXT = "วันที่ไม่ถูกต้อง ลองใหม่ เช่น สรุป 1/10 ถึง 15/10 นะ";
+export const SUMMARY_RANGE_ORDER_TEXT =
+  "วันเริ่มต้องไม่อยู่หลังวันสิ้นสุด ลองสลับวันที่แล้วส่งใหม่นะ";
+export const SUMMARY_RANGE_TOO_LONG_TEXT =
+  "เลือกช่วงได้ไม่เกิน 366 วัน ลองย่อช่วงวันที่ลงแล้วส่งใหม่นะ";
 
 // ───── backdating with the date picker ─────
 export const BACKDATE_PICKER_LOCKED_TEXT =

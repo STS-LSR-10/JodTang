@@ -11,18 +11,40 @@ type Row = {
 let rows: Row[] = [];
 let lastRange: { from: string; to: string } | null = null;
 
+let plan = "free";
+let rangeCalls: { from: string; to: string; prevFrom: string; prevTo: string }[] = [];
+let rangeCount = 4;
+
 vi.mock("@/lib/repo", async (original) => ({
   ...(await original<typeof import("@/lib/repo")>()),
   ensureUser: async () => ({
     id: "u1",
     line_user_id: "U1",
     display_name: null,
-    plan: "free",
+    plan,
     plan_expires_at: null,
   }),
   getSettings: async () => ({ budget_cycle: "monthly", cycle_start_day: 1 }),
 }));
 vi.mock("@/lib/summary-load", () => ({
+  loadSummaryData: async (
+    _db: unknown,
+    _user: string,
+    range: { from: Date; to: Date },
+    previous: { from: Date; to: Date },
+  ) => {
+    rangeCalls.push({
+      from: range.from.toISOString(),
+      to: range.to.toISOString(),
+      prevFrom: previous.from.toISOString(),
+      prevTo: previous.to.toISOString(),
+    });
+    return {
+      current: { income: 100_000, expense: 40_000, count: rangeCount },
+      previous: { income: 0, expense: 20_000, count: 2 },
+      topExpenses: [{ name: "อาหาร", amountSatang: 20_000, percent: 50 }],
+    };
+  },
   loadSummaryTransactions: async (_db: unknown, _user: string, from: Date, to: Date) => {
     lastRange = { from: from.toISOString(), to: to.toISOString() };
     return rows
@@ -68,6 +90,9 @@ const sent = (reply: ReturnType<typeof setup>["reply"]) =>
   (reply.mock.calls[0]?.[1] ?? []) as { type: string; text?: string }[];
 
 beforeEach(() => {
+  plan = "free";
+  rangeCalls = [];
+  rangeCount = 4;
   rows = [];
   lastRange = null;
   delete process.env.APP_BASE_URL;
@@ -147,5 +172,133 @@ describe("สรุปเดือนนี้", () => {
     const { deps, reply } = setup();
     await handleEvent(say("สรุปเดือนนี้"), deps);
     expect(sent(reply)[0]?.text).toContain("ยังไม่มีรายการเลย");
+  });
+});
+
+const tap = (data: string, params?: { date?: string }): LineEvent => ({
+  type: "postback",
+  replyToken: "rt",
+  source: { type: "user", userId: "U" + "a".repeat(32) },
+  postback: { data, ...(params ? { params } : {}) },
+});
+type Quick = { quickReply?: { items: { action: Record<string, string> }[] } };
+
+describe("the ช่วงวันเอง shortcut under the summary cards", () => {
+  it("is on both the day and the month card, for every plan", async () => {
+    rows = [row("2026-10-17T02:00:00Z", "expense", "120.00", "อาหาร")];
+    for (const t of ["สรุปวันนี้", "สรุปเดือนนี้"]) {
+      const { deps, reply } = setup();
+      await handleEvent(say(t), deps);
+      const item = (sent(reply)[0] as unknown as Quick).quickReply?.items[0]?.action;
+      expect(item?.data).toBe("a=sr");
+    }
+  });
+});
+
+describe("สรุป <วันเริ่ม> ถึง <วันจบ>", () => {
+  it("is for Professional and above: Free gets the upsell and nothing is loaded", async () => {
+    const { deps, reply } = setup();
+    await handleEvent(say("สรุป 1/10 ถึง 15/10"), deps);
+    expect(sent(reply)[0]?.text).toContain("Professional ขึ้นไป");
+    expect(rangeCalls).toHaveLength(0);
+  });
+
+  it.each(["plus", "ultimate"])("%s gets a card for exactly those days", async (p) => {
+    plan = p;
+    const { deps, reply } = setup();
+    await handleEvent(say("สรุป 1/10 ถึง 15/10"), deps);
+    const json = JSON.stringify(sent(reply)[0]);
+    expect(json).toContain("สรุปช่วงที่เลือก");
+    expect(json).toContain("15 วัน");
+    expect(json).toContain("1 ต.ค. 2569 – 15 ต.ค. 2569");
+    expect(json).toContain("จากช่วงก่อนหน้า");
+    expect(rangeCalls[0]).toEqual({
+      from: "2026-09-30T17:00:00.000Z",
+      to: "2026-10-15T17:00:00.000Z",
+      prevFrom: "2026-09-15T17:00:00.000Z",
+      prevTo: "2026-09-30T17:00:00.000Z",
+    });
+  });
+
+  it("an empty range says so in text", async () => {
+    plan = "plus";
+    rangeCount = 0;
+    const { deps, reply } = setup();
+    await handleEvent(say("สรุป 1/10 ถึง 15/10"), deps);
+    expect(sent(reply)[0]?.type).toBe("text");
+    expect(sent(reply)[0]?.text).toContain("ยังไม่มีรายการเลย");
+  });
+
+  it.each([
+    ["สรุป 15/10/2026 ถึง 1/10/2026", "วันเริ่มต้องไม่อยู่หลังวันสิ้นสุด"],
+    ["สรุป 31/2 ถึง 1/3", "วันที่ไม่ถูกต้อง"],
+    ["สรุป 1/1/2024 ถึง วันนี้", "ไม่เกิน 366 วัน"],
+    ["สรุป 1/10", "ระบุช่วงวันที่ให้ครบ"],
+  ])("%s -> a clear message and no loading", async (input, expected) => {
+    plan = "plus";
+    const { deps, reply } = setup();
+    await handleEvent(say(input), deps);
+    expect(sent(reply)[0]?.text).toContain(expected);
+    expect(rangeCalls).toHaveLength(0);
+  });
+});
+
+describe("the two-step calendar (a=sr, a=sr1, a=sr2)", () => {
+  const action = (reply: ReturnType<typeof setup>["reply"]) =>
+    (sent(reply)[0] as unknown as Quick).quickReply?.items[0]?.action;
+
+  it("Free is turned away at every step", async () => {
+    for (const [data, params] of [
+      ["a=sr", undefined],
+      ["a=sr1", { date: "2026-10-01" }],
+      ["a=sr2&f=2026-10-01", { date: "2026-10-15" }],
+    ] as const) {
+      const { deps, reply } = setup();
+      await handleEvent(tap(data, params), deps);
+      expect(sent(reply)[0]?.text).toContain("Professional ขึ้นไป");
+      expect((sent(reply)[0] as unknown as Quick).quickReply).toBeUndefined();
+    }
+    expect(rangeCalls).toHaveLength(0);
+  });
+
+  it("step 1 offers the first-day calendar, step 2 the last-day calendar that keeps the first day", async () => {
+    plan = "plus";
+    const a = setup();
+    await handleEvent(tap("a=sr"), a.deps);
+    expect(action(a.reply)).toMatchObject({ type: "datetimepicker", data: "a=sr1", mode: "date" });
+
+    const b = setup();
+    await handleEvent(tap("a=sr1", { date: "2026-10-01" }), b.deps);
+    expect(action(b.reply)).toMatchObject({
+      type: "datetimepicker",
+      data: "a=sr2&f=2026-10-01",
+      min: "2026-10-01",
+      max: "2026-10-17",
+    });
+    expect(sent(b.reply)[0]?.text).toContain("1 ต.ค. 2569");
+  });
+
+  it("step 3 gives the card for the two chosen days", async () => {
+    plan = "plus";
+    const { deps, reply } = setup();
+    await handleEvent(tap("a=sr2&f=2026-10-01", { date: "2026-10-15" }), deps);
+    expect(JSON.stringify(sent(reply)[0])).toContain("15 วัน");
+    expect(rangeCalls[0]?.from).toBe("2026-09-30T17:00:00.000Z");
+  });
+
+  it("a missing or broken date is refused", async () => {
+    plan = "plus";
+    for (const [data, params] of [
+      ["a=sr1", undefined],
+      ["a=sr1", { date: "nope" }],
+      ["a=sr2&f=2026-10-01", undefined],
+      ["a=sr2&f=bad", { date: "2026-10-15" }],
+      ["a=sr2", { date: "2026-10-15" }],
+    ] as const) {
+      const { deps, reply } = setup();
+      await handleEvent(tap(data, params), deps);
+      expect(sent(reply)[0]?.text).toContain("วันที่ไม่ถูกต้อง");
+    }
+    expect(rangeCalls).toHaveLength(0);
   });
 });

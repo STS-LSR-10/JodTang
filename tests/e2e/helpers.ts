@@ -98,6 +98,7 @@ export const ME_FREE = {
     tags: false,
     entryPhoto: false,
     smartParse: false,
+    customRange: false,
   },
   slips: { used: 0, limit: 0, remaining: 0 },
   points: 7,

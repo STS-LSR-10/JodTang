@@ -41,7 +41,8 @@ import {
 } from "@/lib/points";
 import { getSlip, getSlipItems, learnMerchant } from "@/lib/slip-repo";
 import { planReceiptSplit } from "@/lib/receipt-split";
-import { loadSummaryTransactions } from "@/lib/summary-load";
+import { loadSummaryData, loadSummaryTransactions } from "@/lib/summary-load";
+import { daySpecFromIso, resolveRange, type DaySpec } from "@/lib/summary-range";
 import { buildSummaryCard, previousRange, summarize } from "@/lib/summary-report";
 import { handleSlipImage } from "@/lib/slips";
 import { handlePhotoImage, photoBlockedReply } from "@/lib/photos";
@@ -57,6 +58,9 @@ import {
   buildConfirmMessage,
   buildDatePicker,
   buildPhotoAsk,
+  buildRangeEndPicker,
+  buildRangeStartPicker,
+  withRangeButton,
   buildTypeQuestion,
 } from "./flex";
 import { buildCategoryChooser } from "./slip-flex";
@@ -78,6 +82,11 @@ import {
   SMART_CANCELLED_TEXT,
   SMART_PREFACE_TEXT,
   SPLIT_LOCKED_TEXT,
+  SUMMARY_RANGE_BAD_DATE_TEXT,
+  SUMMARY_RANGE_LOCKED_TEXT,
+  SUMMARY_RANGE_ORDER_TEXT,
+  SUMMARY_RANGE_TOO_LONG_TEXT,
+  SUMMARY_RANGE_USAGE_TEXT,
   SPLIT_UNAVAILABLE_TEXT,
   splitDoneText,
   NOTHING_TO_DELETE_TEXT,
@@ -259,6 +268,41 @@ async function handleText(input: string, user: UserRow, deps: HandlerDeps): Prom
     return [text(TAGS_LOCKED_TEXT)];
   }
   return saveEntries(entries, user, deps);
+}
+
+/** The card for a custom range (typed or picked), or the text that says what is wrong with it. */
+async function summaryForRange(
+  user: UserRow,
+  deps: HandlerDeps,
+  start: DaySpec,
+  end: DaySpec | null,
+): Promise<LineMessage[]> {
+  const result = resolveRange(start, end, deps.now());
+  if (!result.ok) {
+    return [
+      text(
+        result.reason === "order"
+          ? SUMMARY_RANGE_ORDER_TEXT
+          : result.reason === "too_long"
+            ? SUMMARY_RANGE_TOO_LONG_TEXT
+            : SUMMARY_RANGE_BAD_DATE_TEXT,
+      ),
+    ];
+  }
+  const subtitle = `${formatThaiDate(result.range.from)} – ${formatThaiDate(result.lastDay)} (${result.days} วัน)`;
+  const data = await loadSummaryData(deps.db, user.id, result.range, result.previous);
+  if (data.current.count === 0) return [text(`สรุปช่วงที่เลือก\n${subtitle}\nยังไม่มีรายการเลย`)];
+  const base = process.env.APP_BASE_URL?.replace(/\/$/, "");
+  return [
+    buildSummaryCard({
+      title: "สรุปช่วงที่เลือก",
+      range: result.range,
+      data,
+      against: "ช่วงก่อนหน้า",
+      subtitle,
+      liffUrl: base ? `${base}/summary` : undefined,
+    }),
+  ];
 }
 
 /** A day from the LINE date picker ("2026-10-12"): real, not in the future, within a year. */
@@ -577,7 +621,11 @@ async function runCommand(
         );
         const subtitle = formatThaiDate(now);
         if (data.current.count === 0) return [text(`สรุปวันนี้ (${subtitle})\nยังไม่มีรายการเลย`)];
-        return [buildSummaryCard({ title: "สรุปวันนี้", range, data, subtitle, liffUrl })];
+        return [
+          withRangeButton(
+            buildSummaryCard({ title: "สรุปวันนี้", range, data, subtitle, liffUrl }),
+          ),
+        ];
       }
       const settings = await getSettings(db, user.id);
       const range =
@@ -594,15 +642,32 @@ async function runCommand(
       const subtitle = `${formatThaiDate(range.from)} – ${formatThaiDate(last)}`;
       if (data.current.count === 0) return [text(`สรุปเดือนนี้ (${subtitle})\nยังไม่มีรายการเลย`)];
       return [
-        buildSummaryCard({
-          title: "สรุปเดือนนี้",
-          range,
-          data,
-          against: "เดือนก่อน",
-          subtitle,
-          liffUrl,
-        }),
+        withRangeButton(
+          buildSummaryCard({
+            title: "สรุปเดือนนี้",
+            range,
+            data,
+            against: "เดือนก่อน",
+            subtitle,
+            liffUrl,
+          }),
+        ),
       ];
+    }
+
+    case "summary-range-usage":
+      return [text(SUMMARY_RANGE_USAGE_TEXT)];
+
+    case "summary-range": {
+      if (!can(effectivePlan(user.plan, user.plan_expires_at, deps.now()), "customRange")) {
+        return [text(SUMMARY_RANGE_LOCKED_TEXT)];
+      }
+      return summaryForRange(
+        user,
+        deps,
+        command.start,
+        command.end === "today" ? null : command.end,
+      );
     }
 
     case "delete-latest": {
@@ -657,6 +722,24 @@ async function handlePostback(
   const action = params.get("a");
   // Rich Menu "จดตังค์": answer with the how-to card; its button opens the keyboard (a=compose-go).
   if (action === "compose") return [buildComposeCard()];
+  // "📆 ช่วงวันเอง" under a summary card: pick the first day, then the last (Professional and above).
+  // The first day travels in the button's data, so nothing is stored between the two taps.
+  if (action === "sr" || action === "sr1" || action === "sr2") {
+    if (!can(effectivePlan(user.plan, user.plan_expires_at, deps.now()), "customRange")) {
+      return [text(SUMMARY_RANGE_LOCKED_TEXT)];
+    }
+    if (action === "sr") return [buildRangeStartPicker(deps.now())];
+    const picked = daySpecFromIso(pickerParams?.date);
+    if (action === "sr1") {
+      if (!picked) return [text(SUMMARY_RANGE_BAD_DATE_TEXT)];
+      const at = fromBangkok(picked.year!, picked.month, picked.day);
+      const iso = pickerParams!.date!;
+      return [buildRangeEndPicker(iso, formatThaiDate(at), deps.now())];
+    }
+    const first = daySpecFromIso(params.get("f") ?? undefined);
+    if (!first || !picked) return [text(SUMMARY_RANGE_BAD_DATE_TEXT)];
+    return summaryForRange(user, deps, first, picked);
+  }
   // "📅 จดย้อนหลัง" under that card: Professional and above get the calendar, others the upsell
   // (checked here, before the calendar opens). a=bdk (the keyboard button) is silent.
   if (action === "bd") {

@@ -5,6 +5,9 @@ import {
   buildBackdatePrompt,
   buildCategoryKeyboardList,
   buildDatePicker,
+  buildRangeEndPicker,
+  buildRangeStartPicker,
+  withRangeButton,
   buildComposeCard,
   buildConfirmMessage,
   buildTypeQuestion,
@@ -316,5 +319,40 @@ describe("backdating with the date picker", () => {
 
   it("backdatePrefix writes DD/MM/YYYY with a trailing space", () => {
     expect(backdatePrefix("2026-01-05")).toBe("05/01/2026 ");
+  });
+});
+
+describe("custom range pickers", () => {
+  type A = { action: Record<string, string> };
+  const first = (m: Record<string, unknown>) => (m.quickReply as { items: A[] }).items[0]!.action;
+  const NOW = new Date("2026-10-17T08:00:00Z");
+
+  it("the shortcut keeps the card and adds one quick reply", () => {
+    const card = { type: "flex", altText: "x", contents: { type: "bubble" } };
+    const out = withRangeButton(card);
+    expect(out.contents).toEqual(card.contents);
+    expect(first(out)).toMatchObject({ type: "postback", data: "a=sr" });
+  });
+
+  it("the first-day picker reaches back about three years and stops at today", () => {
+    const a = first(buildRangeStartPicker(NOW));
+    expect(a).toMatchObject({
+      type: "datetimepicker",
+      data: "a=sr1",
+      mode: "date",
+      max: "2026-10-17",
+    });
+    expect(a.min! < a.initial!).toBe(true);
+    expect(a.initial! <= a.max!).toBe(true);
+  });
+
+  it("the last-day picker starts at the first day, keeps it in data, and stops at today", () => {
+    const a = first(buildRangeEndPicker("2026-10-01", "1 ต.ค. 2569", NOW));
+    expect(a).toMatchObject({
+      data: "a=sr2&f=2026-10-01",
+      min: "2026-10-01",
+      max: "2026-10-17",
+      initial: "2026-10-17",
+    });
   });
 });

@@ -632,3 +632,73 @@ export function buildBackdatePrompt(isoDate: string, thaiDate: string): LineMess
     },
   };
 }
+
+/** The "📆 ช่วงวันเอง" shortcut under a summary card; the plan is checked when it is tapped. */
+export function withRangeButton(message: LineMessage): LineMessage {
+  return {
+    ...message,
+    quickReply: {
+      items: [
+        {
+          type: "action",
+          action: {
+            type: "postback",
+            label: "📆 ช่วงวันเอง",
+            data: "a=sr",
+            displayText: "ช่วงวันเอง",
+          },
+        },
+      ],
+    },
+  };
+}
+
+const RANGE_START_YEARS_BACK = 3;
+
+/** Step 1 of a custom range: the first day. The pick comes back as `a=sr1` with params.date. */
+export function buildRangeStartPicker(now: Date): LineMessage {
+  return {
+    type: "text",
+    text: "เลือกวันเริ่มต้นของช่วงที่ต้องการสรุป",
+    quickReply: {
+      items: [
+        {
+          type: "action",
+          action: {
+            type: "datetimepicker",
+            label: "วันเริ่มต้น",
+            data: "a=sr1",
+            mode: "date",
+            initial: ymd(new Date(now.getTime() - 30 * DAY_MS)),
+            max: ymd(now),
+            min: ymd(new Date(now.getTime() - RANGE_START_YEARS_BACK * 366 * DAY_MS)),
+          },
+        },
+      ],
+    },
+  };
+}
+
+/** Step 2: the last day, from the chosen first day up to today. The first day rides in `data`. */
+export function buildRangeEndPicker(startIso: string, thaiStart: string, now: Date): LineMessage {
+  return {
+    type: "text",
+    text: `เริ่มวันที่ ${thaiStart} เลือกวันสิ้นสุดต่อได้เลย`,
+    quickReply: {
+      items: [
+        {
+          type: "action",
+          action: {
+            type: "datetimepicker",
+            label: "วันสิ้นสุด",
+            data: `a=sr2&f=${startIso}`,
+            mode: "date",
+            initial: ymd(now),
+            max: ymd(now),
+            min: startIso,
+          },
+        },
+      ],
+    },
+  };
+}

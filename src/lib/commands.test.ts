@@ -37,3 +37,41 @@ describe("parseCommand", () => {
     expect(parseCommand("สรุปวันนี้ 30")).toBeNull();
   });
 });
+
+describe("parseCommand: summary of a custom range", () => {
+  const range = (
+    start: [number, number, number | null],
+    end: [number, number, number | null] | "today",
+  ) => ({
+    kind: "summary-range",
+    start: { day: start[0], month: start[1], year: start[2] },
+    end: end === "today" ? "today" : { day: end[0], month: end[1], year: end[2] },
+  });
+
+  it.each([
+    ["สรุป 1/10 ถึง 15/10", range([1, 10, null], [15, 10, null])],
+    ["สรุป 25/9 - 24/10", range([25, 9, null], [24, 10, null])],
+    ["สรุป 25/9-24/10", range([25, 9, null], [24, 10, null])],
+    ["สรุป 25/9 – 24/10", range([25, 9, null], [24, 10, null])],
+    ["สรุป 1/10 ไป 15/10", range([1, 10, null], [15, 10, null])],
+    ["สรุปวันที่ 1/10 ถึงวันที่ 15/10", range([1, 10, null], [15, 10, null])],
+    ["สรุป 1/1/2569 ถึง 31/1/2569", range([1, 1, 2569], [31, 1, 2569])],
+    ["สรุป 1/10 ถึง วันนี้", range([1, 10, null], "today")],
+    ["สรุป ๑/๑๐ ถึง ๑๕/๑๐", range([1, 10, null], [15, 10, null])],
+    ["  สรุป   1/10   ถึง   15/10  ", range([1, 10, null], [15, 10, null])],
+  ])("%s", (input, expected) => {
+    expect(parseCommand(input)).toEqual(expected);
+  });
+
+  it("a date without the other end shows how to write a range", () => {
+    expect(parseCommand("สรุป 1/10")).toEqual({ kind: "summary-range-usage" });
+    expect(parseCommand("สรุป 1/10 ถึง")).toEqual({ kind: "summary-range-usage" });
+  });
+
+  it("leaves the plain summaries and ordinary entries alone", () => {
+    expect(parseCommand("สรุปวันนี้")).toEqual({ kind: "summary", scope: "today" });
+    expect(parseCommand("สรุปเดือนนี้")).toEqual({ kind: "summary", scope: "month" });
+    expect(parseCommand("สรุปค่าไฟ 500")).toBeNull();
+    expect(parseCommand("12/10 ค่าไฟ 1200")).toBeNull();
+  });
+});

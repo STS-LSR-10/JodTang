@@ -27,6 +27,7 @@ const FEATURES: Feature[] = [
   "tags",
   "entryPhoto",
   "smartParse",
+  "customRange",
 ];
 
 export async function GET(request: Request): Promise<Response> {

@@ -1,7 +1,10 @@
+import type { DaySpec } from "@/lib/summary-range";
 import { normalizeThaiDigits, parseAmountToSatang } from "@/lib/parse/thai-number";
 
 export type Command =
   | { kind: "help" }
+  | { kind: "summary-range"; start: DaySpec; end: DaySpec | "today" }
+  | { kind: "summary-range-usage" }
   | { kind: "summary"; scope: "today" | "month" }
   | { kind: "delete-latest" }
   | { kind: "edit-latest"; amountSatang: number }
@@ -11,6 +14,16 @@ export type Command =
   | { kind: "use-code"; code: string }
   | { kind: "use-code-usage" };
 
+const DAY = String.raw`(\d{1,2})/(\d{1,2})(?:/(\d{2,4}))?`;
+// "สรุป 1/10 ถึง 15/10", "สรุป 25/9 - 24/10/2569", "สรุปวันที่ 1/10 ถึงวันนี้"
+const SUMMARY_RANGE_RE = new RegExp(
+  `^สรุป(?:วันที่)?\\s+${DAY}\\s*(?:ถึงวันที่|ถึง|ไป|-|–|—)\\s*(?:${DAY}|วันนี้)$`,
+);
+
+function typedDay(d: string | undefined, m: string | undefined, y: string | undefined): DaySpec {
+  return { day: Number(d), month: Number(m), year: y === undefined ? null : Number(y) };
+}
+
 /** Recognize the short commands. Returns null for anything that should be parsed as a transaction. */
 export function parseCommand(input: string): Command | null {
   const text = normalizeThaiDigits(input).trim().replace(/\s+/g, " ").toLowerCase();
@@ -18,6 +31,16 @@ export function parseCommand(input: string): Command | null {
   if (["ช่วยเหลือ", "วิธีใช้", "help", "?", "เมนู"].includes(text)) return { kind: "help" };
   if (text === "สรุปวันนี้") return { kind: "summary", scope: "today" };
   if (text === "สรุปเดือนนี้") return { kind: "summary", scope: "month" };
+  const range = SUMMARY_RANGE_RE.exec(text);
+  if (range) {
+    return {
+      kind: "summary-range",
+      start: typedDay(range[1], range[2], range[3]),
+      end: range[4] === undefined ? "today" : typedDay(range[4], range[5], range[6]),
+    };
+  }
+  // "สรุป" followed by a date that is not a full range: show how to write one
+  if (/^สรุป(?:วันที่)?\s+\d{1,2}\/\d{1,2}/.test(text)) return { kind: "summary-range-usage" };
   if (text === "ลบล่าสุด") return { kind: "delete-latest" };
   if (["ตังสะสม", "แต้ม", "แต้มสะสม", "points"].includes(text)) return { kind: "points" };
   if (["รหัสชวน", "รหัสชวนเพื่อน", "รหัสของฉัน"].includes(text)) return { kind: "my-code" };
