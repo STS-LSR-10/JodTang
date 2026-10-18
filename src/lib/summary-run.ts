@@ -1,7 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { DateRange } from "@/lib/budget-cycle";
 import { log } from "@/lib/log";
-import { toSatang } from "@/lib/money";
 import { can, effectivePlan, type Plan } from "@/lib/plan";
 import {
   bangkokDay,
@@ -13,8 +12,8 @@ import {
   previousRange,
   summarize,
   type SummaryKind,
-  type SummaryTx,
 } from "@/lib/summary-report";
+import { loadSummaryTransactions } from "@/lib/summary-load";
 import type { BudgetCycle, LineMessage } from "@/lib/types";
 
 export interface SummaryRunResult {
@@ -26,7 +25,6 @@ export interface SummaryRunResult {
 }
 
 const BATCH = 1000;
-const MAX_ROWS = 10_000;
 
 interface SettingRow {
   user_id: string;
@@ -36,32 +34,6 @@ interface SettingRow {
   monthly_summary_enabled: boolean;
   last_weekly_summary_on: string | null;
   last_monthly_summary_on: string | null;
-}
-
-async function loadTransactions(
-  db: SupabaseClient,
-  userId: string,
-  from: Date,
-  to: Date,
-): Promise<SummaryTx[]> {
-  const { data, error } = await db
-    .from("transactions")
-    .select("occurred_at,type,amount,categories(name)")
-    .eq("user_id", userId)
-    .eq("status", "confirmed")
-    .gte("occurred_at", from.toISOString())
-    .lt("occurred_at", to.toISOString())
-    .limit(MAX_ROWS);
-  if (error) throw new Error(`load summary rows: ${error.message}`);
-  return (data ?? []).map((r) => {
-    const cat = Array.isArray(r.categories) ? r.categories[0] : r.categories;
-    return {
-      occurredAt: new Date(r.occurred_at as string),
-      type: r.type as "income" | "expense",
-      amountSatang: toSatang(r.amount as string | number),
-      categoryName: (cat as { name?: string } | null)?.name ?? null,
-    };
-  });
 }
 
 /**
@@ -145,7 +117,7 @@ export async function runSummaries(
       if (mark.error) throw new Error(`mark summary sent: ${mark.error.message}`);
 
       const data = summarize(
-        await loadTransactions(db, user.id, previous.from, range.to),
+        await loadSummaryTransactions(db, user.id, previous.from, range.to),
         range,
         previous,
       );

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   bangkokDay,
+  buildSummaryCard,
   buildSummaryMessage,
   expenseChangePercent,
   isMonthlySummaryDue,
@@ -179,5 +180,39 @@ describe("buildSummaryMessage", () => {
     expect(json).toContain("-฿80"); // balance below zero
     expect(json).not.toContain("ดูรายละเอียด");
     expect(json).not.toContain("จากเดือนก่อน"); // no baseline
+  });
+});
+
+describe("buildSummaryCard", () => {
+  const data = summarize(sample, week, before);
+
+  it("uses the given title and subtitle, and names the previous period it compares with", () => {
+    const json = JSON.stringify(
+      buildSummaryCard({
+        title: "สรุปเดือนนี้",
+        range: week,
+        data,
+        against: "เดือนก่อน",
+        subtitle: "1 ต.ค. 2569 – 31 ต.ค. 2569",
+      }),
+    );
+    expect(json).toContain("สรุปเดือนนี้");
+    expect(json).toContain("1 ต.ค. 2569 – 31 ต.ค. 2569");
+    expect(json).toContain("จากเดือนก่อน");
+  });
+
+  it("has no comparison line when no previous period is named, even if there is data", () => {
+    const json = JSON.stringify(buildSummaryCard({ title: "สรุปวันนี้", range: week, data }));
+    expect(json).not.toContain("เพิ่มขึ้น");
+    expect(json).not.toContain("ลดลง");
+    expect(json).toContain("จดไว้ 5 รายการ");
+  });
+
+  it("buildSummaryMessage still gives the same card as before", () => {
+    const old = JSON.stringify(buildSummaryMessage({ kind: "weekly", range: week, data }));
+    const next = JSON.stringify(
+      buildSummaryCard({ title: "สรุปรายสัปดาห์", range: week, data, against: "สัปดาห์ก่อน" }),
+    );
+    expect(next).toBe(old);
   });
 });

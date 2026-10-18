@@ -20,7 +20,6 @@ import {
   insertTransaction,
   loadCategories,
   loadMemoryFor,
-  periodSummary,
   releasePendingTransaction,
   txAmountSatang,
   updateTransaction,
@@ -42,6 +41,8 @@ import {
 } from "@/lib/points";
 import { getSlip, getSlipItems, learnMerchant } from "@/lib/slip-repo";
 import { planReceiptSplit } from "@/lib/receipt-split";
+import { loadSummaryTransactions } from "@/lib/summary-load";
+import { buildSummaryCard, previousRange, summarize } from "@/lib/summary-report";
 import { handleSlipImage } from "@/lib/slips";
 import { handlePhotoImage, photoBlockedReply } from "@/lib/photos";
 import { needsSmartParse, runSmartParse } from "@/lib/ai/smart-parse";
@@ -565,32 +566,42 @@ async function runCommand(
 
     case "summary": {
       const now = deps.now();
-      let label: string;
-      let range;
+      const base = process.env.APP_BASE_URL?.replace(/\/$/, "");
+      const liffUrl = base ? `${base}/summary` : undefined;
       if (command.scope === "today") {
-        range = dayRange(now);
-        label = `สรุปวันนี้ (${formatThaiDate(now)})`;
-      } else {
-        const settings = await getSettings(db, user.id);
-        range =
-          settings.budget_cycle === "monthly"
-            ? cycleRange(now, "monthly", settings.cycle_start_day)
-            : calendarMonthRange(now);
-        const last = new Date(range.to.getTime() - 1);
-        label = `สรุปเดือนนี้ (${formatThaiDate(range.from)} – ${formatThaiDate(last)})`;
+        const range = dayRange(now);
+        const data = summarize(
+          await loadSummaryTransactions(db, user.id, range.from, range.to),
+          range,
+          range,
+        );
+        const subtitle = formatThaiDate(now);
+        if (data.current.count === 0) return [text(`สรุปวันนี้ (${subtitle})\nยังไม่มีรายการเลย`)];
+        return [buildSummaryCard({ title: "สรุปวันนี้", range, data, subtitle, liffUrl })];
       }
-      const s = await periodSummary(db, { userId: user.id, from: range.from, to: range.to });
-      if (s.count === 0) return [text(`${label}\nยังไม่มีรายการเลย`)];
+      const settings = await getSettings(db, user.id);
+      const range =
+        settings.budget_cycle === "monthly"
+          ? cycleRange(now, "monthly", settings.cycle_start_day)
+          : calendarMonthRange(now);
+      const previous = previousRange("monthly", range);
+      const data = summarize(
+        await loadSummaryTransactions(db, user.id, previous.from, range.to),
+        range,
+        previous,
+      );
+      const last = new Date(range.to.getTime() - 1);
+      const subtitle = `${formatThaiDate(range.from)} – ${formatThaiDate(last)}`;
+      if (data.current.count === 0) return [text(`สรุปเดือนนี้ (${subtitle})\nยังไม่มีรายการเลย`)];
       return [
-        text(
-          [
-            label,
-            `รายรับ ฿${formatBaht(s.incomeSatang)}`,
-            `รายจ่าย ฿${formatBaht(s.expenseSatang)}`,
-            `คงเหลือ ฿${formatBaht(s.incomeSatang - s.expenseSatang)}`,
-            `(${s.count} รายการ)`,
-          ].join("\n"),
-        ),
+        buildSummaryCard({
+          title: "สรุปเดือนนี้",
+          range,
+          data,
+          against: "เดือนก่อน",
+          subtitle,
+          liffUrl,
+        }),
       ];
     }
 

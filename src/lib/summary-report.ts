@@ -164,11 +164,33 @@ export function buildSummaryMessage(input: {
   data: SummaryData;
   liffUrl?: string;
 }): LineMessage {
-  const { kind, range, data } = input;
-  const title = kind === "weekly" ? "สรุปรายสัปดาห์" : "สรุปรายเดือน";
+  return buildSummaryCard({
+    title: input.kind === "weekly" ? "สรุปรายสัปดาห์" : "สรุปรายเดือน",
+    range: input.range,
+    data: input.data,
+    against: input.kind === "weekly" ? "สัปดาห์ก่อน" : "เดือนก่อน",
+    liffUrl: input.liffUrl,
+  });
+}
+
+/**
+ * The one summary card: totals, the top expense categories and, when `against` names a previous
+ * period, the change of the expenses against it. Used by the automatic pushes and the chat commands.
+ */
+export function buildSummaryCard(input: {
+  title: string;
+  range: DateRange;
+  data: SummaryData;
+  /** Name of the previous period ("เดือนก่อน"); omit for no comparison line. */
+  against?: string;
+  /** Replaces the range under the title (e.g. a single dated day). */
+  subtitle?: string;
+  liffUrl?: string;
+}): LineMessage {
+  const { title, range, data, against } = input;
+  const subtitle = input.subtitle ?? rangeLabel(range);
   const net = data.current.income - data.current.expense;
-  const change = expenseChangePercent(data);
-  const against = kind === "weekly" ? "สัปดาห์ก่อน" : "เดือนก่อน";
+  const change = against ? expenseChangePercent(data) : null;
 
   const body: unknown[] = [
     row("รายรับ", `+฿${formatBaht(data.current.income)}`, COLOR.income),
@@ -237,7 +259,7 @@ export function buildSummaryMessage(input: {
       paddingAll: "16px",
       contents: [
         { type: "text", text: title, weight: "bold", size: "lg", color: "#0B5D4F" },
-        { type: "text", text: rangeLabel(range), size: "xs", color: "#3F6B63", margin: "xs" },
+        { type: "text", text: subtitle, size: "xs", color: "#3F6B63", margin: "xs" },
       ],
     },
     body: { type: "box", layout: "vertical", paddingAll: "16px", spacing: "sm", contents: body },
@@ -259,7 +281,7 @@ export function buildSummaryMessage(input: {
   }
   return {
     type: "flex",
-    altText: `${title} ${rangeLabel(range)}: รายรับ ฿${formatBaht(data.current.income)} รายจ่าย ฿${formatBaht(data.current.expense)}`,
+    altText: `${title} ${subtitle}: รายรับ ฿${formatBaht(data.current.income)} รายจ่าย ฿${formatBaht(data.current.expense)}`,
     contents: bubble,
   };
 }
