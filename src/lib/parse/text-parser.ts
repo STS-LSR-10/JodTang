@@ -9,6 +9,8 @@ export interface ParsedEntry {
   /** Integer satang, always > 0. */
   amountSatang: number;
   occurredAt: Date;
+  /** Lower-case #tags found in the text (at most MAX_TAGS), already removed from the title. */
+  tags: string[];
   /** True when the text named a past day (เมื่อวาน, 12/10 …); "วันนี้" or no date is false. */
   backdated: boolean;
   /** 0..1. Below CONFIRM_THRESHOLD the bot should ask before saving as confirmed. */
@@ -23,6 +25,10 @@ export interface ParseResult {
 
 export const CONFIRM_THRESHOLD = 0.7;
 const MAX_TITLE_LENGTH = 60;
+export const MAX_TAGS = 5;
+const MAX_TAG_LENGTH = 20;
+// "#word": starts with a letter (so "#1" stays a number), then letters/marks/digits/underscore.
+const TAG_RE = /(^|\s)#(\p{L}[\p{L}\p{M}\p{N}_]{0,19})(?=\s|$)/gu;
 const MAX_INT_DIGITS = 9; // longer digit runs are phone numbers / ids, not money
 export const LARGE_AMOUNT_SATANG = 100_000_000; // 1,000,000 baht -> ask to confirm
 
@@ -169,12 +175,26 @@ function titleCue(title: string): { type: TxType; confidence: number } | null {
 // Links are never transactions (their digits would otherwise be read as amounts).
 const URL_RE = /https?:\/\/|www\.|\b[a-z0-9-]+\.(?:com|net|org|me|co|io|th)\b\/?/i;
 
+/** Pull "#tag" words out of a line. Extra tags beyond MAX_TAGS are dropped but still removed. */
+export function extractTags(line: string): { text: string; tags: string[] } {
+  const tags: string[] = [];
+  const text = line.replace(TAG_RE, (_m, lead: string, tag: string) => {
+    const lower = tag.toLowerCase();
+    if (tags.length < MAX_TAGS && !tags.includes(lower) && lower.length <= MAX_TAG_LENGTH) {
+      tags.push(lower);
+    }
+    return lead;
+  });
+  return { text: text.replace(/\s+/g, " ").trim(), tags };
+}
+
 function parseLine(segment: string, now: Date): ParsedEntry | null {
   const normalized = normalizeThaiDigits(segment).trim();
   if (!normalized) return null;
   if (URL_RE.test(normalized)) return null;
 
-  const { text, date } = extractDate(normalized, now);
+  const { text: untagged, tags } = extractTags(normalized);
+  const { text, date } = extractDate(untagged, now);
   const amount = findAmount(text);
   if (!amount) return null;
 
@@ -212,6 +232,7 @@ function parseLine(segment: string, now: Date): ParsedEntry | null {
     raw: segment.trim(),
     type,
     title: title || defaultTitle,
+    tags,
     amountSatang: amount.satang,
     occurredAt: date ?? now,
     backdated: date !== null && date !== now,

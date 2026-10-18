@@ -25,6 +25,11 @@ export function TxItem({
         <p className="truncate text-xs text-muted">
           {tx.categoryName ?? "ไม่ระบุหมวด"} · {formatThaiDate(new Date(tx.occurredAt))}
         </p>
+        {tx.tags && tx.tags.length > 0 ? (
+          <p className="truncate text-xs font-medium text-primary">
+            {tx.tags.map((t) => `#${t}`).join(" ")}
+          </p>
+        ) : null}
       </div>
       <p className={cn("num shrink-0 text-sm font-bold", income ? "text-income" : "text-expense")}>
         {income ? "+" : "-"}฿{formatBaht(tx.amountSatang)}

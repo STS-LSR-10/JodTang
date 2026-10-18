@@ -63,6 +63,20 @@ describe("flex", () => {
     );
   });
 
+  it("shows #tags on the full and short cards, and nothing when there are none", () => {
+    const tagged = { ...base, tags: ["ปาร์ตี้", "trip"] };
+    expect(JSON.stringify(buildConfirmMessage({ ...tagged, style: "full" }))).toContain(
+      "#ปาร์ตี้ #trip",
+    );
+    expect(buildConfirmMessage({ ...tagged, style: "short" })).toEqual({
+      type: "text",
+      text: "จดแล้ว: กาแฟ ฿30 · อาหาร #ปาร์ตี้ #trip",
+    });
+    expect(JSON.stringify(buildConfirmMessage({ ...base, style: "full" }))).not.toContain(
+      '"text":"#',
+    );
+  });
+
   it("omits the cycle total when unknown", () => {
     const json = JSON.stringify(
       buildConfirmMessage({ ...base, style: "full", cycleTotalSatang: null }),

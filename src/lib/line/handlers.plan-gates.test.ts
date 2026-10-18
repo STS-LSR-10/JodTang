@@ -1,7 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { handleEvent, type HandlerDeps, type LineEvent } from "./handlers";
-import { BACKDATE_LOCKED_TEXT, MULTI_ENTRY_LOCKED_TEXT } from "./messages";
+import { BACKDATE_LOCKED_TEXT, MULTI_ENTRY_LOCKED_TEXT, TAGS_LOCKED_TEXT } from "./messages";
 
 let plan = "free";
 const insertTransaction = vi.fn(async () => ({
@@ -106,5 +106,23 @@ describe("several entries in one message", () => {
     const { deps } = setup();
     await handleEvent(message(many), deps);
     expect(insertTransaction).toHaveBeenCalledTimes(3);
+  });
+});
+
+describe("#tags in text messages", () => {
+  it("are locked for Free and record nothing", async () => {
+    const { deps, reply } = setup();
+    await handleEvent(message("หมูกระทะ 500 #ปาร์ตี้"), deps);
+    expect(repliedText(reply)).toBe(TAGS_LOCKED_TEXT);
+    expect(insertTransaction).not.toHaveBeenCalled();
+  });
+
+  it.each(["plus", "ultimate"])("are saved with the entry on %s", async (p) => {
+    plan = p;
+    const { deps } = setup();
+    await handleEvent(message("หมูกระทะ 500 #ปาร์ตี้"), deps);
+    expect(insertTransaction).toHaveBeenCalledTimes(1);
+    const input = (insertTransaction.mock.calls[0] as unknown as [unknown, { tags: string[] }])[1];
+    expect(input.tags).toEqual(["ปาร์ตี้"]);
   });
 });

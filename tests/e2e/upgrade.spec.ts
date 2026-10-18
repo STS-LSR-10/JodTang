@@ -28,9 +28,7 @@ test.describe("upgrade page (360px)", () => {
     await page.goto("/upgrade");
     const table = page.getByRole("table");
     await expect(table.getByRole("row", { name: /จดด้วย PDF/ })).toContainText("เร็วๆ นี้");
-    await expect(table.getByRole("row", { name: /อ่านสลิปอัตโนมัติ/ })).toContainText(
-      "5 ใบ/เดือน",
-    );
+    await expect(table.getByRole("row", { name: /อ่านสลิปอัตโนมัติ/ })).toContainText("5 ใบ/เดือน");
   });
 
   test("checkout sends the chosen plan and period; the stub explains it is not open", async ({

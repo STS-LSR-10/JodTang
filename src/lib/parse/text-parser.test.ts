@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CONFIRM_THRESHOLD, parseMessage } from "./text-parser";
+import { CONFIRM_THRESHOLD, extractTags, MAX_TAGS, parseMessage } from "./text-parser";
 
 // 2026-10-15 15:00 in Bangkok
 const NOW = new Date("2026-10-15T08:00:00Z");
@@ -209,5 +209,48 @@ describe("parseMessage: rejects", () => {
     const text =
       "วันนี้ฉันไปเดินเล่นที่สวนสาธารณะแล้วเจอเพื่อนเก่าที่ไม่ได้เจอกันมานานมากเลยคุยกันนานมากมาย 2 ชั่วโมง";
     expect(parseMessage(text, NOW).entries).toHaveLength(0);
+  });
+});
+
+describe("#tags", () => {
+  it("are taken out of the title and kept on the entry", () => {
+    const e = one("หมูกระทะ 500 #ปาร์ตี้บริษัท");
+    expect(e.title).toBe("หมูกระทะ");
+    expect(e.tags).toEqual(["ปาร์ตี้บริษัท"]);
+    expect(e.amountSatang).toBe(50_000);
+  });
+
+  it("work anywhere in the line, several at once, lower-cased and without repeats", () => {
+    const e = one("#Trip กาแฟ #เชียงใหม่ 60 #trip");
+    expect(e.title).toBe("กาแฟ");
+    expect(e.tags).toEqual(["trip", "เชียงใหม่"]);
+    expect(e.amountSatang).toBe(6000);
+  });
+
+  it("do not disturb the date or the income/expense reading", () => {
+    const e = one("เมื่อวาน เงินเดือน 25000 #งานหลัก");
+    expect(e.type).toBe("income");
+    expect(e.tags).toEqual(["งานหลัก"]);
+    expect(e.backdated).toBe(true);
+  });
+
+  it("digits inside a tag are not read as the amount", () => {
+    const e = one("ค่าที่พัก 1200 #trip2026");
+    expect(e.amountSatang).toBe(120_000);
+    expect(e.tags).toEqual(["trip2026"]);
+  });
+
+  it("a # followed by a number is not a tag", () => {
+    expect(extractTags("คิวที่ #1 กาแฟ 50").tags).toEqual([]);
+  });
+
+  it("keeps at most MAX_TAGS but still removes the extra ones from the title", () => {
+    const { text, tags } = extractTags("ข้าว #a #b #c #d #e #f #g");
+    expect(tags).toHaveLength(MAX_TAGS);
+    expect(text).toBe("ข้าว");
+  });
+
+  it("an entry without tags has an empty list", () => {
+    expect(one("กาแฟ 30").tags).toEqual([]);
   });
 });

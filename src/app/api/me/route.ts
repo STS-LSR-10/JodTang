@@ -1,13 +1,7 @@
 import { guard, json } from "@/lib/api";
 import { requireUser } from "@/lib/auth/require-user";
 import { MAX_RECURRING_RULES, POINTS_PER_PLUS_DAY } from "@/lib/config";
-import {
-  can,
-  effectivePlan,
-  SLIP_LIMIT,
-  slipsRemaining,
-  type Feature,
-} from "@/lib/plan";
+import { can, effectivePlan, SLIP_LIMIT, slipsRemaining, type Feature } from "@/lib/plan";
 import { getPaymentProvider } from "@/lib/payments";
 import { loadBillingState } from "@/lib/payments/billing-state";
 import { trialBlock } from "@/lib/payments/policy";
@@ -30,6 +24,7 @@ const FEATURES: Feature[] = [
   "voiceLog",
   "backdate",
   "multiEntry",
+  "tags",
 ];
 
 export async function GET(request: Request): Promise<Response> {

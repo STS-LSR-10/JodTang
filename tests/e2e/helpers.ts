@@ -95,6 +95,7 @@ export const ME_FREE = {
     voiceLog: false,
     backdate: false,
     multiEntry: false,
+    tags: false,
   },
   slips: { used: 0, limit: 0, remaining: 0 },
   points: 7,
@@ -144,5 +145,6 @@ export const TX = (over: Record<string, unknown> = {}) => ({
   categoryColor: "#0F766E",
   hasSlip: false,
   note: null,
+  tags: [],
   ...over,
 });

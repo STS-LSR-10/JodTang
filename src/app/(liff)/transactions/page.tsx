@@ -234,8 +234,8 @@ export default function TransactionsPage() {
           type="search"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="ค้นหาชื่อรายการ"
-          aria-label="ค้นหาชื่อรายการ"
+          placeholder="ค้นหาชื่อรายการ หรือ #แท็ก"
+          aria-label="ค้นหาชื่อรายการหรือแท็ก"
           className="h-11 w-full rounded-2xl border border-border bg-surface px-4 text-sm outline-none focus:border-primary"
         />
 

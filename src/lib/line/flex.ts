@@ -21,6 +21,8 @@ export interface ConfirmCardInput {
   categoryName: string | null;
   amountSatang: number;
   occurredAt: Date;
+  /** #tags on the entry (without the #). */
+  tags?: string[];
   /** Total of this category in the current budget cycle, including this entry. */
   cycleTotalSatang: number | null;
   /** e.g. "รายเดือน (วันที่ 1)"; shown under the category total. */
@@ -72,11 +74,12 @@ const chip = (label: string, bg: string, color: string, action: unknown, width =
 export function buildConfirmMessage(input: ConfirmCardInput): LineMessage {
   const amountText = `฿${formatBaht(input.amountSatang)}`;
   const category = input.categoryName ?? "ไม่ระบุหมวด";
+  const tagsText = input.tags?.length ? ` ${input.tags.map((t) => `#${t}`).join(" ")}` : "";
 
   if (input.style === "short") {
     return {
       type: "text",
-      text: `จดแล้ว: ${input.title} ${amountText} · ${category}`,
+      text: `จดแล้ว: ${input.title} ${amountText} · ${category}${tagsText}`,
     };
   }
 
@@ -195,6 +198,18 @@ export function buildConfirmMessage(input: ConfirmCardInput): LineMessage {
       color: COLOR.muted,
       margin: "md",
     },
+    ...(input.tags && input.tags.length > 0
+      ? [
+          {
+            type: "text",
+            text: input.tags.map((t) => `#${t}`).join(" "),
+            size: "sm",
+            color: COLOR.primary,
+            wrap: true,
+            margin: "sm",
+          },
+        ]
+      : []),
     {
       type: "box",
       layout: "horizontal",

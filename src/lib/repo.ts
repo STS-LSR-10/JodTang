@@ -273,6 +273,7 @@ export async function insertTransaction(
     rawText: string;
     source?: "text" | "manual" | "slip" | "voice";
     slipId?: string;
+    tags?: string[];
   },
 ): Promise<TxRow> {
   const { data, error } = await db
@@ -288,6 +289,8 @@ export async function insertTransaction(
       status: input.status,
       raw_text: input.rawText,
       slip_id: input.slipId ?? null,
+      // only sent when there are tags, so plain entries keep working before migration 0014 is run
+      ...(input.tags && input.tags.length > 0 ? { tags: input.tags } : {}),
     })
     .select(TX_COLUMNS)
     .single();

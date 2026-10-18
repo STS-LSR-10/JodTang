@@ -15,6 +15,7 @@ const LIST = {
       title: "น้ำมัน",
       amountSatang: 50_000,
       categoryName: "เดินทาง",
+      tags: ["ทริปเหนือ", "company"],
     }),
     TX({
       id: "33333333-3333-3333-3333-333333333333",
@@ -34,6 +35,7 @@ test.describe("transactions page (360px)", () => {
     await page.goto("/transactions");
 
     await expect(page.getByText("น้ำมัน")).toBeVisible();
+    await expect(page.getByText("#ทริปเหนือ #company")).toBeVisible();
     await expect(page.getByRole("button", { name: "ลบ กาแฟ" })).toBeVisible();
     await expect(page.getByRole("button", { name: "ดูสลิป ร้านลุงหนวด" })).toBeVisible();
     await expectNoHorizontalScroll(page);
@@ -46,6 +48,17 @@ test.describe("transactions page (360px)", () => {
 
     await page.getByRole("tab", { name: "รายจ่าย" }).click();
     await expect.poll(() => seen.some((s) => s.includes("type=expense"))).toBe(true);
+  });
+
+  test("searching with a # sends the text as typed so the server filters by tag", async ({
+    page,
+  }) => {
+    const { seen } = await mockApi(page, { "GET /api/transactions": LIST, "GET /api/me": ME_FREE });
+    await page.goto("/transactions");
+    await expect(page.getByText("น้ำมัน")).toBeVisible();
+
+    await page.getByRole("searchbox", { name: "ค้นหาชื่อรายการหรือแท็ก" }).fill("#company");
+    await expect.poll(() => seen.some((s) => s.includes("q=%23company"))).toBe(true);
   });
 
   test("empty state", async ({ page }) => {

@@ -52,6 +52,7 @@ import {
   EDIT_USAGE_TEXT,
   BACKDATE_LOCKED_TEXT,
   MULTI_ENTRY_LOCKED_TEXT,
+  TAGS_LOCKED_TEXT,
   ERROR_TEXT,
   HELP_TEXT,
   MEMORY_PLUS_HINT_TEXT,
@@ -203,6 +204,9 @@ async function handleText(input: string, user: UserRow, deps: HandlerDeps): Prom
     return [text(BACKDATE_LOCKED_TEXT)];
   }
   if (entries.length > 1 && !can(plan, "multiEntry")) return [text(MULTI_ENTRY_LOCKED_TEXT)];
+  if (entries.some((e) => e.tags.length > 0) && !can(plan, "tags")) {
+    return [text(TAGS_LOCKED_TEXT)];
+  }
   return saveEntries(entries, user, deps);
 }
 
@@ -248,6 +252,7 @@ async function saveEntries(
       occurredAt: entry.occurredAt,
       status: needsConfirm ? "pending_confirm" : "confirmed",
       rawText: entry.raw,
+      tags: entry.tags,
     });
     if (needsConfirm) pending.push({ tx, entry });
     else confirmed.push({ tx, entry, categoryId });
@@ -258,7 +263,9 @@ async function saveEntries(
   if (settings.confirm_style !== "off" && confirmed.length > 0) {
     if (confirmed.length <= MAX_CARDS_PER_REPLY) {
       for (const c of confirmed) {
-        messages.push(await confirmCard(c.tx, c.categoryId, categories, settings, user, deps));
+        messages.push(
+          await confirmCard(c.tx, c.categoryId, categories, settings, user, deps, c.entry.tags),
+        );
       }
     } else {
       const lines = confirmed.map(
@@ -340,6 +347,7 @@ async function confirmCard(
   settings: SettingsRow,
   user: UserRow,
   deps: HandlerDeps,
+  tags: string[] = [],
 ): Promise<LineMessage> {
   const style = settings.confirm_style === "short" ? "short" : "full";
   let cycleTotal: number | null = null;
@@ -361,6 +369,7 @@ async function confirmCard(
     categoryName: categories.find((c) => c.id === categoryId)?.name ?? null,
     amountSatang: txAmountSatang(tx),
     occurredAt: new Date(tx.occurred_at),
+    tags,
     cycleTotalSatang: cycleTotal,
     cycleLabel:
       settings.budget_cycle === "weekly"

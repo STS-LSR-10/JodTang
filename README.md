@@ -177,7 +177,7 @@ pnpm richmenu --replace   # สร้างเมนู อัปโหลดภ
 | POST | `/api/auth/liff` | แลก LIFF ID token เป็น session (1 ชม.) |
 | GET | `/api/me` | โปรไฟล์/แผน/ตังสะสม |
 | GET | `/api/summary?scope=cycle\|month\|day` | สรุปรายรับ/จ่าย + รายการล่าสุด |
-| GET/POST | `/api/transactions` | รายการ (กรอง `type,q,from,to,categoryId`) / เพิ่มด้วยมือ |
+| GET/POST | `/api/transactions` | รายการ (กรอง `type,q,from,to,categoryId,tag` — `q` ที่ขึ้นต้นด้วย `#` ค้นด้วยแท็ก) / เพิ่มด้วยมือ |
 | PATCH | `/api/transactions/:id` | แก้ไขรายการ (ชื่อ/จำนวน/ประเภท/หมวด/วันเวลา/โน้ต) ส่งเฉพาะที่เปลี่ยน; เปลี่ยนหมวดของรายการจากสลิป (Plus) จะสอนความจำร้านค้า |
 | DELETE | `/api/transactions/:id` | ลบ (soft delete) |
 | POST | `/api/transactions/bulk` | `{action:"delete"\|"move", ids≤100, categoryId?}` → `{updated, skipped}` (ย้ายหมวดข้ามรายการต่างประเภท) |

@@ -9,6 +9,7 @@ function recorder() {
     gte: (c: string, v: string) => (calls.push(["gte", c, v]), q),
     lt: (c: string, v: string) => (calls.push(["lt", c, v]), q),
     ilike: (c: string, v: string) => (calls.push(["ilike", c, v]), q),
+    contains: (c: string, v: string[]) => (calls.push(["contains", c, v.join(",")]), q),
   };
   return { q, calls };
 }
@@ -62,5 +63,25 @@ describe("txFilterSchema", () => {
     expect(txFilterSchema.safeParse({ type: "income", from: "2026-10-01T00:00:00Z" }).success).toBe(
       true,
     );
+  });
+});
+
+describe("applyTxFilters: tags", () => {
+  it("filters by a tag (lower-cased, without the #)", () => {
+    const { q, calls } = recorder();
+    applyTxFilters(q, { tag: "#ปาร์ตี้" });
+    expect(calls).toEqual([["contains", "tags", "ปาร์ตี้"]]);
+  });
+
+  it("reads a search that starts with # as a tag, not as a title search", () => {
+    const { q, calls } = recorder();
+    applyTxFilters(q, { q: "#Trip" });
+    expect(calls).toEqual([["contains", "tags", "trip"]]);
+  });
+
+  it("a lone # filters nothing", () => {
+    const { q, calls } = recorder();
+    applyTxFilters(q, { q: "#" });
+    expect(calls).toEqual([]);
   });
 });

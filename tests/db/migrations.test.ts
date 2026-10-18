@@ -106,6 +106,28 @@ describe("constraints", () => {
   });
 });
 
+describe("transaction tags (0014)", () => {
+  it("default to an empty list and can be searched by one tag", async () => {
+    const u = await newUser(db, "tags");
+    await db.query(
+      "insert into transactions (user_id,type,amount,title,tags) values ($1,'expense',10,'a','{ปาร์ตี้,trip}'), ($1,'expense',20,'b','{trip}'), ($1,'expense',30,'c', default)",
+      [u],
+    );
+    const plain = await one<{ tags: string[] }>(
+      db,
+      "select tags from transactions where user_id = $1 and title = 'c'",
+      [u],
+    );
+    expect(plain.tags).toEqual([]);
+    const found = await rows<{ title: string }>(
+      db,
+      "select title from transactions where user_id = $1 and tags @> array['trip'] order by title",
+      [u],
+    );
+    expect(found.map((r) => r.title)).toEqual(["a", "b"]);
+  });
+});
+
 describe("summary and analytics functions", () => {
   it("add up confirmed entries only, in satang-exact numeric", async () => {
     const u = await newUser(db, "sums");
