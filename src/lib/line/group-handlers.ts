@@ -14,6 +14,13 @@ import {
 import {
   addEntries,
   closeGroup,
+  closeTrip,
+  closedTrips,
+  createTrip,
+  joinTrip,
+  openTrip,
+  tripEntries,
+  tripMembers,
   countEntriesSince,
   countOwnedGroups,
   deleteEntry,
@@ -34,7 +41,15 @@ import { LIMITS } from "@/lib/rate-limit";
 import { ensureUser } from "@/lib/repo";
 import { formatThaiDate } from "@/lib/thai-date";
 import type { LineMessage } from "@/lib/types";
-import { buildGroupSummaryCard } from "./group-flex";
+import { buildGroupSummaryCard, buildTripSummaryCard } from "./group-flex";
+import { convertForeignEntries, fxNoteOf } from "./fx-entries";
+import {
+  computeSettlement,
+  participantsOf,
+  parseSplitClause,
+  resolveNames,
+  splitAmount,
+} from "@/lib/trip";
 import type { HandlerDeps, LineEvent } from "./handlers";
 import {
   GROUP_ALREADY_OPEN_TEXT,
@@ -57,6 +72,16 @@ import {
   GROUP_RECORD_USAGE_TEXT,
   GROUP_TOO_MANY_ENTRIES_TEXT,
   GROUP_TOO_MANY_TEXT,
+  GROUP_NO_TRIP_TEXT,
+  GROUP_SPLIT_NEEDS_TRIP_TEXT,
+  GROUP_TRIP_CLOSE_DENIED_TEXT,
+  GROUP_TRIP_EXISTS_TEXT,
+  GROUP_TRIP_NO_EXIST_TEXT,
+  GROUP_TRIP_OLD_EMPTY_TEXT,
+  groupSplitAmbiguousText,
+  groupSplitUnknownText,
+  groupTripJoinedText,
+  groupTripStartedText,
   GROUP_WELCOME_TEXT,
   text,
 } from "./messages";
@@ -206,6 +231,14 @@ async function runGroupCommand(
     case "record":
       return recordInGroup(command.body, userId, group, writable, deps, reply);
 
+    case "trip-start":
+    case "trip-join":
+    case "trip-status":
+    case "trip-summary":
+    case "trip-close":
+    case "trip-old":
+      return runTripCommand(command, userId, group, writable, isOwner, deps, reply);
+
     default:
       return;
   }
@@ -224,10 +257,20 @@ async function recordInGroup(
   if (!userId) return reply([text(GROUP_NO_USER_TEXT)]);
   if (!writable) return reply([text(GROUP_PAUSED_TEXT)]);
 
-  const { entries } = parseMessage(body, deps.now());
-  if (entries.length === 0) return reply([text(GROUP_RECORD_USAGE_TEXT)]);
-  if (entries.length > MAX_RECORDS_PER_MESSAGE) return reply([text(GROUP_TOO_MANY_ENTRIES_TEXT)]);
-  if (entries.some((e) => e.type === "income")) return reply([text(GROUP_EXPENSE_ONLY_TEXT)]);
+  // during a trip the entry is shared between people: everyone on it, or "หาร …" / "ไม่หาร …" some
+  const trip = await openTrip(db, group.id);
+  const split = parseSplitClause(body);
+  if (!trip && split.mode !== "all") return reply([text(GROUP_SPLIT_NEEDS_TRIP_TEXT)]);
+
+  const parsed = parseMessage(split.body, deps.now(), { currencies: true }).entries;
+  if (parsed.length === 0) return reply([text(GROUP_RECORD_USAGE_TEXT)]);
+  if (parsed.length > MAX_RECORDS_PER_MESSAGE) return reply([text(GROUP_TOO_MANY_ENTRIES_TEXT)]);
+  if (parsed.some((e) => e.type === "income")) return reply([text(GROUP_EXPENSE_ONLY_TEXT)]);
+
+  // "1500 JPY" is turned into baht at the rate of that day; an amount without a currency is baht
+  const converted = await convertForeignEntries(parsed, deps);
+  if (typeof converted === "string") return reply([text(converted)]);
+  const entries = converted;
 
   const today = dayRange(deps.now());
   if (
@@ -237,7 +280,32 @@ async function recordInGroup(
     return reply([text(GROUP_DAY_FULL_TEXT)]);
   }
 
+  const names = await memberNames(db, group.id);
   const name = await knownName(db, group, userId, deps);
+  names.set(userId, { name, updatedAt: deps.now().toISOString() });
+
+  let participants: string[] = [];
+  if (trip) {
+    await joinTrip(db, trip.id, userId); // writing in a trip puts you on it
+    const members = await tripMembers(db, trip.id);
+    const people = members.map((id) => ({ id, name: names.get(id)?.name ?? NAME_FALLBACK }));
+    let named: string[] = [];
+    if (split.mode !== "all") {
+      const found = resolveNames(split.names, people);
+      if (!found.ok) {
+        return reply([
+          text(
+            found.unknown.length > 0
+              ? groupSplitUnknownText(found.unknown)
+              : groupSplitAmbiguousText(found.ambiguous),
+          ),
+        ]);
+      }
+      named = found.ids;
+    }
+    participants = participantsOf(split.mode, named, members, userId);
+  }
+
   const saved = await addEntries(
     db,
     group.id,
@@ -247,15 +315,32 @@ async function recordInGroup(
       amountSatang: e.amountSatang,
       occurredAt: e.occurredAt,
       raw: e.raw,
+      tripId: trip?.id ?? null,
+      splitMode: trip ? split.mode : "all",
+      splitUsers: participants,
+      foreign: e.fx ? { currency: e.fx.currency, minor: e.fx.minor, rate: e.fx.rate } : null,
     })),
   );
 
-  if (saved.length === 1 && saved[0]) {
+  /** "หาร 3 คน คนละ ฿116.75" / "หาร แอน, บ๊อบ คนละประมาณ ฿450" for an entry in a trip. */
+  const shareLine = (amountSatang: number) => {
+    if (!trip) return "";
+    const shares = [...splitAmount(amountSatang, participants, userId).values()];
+    const same = shares.every((v) => v === shares[0]);
+    const people =
+      split.mode === "all"
+        ? `${participants.length} คน`
+        : participants.map((id) => names.get(id)?.name ?? NAME_FALLBACK).join(", ");
+    return `\nหาร ${people} คนละ${same ? "" : "ประมาณ"} ฿${formatBaht(Math.max(...shares))}`;
+  };
+
+  if (saved.length === 1 && saved[0] && entries[0]) {
     const e = saved[0];
+    const fx = entries[0].fx ? ` (${fxNoteOf(entries[0].fx)})` : "";
     return reply([
       {
         type: "text",
-        text: `จดแล้ว: ${e.title} ฿${formatBaht(e.amountSatang)}\nจ่ายโดย ${name}`,
+        text: `จดแล้ว: ${e.title} ฿${formatBaht(e.amountSatang)}${fx}\nจ่ายโดย ${name}${shareLine(e.amountSatang)}`,
         quickReply: {
           items: [
             {
@@ -277,12 +362,150 @@ async function recordInGroup(
   return reply([
     text(
       [
-        `จดแล้ว ${saved.length} รายการ · จ่ายโดย ${name}`,
+        `จดแล้ว ${saved.length} รายการ · จ่ายโดย ${name}${trip ? ` · หาร ${participants.length} คน` : ""}`,
         ...lines,
         `รวม ฿${formatBaht(total)}`,
       ].join("\n"),
     ),
   ]);
+}
+
+/** Start / join / look at / close a trip, and the old ones. */
+async function runTripCommand(
+  command: Extract<GroupCommand, { kind: `trip-${string}` }>,
+  userId: string | undefined,
+  group: GroupRow,
+  writable: boolean,
+  isOwner: boolean,
+  deps: HandlerDeps,
+  reply: Reply,
+): Promise<void> {
+  const { db } = deps;
+  const open = await openTrip(db, group.id);
+  const names = await memberNames(db, group.id);
+  const nameOf = (id: string) => names.get(id)?.name ?? NAME_FALLBACK;
+
+  switch (command.kind) {
+    case "trip-start": {
+      if (!userId) return reply([text(GROUP_NO_USER_TEXT)]);
+      if (!writable) return reply([text(GROUP_PAUSED_TEXT)]);
+      if (open) return reply([text(GROUP_TRIP_EXISTS_TEXT)]);
+      await knownName(db, group, userId, deps);
+      const created = await createTrip(db, group.id, command.name, userId);
+      if (created === "exists") return reply([text(GROUP_TRIP_EXISTS_TEXT)]);
+      await joinTrip(db, created.id, userId);
+      return reply([
+        {
+          type: "text",
+          text: groupTripStartedText(created.name),
+          quickReply: {
+            items: [
+              {
+                type: "action",
+                action: {
+                  type: "postback",
+                  label: "🙋 ร่วมทริป",
+                  data: `a=gtj&t=${created.id}`,
+                  displayText: "ร่วมทริป",
+                },
+              },
+            ],
+          },
+        },
+      ]);
+    }
+
+    case "trip-join": {
+      if (!open) return reply([text(GROUP_NO_TRIP_TEXT)]);
+      return joinOpenTrip(open.id, open.name, userId, group, deps, reply);
+    }
+
+    case "trip-status": {
+      if (!open) return reply([text(GROUP_NO_TRIP_TEXT)]);
+      const [members, entries] = await Promise.all([
+        tripMembers(db, open.id),
+        tripEntries(db, open.id),
+      ]);
+      const total = entries.reduce((s, e) => s + e.amountSatang, 0);
+      return reply([
+        text(
+          [
+            `🧳 ${open.name}`,
+            `ร่วมทริป ${members.length} คน: ${members.map(nameOf).join(", ")}`,
+            `${entries.length} รายการ รวม ฿${formatBaht(total)}`,
+            'พิมพ์ "สรุปทริป" ดูว่าใครต้องโอนให้ใคร',
+          ].join("\n"),
+        ),
+      ]);
+    }
+
+    case "trip-summary": {
+      const trip = open ?? (await closedTrips(db, group.id, 1))[0];
+      if (!trip) return reply([text(GROUP_TRIP_NO_EXIST_TEXT)]);
+      return reply([
+        await tripSummaryCard(db, trip.id, trip.name, trip.status === "closed", nameOf),
+      ]);
+    }
+
+    case "trip-close": {
+      if (!open) return reply([text(GROUP_NO_TRIP_TEXT)]);
+      if (!writable) return reply([text(GROUP_PAUSED_TEXT)]);
+      if (!isOwner && open.startedBy !== userId) return reply([text(GROUP_TRIP_CLOSE_DENIED_TEXT)]);
+      await closeTrip(db, open.id);
+      return reply([
+        text(`จบทริป "${open.name}" แล้ว สรุปยอดโอนด้านล่างนี้เลย 👇`),
+        await tripSummaryCard(db, open.id, open.name, true, nameOf),
+      ]);
+    }
+
+    case "trip-old": {
+      const old = await closedTrips(db, group.id, 5);
+      if (old.length === 0) return reply([text(GROUP_TRIP_OLD_EMPTY_TEXT)]);
+      const lines = await Promise.all(
+        old.map(async (t) => {
+          const total = (await tripEntries(db, t.id)).reduce((s, e) => s + e.amountSatang, 0);
+          return `• ${t.name} · ${t.closedAt ? formatThaiDate(new Date(t.closedAt)) : ""} · ฿${formatBaht(total)}`;
+        }),
+      );
+      return reply([text(["ทริปที่จบแล้ว", ...lines].join("\n"))]);
+    }
+  }
+}
+
+/** Put the person on the trip and say so (the name is looked up so others can use it in "หาร"). */
+async function joinOpenTrip(
+  tripId: string,
+  tripName: string,
+  userId: string | undefined,
+  group: GroupRow,
+  deps: HandlerDeps,
+  reply: Reply,
+): Promise<void> {
+  if (!userId) return reply([text(GROUP_NO_USER_TEXT)]);
+  const name = await knownName(deps.db, group, userId, deps);
+  await joinTrip(deps.db, tripId, userId);
+  const count = (await tripMembers(deps.db, tripId)).length;
+  return reply([text(groupTripJoinedText(name, tripName, count))]);
+}
+
+/** The summary card of a trip: who paid, who owes, who transfers whom. */
+async function tripSummaryCard(
+  db: SupabaseClient,
+  tripId: string,
+  name: string,
+  closed: boolean,
+  nameOf: (id: string) => string,
+): Promise<LineMessage> {
+  const [entries, members] = await Promise.all([tripEntries(db, tripId), tripMembers(db, tripId)]);
+  const settlement = computeSettlement(
+    entries.map((e) => ({
+      payer: e.payerLineUserId,
+      amountSatang: e.amountSatang,
+      participants: e.splitUsers && e.splitUsers.length > 0 ? e.splitUsers : [e.payerLineUserId],
+    })),
+    members,
+  );
+  return buildTripSummaryCard({ name, closed, entryCount: entries.length, settlement, nameOf });
 }
 
 /**
@@ -318,10 +541,20 @@ async function handleGroupPostback(
   reply: Reply,
 ): Promise<void> {
   const params = new URLSearchParams(event.postback?.data ?? "");
-  if (params.get("a") !== "gdx") return;
+  const action = params.get("a");
+  if (action !== "gdx" && action !== "gtj") return;
   const userId = event.source?.userId;
   if (!userId) return reply([text(GROUP_NO_USER_TEXT)]);
   const { db } = deps;
+
+  // "🙋 ร่วมทริป" under the start of a trip
+  if (action === "gtj") {
+    const group = await getGroup(db, groupId);
+    if (!group || !group.isActive) return reply([text(GROUP_NOT_OPEN_TEXT)]);
+    const open = await openTrip(db, group.id);
+    if (!open || open.id !== params.get("t")) return reply([text(GROUP_NO_TRIP_TEXT)]);
+    return joinOpenTrip(open.id, open.name, userId, group, deps, reply);
+  }
 
   const group = await getGroup(db, groupId);
   if (!group || !group.isActive) return reply([text(GROUP_NOT_OPEN_TEXT)]);

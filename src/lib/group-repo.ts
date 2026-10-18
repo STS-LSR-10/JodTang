@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { GroupEntryRow, GroupRow } from "@/lib/group";
+import type { GroupEntryRow, GroupRow, TripRow } from "@/lib/group";
+import type { SplitMode } from "@/lib/trip";
 import { satangToString, toSatang } from "@/lib/money";
 
 function fail(context: string, error: { message: string }): never {
@@ -103,11 +104,22 @@ export async function memberNames(
   );
 }
 
+export interface NewGroupEntry {
+  title: string;
+  amountSatang: number;
+  occurredAt: Date;
+  raw: string;
+  tripId?: string | null;
+  splitMode?: SplitMode;
+  splitUsers?: string[];
+  foreign?: { currency: string; minor: number; rate: number } | null;
+}
+
 export async function addEntries(
   db: SupabaseClient,
   groupId: string,
   payerLineUserId: string,
-  entries: { title: string; amountSatang: number; occurredAt: Date; raw: string }[],
+  entries: NewGroupEntry[],
 ): Promise<GroupEntryRow[]> {
   const { data, error } = await db
     .from("group_entries")
@@ -119,12 +131,26 @@ export async function addEntries(
         amount: satangToString(e.amountSatang),
         occurred_at: e.occurredAt.toISOString(),
         raw_text: e.raw,
+        // the trip / currency columns are only sent when used (works before migration 0028)
+        ...(e.tripId ? { trip_id: e.tripId } : {}),
+        ...(e.splitMode && e.splitMode !== "all" ? { split_mode: e.splitMode } : {}),
+        ...(e.splitUsers && e.splitUsers.length > 0 ? { split_users: e.splitUsers } : {}),
+        ...(e.foreign
+          ? {
+              orig_currency: e.foreign.currency,
+              orig_amount: satangToString(e.foreign.minor),
+              fx_rate: e.foreign.rate,
+            }
+          : {}),
       })),
     )
-    .select("id,payer_line_user_id,title,amount,occurred_at");
+    .select(ENTRY_COLUMNS);
   if (error) fail("add group entries", error);
   return ((data ?? []) as EntryDb[]).map(toEntry);
 }
+
+const ENTRY_COLUMNS =
+  "id,payer_line_user_id,title,amount,occurred_at,trip_id,split_users,orig_currency,orig_amount,fx_rate";
 
 interface EntryDb {
   id: string;
@@ -132,6 +158,11 @@ interface EntryDb {
   title: string;
   amount: number | string;
   occurred_at: string;
+  trip_id?: string | null;
+  split_users?: string[] | null;
+  orig_currency?: string | null;
+  orig_amount?: number | string | null;
+  fx_rate?: number | string | null;
 }
 const toEntry = (r: EntryDb): GroupEntryRow => ({
   id: r.id,
@@ -139,6 +170,11 @@ const toEntry = (r: EntryDb): GroupEntryRow => ({
   title: r.title,
   amountSatang: toSatang(r.amount),
   occurredAt: r.occurred_at,
+  tripId: r.trip_id ?? null,
+  splitUsers: r.split_users ?? [],
+  origCurrency: r.orig_currency ?? null,
+  origMinor: r.orig_amount === null || r.orig_amount === undefined ? null : toSatang(r.orig_amount),
+  fxRate: r.fx_rate === null || r.fx_rate === undefined ? null : Number(r.fx_rate),
 });
 
 /** The newest entries (not deleted) first; `payer` limits it to one member. */
@@ -150,7 +186,7 @@ export async function recentEntries(
 ): Promise<GroupEntryRow[]> {
   let query = db
     .from("group_entries")
-    .select("id,payer_line_user_id,title,amount,occurred_at")
+    .select(ENTRY_COLUMNS)
     .eq("group_id", groupId)
     .eq("status", "confirmed");
   if (payer) query = query.eq("payer_line_user_id", payer);
@@ -166,7 +202,7 @@ export async function getEntry(
 ): Promise<GroupEntryRow | null> {
   const { data, error } = await db
     .from("group_entries")
-    .select("id,payer_line_user_id,title,amount,occurred_at")
+    .select(ENTRY_COLUMNS)
     .eq("group_id", groupId)
     .eq("id", id)
     .eq("status", "confirmed")
@@ -246,4 +282,117 @@ export async function getOwner(
   if (error) fail("load group owner", error);
   const r = data as { line_user_id: string; plan: string; plan_expires_at: string | null } | null;
   return r ? { lineUserId: r.line_user_id, plan: r.plan, planExpiresAt: r.plan_expires_at } : null;
+}
+
+// ───────────── trips ─────────────
+
+interface TripDb {
+  id: string;
+  group_id: string;
+  name: string;
+  started_by: string;
+  status: "open" | "closed";
+  created_at: string;
+  closed_at: string | null;
+}
+const TRIP_COLUMNS = "id,group_id,name,started_by,status,created_at,closed_at";
+const toTrip = (r: TripDb): TripRow => ({
+  id: r.id,
+  groupId: r.group_id,
+  name: r.name,
+  startedBy: r.started_by,
+  status: r.status,
+  createdAt: r.created_at,
+  closedAt: r.closed_at,
+});
+
+/** The group's open trip, if there is one. */
+export async function openTrip(db: SupabaseClient, groupId: string): Promise<TripRow | null> {
+  const { data, error } = await db
+    .from("group_trips")
+    .select(TRIP_COLUMNS)
+    .eq("group_id", groupId)
+    .eq("status", "open")
+    .maybeSingle();
+  if (error) fail("get open trip", error);
+  return data ? toTrip(data as TripDb) : null;
+}
+
+/** Start a trip. "exists" when one is already open. */
+export async function createTrip(
+  db: SupabaseClient,
+  groupId: string,
+  name: string,
+  startedBy: string,
+): Promise<TripRow | "exists"> {
+  const { data, error } = await db
+    .from("group_trips")
+    .insert({ group_id: groupId, name, started_by: startedBy })
+    .select(TRIP_COLUMNS)
+    .single();
+  if (error) {
+    if (error.code === "23505") return "exists";
+    fail("start trip", error);
+  }
+  return toTrip(data as TripDb);
+}
+
+export async function closeTrip(db: SupabaseClient, tripId: string): Promise<void> {
+  const { error } = await db
+    .from("group_trips")
+    .update({ status: "closed", closed_at: new Date().toISOString() })
+    .eq("id", tripId)
+    .eq("status", "open");
+  if (error) fail("close trip", error);
+}
+
+/** Closed trips, newest first. */
+export async function closedTrips(
+  db: SupabaseClient,
+  groupId: string,
+  limit: number,
+): Promise<TripRow[]> {
+  const { data, error } = await db
+    .from("group_trips")
+    .select(TRIP_COLUMNS)
+    .eq("group_id", groupId)
+    .eq("status", "closed")
+    .order("closed_at", { ascending: false })
+    .limit(limit);
+  if (error) fail("list closed trips", error);
+  return ((data ?? []) as TripDb[]).map(toTrip);
+}
+
+/** Put a person on the trip (again is fine). */
+export async function joinTrip(
+  db: SupabaseClient,
+  tripId: string,
+  lineUserId: string,
+): Promise<void> {
+  const { error } = await db
+    .from("group_trip_members")
+    .upsert({ trip_id: tripId, line_user_id: lineUserId }, { onConflict: "trip_id,line_user_id" });
+  if (error) fail("join trip", error);
+}
+
+export async function tripMembers(db: SupabaseClient, tripId: string): Promise<string[]> {
+  const { data, error } = await db
+    .from("group_trip_members")
+    .select("line_user_id")
+    .eq("trip_id", tripId)
+    .order("joined_at", { ascending: true });
+  if (error) fail("load trip members", error);
+  return ((data ?? []) as { line_user_id: string }[]).map((r) => r.line_user_id);
+}
+
+/** Every entry of a trip (not deleted), oldest first. */
+export async function tripEntries(db: SupabaseClient, tripId: string): Promise<GroupEntryRow[]> {
+  const { data, error } = await db
+    .from("group_entries")
+    .select(ENTRY_COLUMNS)
+    .eq("trip_id", tripId)
+    .eq("status", "confirmed")
+    .order("occurred_at", { ascending: true });
+  if (error) fail("load trip entries", error);
+  return ((data ?? []) as EntryDb[]).map(toEntry);
 }

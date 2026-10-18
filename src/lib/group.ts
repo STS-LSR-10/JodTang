@@ -1,3 +1,5 @@
+import { parseTripCommand, type TripCommand } from "@/lib/trip";
+
 export const MAX_GROUPS_PER_OWNER = 5;
 export const MAX_GROUP_ENTRIES_PER_DAY = 300;
 export const MAX_RECORDS_PER_MESSAGE = 5;
@@ -17,6 +19,24 @@ export interface GroupEntryRow {
   title: string;
   amountSatang: number;
   occurredAt: string;
+  /** The trip it belongs to (entries written while a trip was open). */
+  tripId?: string | null;
+  /** The people the entry was shared between (empty outside a trip). */
+  splitUsers?: string[];
+  /** Entered in a foreign currency: the code, the original amount (×100) and the rate. */
+  origCurrency?: string | null;
+  origMinor?: number | null;
+  fxRate?: number | null;
+}
+
+export interface TripRow {
+  id: string;
+  groupId: string;
+  name: string;
+  startedBy: string;
+  status: "open" | "closed";
+  createdAt: string;
+  closedAt: string | null;
 }
 
 export type GroupCommand =
@@ -26,7 +46,8 @@ export type GroupCommand =
   | { kind: "summary"; scope: "today" | "month" }
   | { kind: "recent" }
   | { kind: "delete-last" }
-  | { kind: "help" };
+  | { kind: "help" }
+  | TripCommand;
 
 /**
  * What a message in a group means. Only explicit commands count: an entry needs the word "จด" in
@@ -45,6 +66,9 @@ export function parseGroupCommand(input: string): GroupCommand | null {
   if (["ล่าสุด", "รายการล่าสุด"].includes(one)) return { kind: "recent" };
   if (one === "ลบล่าสุด") return { kind: "delete-last" };
   if (["ช่วยเหลือ", "วิธีใช้", "เมนู", "help"].includes(one)) return { kind: "help" };
+
+  const trip = parseTripCommand(text);
+  if (trip) return trip;
 
   const m = /^จด\s+([\s\S]+)$/.exec(text);
   if (m?.[1]?.trim()) return { kind: "record", body: m[1].trim() };

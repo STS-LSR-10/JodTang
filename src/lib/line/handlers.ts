@@ -76,6 +76,7 @@ import { buildForecastCard } from "./forecast-flex";
 import { buildInsightCard } from "./insight-flex";
 import { buildTransferDone, buildWalletChooser, buildWalletsCard } from "./wallet-flex";
 import { buildCardsCard } from "./card-flex";
+import { convertForeignEntries, fxNoteOf } from "./fx-entries";
 import { handleGroupEvent } from "./group-handlers";
 import { buildBillsCard } from "./bill-flex";
 import {
@@ -93,8 +94,6 @@ import { dueSpecToDate, goalProgress, resolveGoal } from "@/lib/goal";
 import { addDeposit, createGoal, listGoals, undoDeposit } from "@/lib/goal-repo";
 import { goalCapacity } from "@/lib/plan";
 import { dailyBudgetStatus } from "@/lib/daily-budget";
-import { convertToSatang, formatForeign, formatRate } from "@/lib/fx";
-import { getRate } from "@/lib/fx-repo";
 import { bangkokDateKey } from "@/lib/points";
 import { buildDebtDone, buildDebtsCard } from "./debt-flex";
 import {
@@ -218,10 +217,7 @@ import {
   DAILY_BUDGET_USAGE_TEXT,
   dailyBudgetSetText,
   DEBT_BAD_DUE_TEXT,
-  FX_FAILED_TEXT,
   FX_LOCKED_TEXT,
-  FX_TOO_SMALL_TEXT,
-  fxUnsupportedText,
   DEBT_CANCELLED_TEXT,
   DEBT_EMPTY_TEXT,
   DEBT_LOCKED_TEXT,
@@ -894,54 +890,6 @@ async function runTransfer(
       ].join("\n"),
     }),
   ];
-}
-
-/**
- * Turn each foreign-currency entry into baht at the rate of its day. Returns the reason (text for the
- * user) when one cannot be converted: nothing is saved then.
- */
-async function convertForeignEntries(
-  entries: ParsedEntry[],
-  deps: HandlerDeps,
-): Promise<ParsedEntry[] | string> {
-  const today = bangkokDateKey(deps.now());
-  const rates = new Map<string, Awaited<ReturnType<typeof getRate>>>();
-  const out: ParsedEntry[] = [];
-  for (const entry of entries) {
-    const f = entry.foreign;
-    if (!f) {
-      out.push(entry);
-      continue;
-    }
-    if (!f.supported) return fxUnsupportedText(f.currency);
-    const day = bangkokDateKey(entry.occurredAt);
-    const key = `${f.currency}:${day}`;
-    if (!rates.has(key)) rates.set(key, await getRate(deps.db, f.currency, day, today));
-    const resolved = rates.get(key);
-    if (!resolved) return FX_FAILED_TEXT;
-    const amountSatang = convertToSatang(f.minor, resolved.rate);
-    if (amountSatang <= 0) return FX_TOO_SMALL_TEXT;
-    out.push({
-      ...entry,
-      amountSatang,
-      fx: {
-        currency: f.currency,
-        minor: f.minor,
-        rate: resolved.rate,
-        sourceDay: resolved.sourceDay,
-        stale: resolved.stale,
-      },
-    });
-  }
-  return out;
-}
-
-/** "1,500 JPY @ 0.2335" (with a note when an older rate had to be used). */
-function fxNoteOf(fx: NonNullable<ParsedEntry["fx"]>): string {
-  const base = `${formatForeign(fx.minor, fx.currency)} @ ${formatRate(fx.rate)}`;
-  if (!fx.stale) return base;
-  const [, month, day] = fx.sourceDay.split("-");
-  return `${base} (อัตราของวันที่ ${Number(day)}/${Number(month)} เพราะแหล่งอัตราไม่ตอบ)`;
 }
 
 /** "🐱 ค่าอาหารแมว" for a category that has an emoji, its plain name otherwise, null for none. */

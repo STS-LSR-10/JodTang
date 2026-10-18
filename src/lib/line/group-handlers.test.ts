@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { GroupEntryRow, GroupRow } from "@/lib/group";
+import type { GroupEntryRow, GroupRow, TripRow } from "@/lib/group";
 import { handleEvent, type HandlerDeps, type LineEvent } from "./handlers";
 
 const GID = "C-group-1";
@@ -14,6 +14,12 @@ let members = new Map<string, { name: string; updatedAt: string }>();
 let ownedCount = 0;
 let todayCount = 0;
 let userPlan = "ultimate";
+let trip: TripRow | null = null;
+let closedTripRows: TripRow[] = [];
+let tripMemberIds: string[] = [];
+let fxAnswer: { rate: number; sourceDay: string; stale: boolean } | null = null;
+const startedTrips: { name: string; startedBy: string }[] = [];
+const closedTripIds: string[] = [];
 const opened: { lineGroupId: string; owner: string }[] = [];
 const closed: string[] = [];
 const upserts: { userId: string; name: string }[] = [];
@@ -50,7 +56,14 @@ vi.mock("@/lib/group-repo", () => ({
     _db: unknown,
     _g: string,
     payer: string,
-    list: { title: string; amountSatang: number; occurredAt: Date }[],
+    list: {
+      title: string;
+      amountSatang: number;
+      occurredAt: Date;
+      tripId?: string | null;
+      splitUsers?: string[];
+      foreign?: { currency: string; minor: number; rate: number } | null;
+    }[],
   ) => {
     const rows = list.map((e, i) => ({
       id: `e${entries.length + i + 1}`,
@@ -58,6 +71,11 @@ vi.mock("@/lib/group-repo", () => ({
       title: e.title,
       amountSatang: e.amountSatang,
       occurredAt: e.occurredAt.toISOString(),
+      tripId: e.tripId ?? null,
+      splitUsers: e.splitUsers ?? [],
+      origCurrency: e.foreign?.currency ?? null,
+      origMinor: e.foreign?.minor ?? null,
+      fxRate: e.foreign?.rate ?? null,
     }));
     entries.push(...rows);
     return rows;
@@ -90,6 +108,40 @@ vi.mock("@/lib/group-repo", () => ({
       .sort((a, b) => b.totalSatang - a.totalSatang);
   },
   countEntriesSince: async () => todayCount,
+  openTrip: async () => trip,
+  createTrip: async (_db: unknown, groupId: string, name: string, startedBy: string) => {
+    if (trip) return "exists";
+    startedTrips.push({ name, startedBy });
+    trip = {
+      id: "t1",
+      groupId,
+      name,
+      startedBy,
+      status: "open",
+      createdAt: NOW.toISOString(),
+      closedAt: null,
+    };
+    return trip;
+  },
+  closeTrip: async (_db: unknown, id: string) => {
+    closedTripIds.push(id);
+    if (trip)
+      closedTripRows = [
+        { ...trip, status: "closed", closedAt: NOW.toISOString() },
+        ...closedTripRows,
+      ];
+    trip = null;
+  },
+  closedTrips: async () => closedTripRows,
+  joinTrip: async (_db: unknown, _t: string, userId: string) => {
+    if (!tripMemberIds.includes(userId)) tripMemberIds.push(userId);
+  },
+  tripMembers: async () => tripMemberIds,
+  tripEntries: async (_db: unknown, tripId: string) =>
+    entries.filter((e) => !e.deleted && e.tripId === tripId),
+}));
+vi.mock("@/lib/fx-repo", () => ({
+  getRate: async () => fxAnswer,
 }));
 
 const inGroup = (userId: string | undefined, t: string): LineEvent => ({
@@ -134,6 +186,12 @@ beforeEach(() => {
   ownedCount = 0;
   todayCount = 0;
   userPlan = "ultimate";
+  trip = null;
+  closedTripRows = [];
+  tripMemberIds = [];
+  fxAnswer = { rate: 0.2335, sourceDay: "2026-10-16", stale: false };
+  startedTrips.length = 0;
+  closedTripIds.length = 0;
   opened.length = 0;
   closed.length = 0;
   upserts.length = 0;
@@ -467,5 +525,326 @@ describe("what the group can never see", () => {
       deps,
     );
     expect(reply).not.toHaveBeenCalled();
+  });
+});
+
+describe("trips: เริ่มทริป / ร่วมทริป", () => {
+  beforeEach(() => {
+    openBook();
+    members.set("Uanna", { name: "แอน", updatedAt: NOW.toISOString() });
+    members.set("Ubob", { name: "บ๊อบ", updatedAt: NOW.toISOString() });
+    members.set("Ucarl", { name: "คาร์ล", updatedAt: NOW.toISOString() });
+  });
+
+  it("any member can start a trip; the starter is on it, and there is a join button", async () => {
+    const { deps, reply } = setup();
+    await handleEvent(inGroup("Uanna", "เริ่มทริป เที่ยวเชียงใหม่"), deps);
+    expect(startedTrips).toEqual([{ name: "เที่ยวเชียงใหม่", startedBy: "Uanna" }]);
+    expect(tripMemberIds).toEqual(["Uanna"]);
+    const text = said(reply);
+    expect(text).toContain("เที่ยวเชียงใหม่");
+    expect(text).toContain("แล้ว 🧳");
+    expect(text).toContain("a=gtj&t=t1");
+  });
+
+  it("only one open trip at a time", async () => {
+    const { deps, reply } = setup();
+    await handleEvent(inGroup("Uanna", "เริ่มทริป หนึ่ง"), deps);
+    await handleEvent(inGroup("Ubob", "เริ่มทริป สอง"), deps);
+    expect(startedTrips).toHaveLength(1);
+    expect(said(reply)).toContain("มีทริปที่เปิดอยู่แล้ว");
+  });
+
+  it("people join by typing or by the button", async () => {
+    const { deps, reply } = setup();
+    await handleEvent(inGroup("Uanna", "เริ่มทริป ทริป"), deps);
+    await handleEvent(inGroup("Ubob", "ร่วมทริป"), deps);
+    await handleEvent(tap("Ucarl", "a=gtj&t=t1"), deps);
+    expect(tripMemberIds).toEqual(["Uanna", "Ubob", "Ucarl"]);
+    expect(said(reply)).toContain("คาร์ล ร่วมทริป");
+    expect(said(reply)).toContain("ตอนนี้ 3 คน");
+  });
+
+  it("joining with no trip open, or an old button, says there is no trip", async () => {
+    let { deps, reply } = setup();
+    await handleEvent(inGroup("Ubob", "ร่วมทริป"), deps);
+    expect(said(reply)).toContain("ยังไม่มีทริปที่เปิดอยู่");
+
+    trip = {
+      id: "t9",
+      groupId: "g1",
+      name: "x",
+      startedBy: "Uanna",
+      status: "open",
+      createdAt: NOW.toISOString(),
+      closedAt: null,
+    };
+    ({ deps, reply } = setup());
+    await handleEvent(tap("Ubob", "a=gtj&t=old"), deps);
+    expect(tripMemberIds).toHaveLength(0);
+    expect(said(reply)).toContain("ยังไม่มีทริปที่เปิดอยู่");
+  });
+
+  it("the owner's lapsed plan stops starting a trip", async () => {
+    ownerPlan = "free";
+    const { deps, reply } = setup();
+    await handleEvent(inGroup("Uanna", "เริ่มทริป x"), deps);
+    expect(startedTrips).toHaveLength(0);
+    expect(said(reply)).toContain("หยุดจดชั่วคราว");
+  });
+});
+
+describe("จด during a trip", () => {
+  beforeEach(() => {
+    openBook();
+    members.set("Uanna", { name: "แอน", updatedAt: NOW.toISOString() });
+    members.set("Ubob", { name: "บ๊อบ", updatedAt: NOW.toISOString() });
+    members.set("Ucarl", { name: "คาร์ล", updatedAt: NOW.toISOString() });
+    trip = {
+      id: "t1",
+      groupId: "g1",
+      name: "ทริป",
+      startedBy: "Uanna",
+      status: "open",
+      createdAt: NOW.toISOString(),
+      closedAt: null,
+    };
+    tripMemberIds = ["Uanna", "Ubob", "Ucarl"];
+  });
+
+  it("is shared equally by everyone on the trip, and the card says so", async () => {
+    const { deps, reply } = setup();
+    await handleEvent(inGroup("Uanna", "จด ข้าวเย็น 900"), deps);
+    expect(entries[0]).toMatchObject({
+      tripId: "t1",
+      splitUsers: ["Uanna", "Ubob", "Ucarl"],
+      amountSatang: 90_000,
+    });
+    expect(said(reply)).toContain("หาร 3 คน คนละ ฿300");
+  });
+
+  it("writing in a trip puts you on it", async () => {
+    const { deps } = setup();
+    await handleEvent(inGroup("Udan", "จด กาแฟ 90"), deps);
+    expect(tripMemberIds).toContain("Udan");
+    expect(entries[0]?.splitUsers).toContain("Udan");
+  });
+
+  it("หาร: only the named people", async () => {
+    const { deps, reply } = setup();
+    await handleEvent(inGroup("Uanna", "จด ไวน์ 900 หาร แอน บ๊อบ"), deps);
+    expect(entries[0]).toMatchObject({
+      title: "ไวน์",
+      amountSatang: 90_000,
+      splitUsers: ["Uanna", "Ubob"],
+    });
+    expect(said(reply)).toContain("หาร แอน, บ๊อบ คนละ ฿450");
+  });
+
+  it("ไม่หาร: everyone except the named", async () => {
+    const { deps } = setup();
+    await handleEvent(inGroup("Uanna", "จด ค่าห้อง 3000 ไม่หาร คาร์ล"), deps);
+    expect(entries[0]?.splitUsers).toEqual(["Uanna", "Ubob"]);
+  });
+
+  it("odd satang: the card says about", async () => {
+    const { deps, reply } = setup();
+    await handleEvent(inGroup("Uanna", "จด ขนม 100"), deps); // 100.00 / 3
+    expect(said(reply)).toContain("คนละประมาณ ฿33.34");
+  });
+
+  it("a name nobody on the trip has: nothing is recorded and it says who", async () => {
+    const { deps, reply } = setup();
+    await handleEvent(inGroup("Uanna", "จด ไวน์ 900 หาร แอน นก"), deps);
+    expect(entries).toHaveLength(0);
+    expect(said(reply)).toContain("ไม่รู้จัก นก");
+  });
+
+  it("outside a trip หาร is refused with the way to start one", async () => {
+    trip = null;
+    const { deps, reply } = setup();
+    await handleEvent(inGroup("Uanna", "จด ไวน์ 900 หาร แอน บ๊อบ"), deps);
+    expect(entries).toHaveLength(0);
+    expect(said(reply)).toContain("เริ่มทริป ชื่อทริป");
+  });
+
+  it("outside a trip an entry has no trip and no split", async () => {
+    trip = null;
+    const { deps } = setup();
+    await handleEvent(inGroup("Uanna", "จด ข้าว 100"), deps);
+    expect(entries[0]).toMatchObject({ tripId: null, splitUsers: [] });
+  });
+});
+
+describe("currency in the group", () => {
+  beforeEach(() => {
+    openBook();
+    members.set("Uanna", { name: "แอน", updatedAt: NOW.toISOString() });
+  });
+
+  it("a currency after the amount is converted to baht at that day's rate and the original kept", async () => {
+    const { deps, reply } = setup();
+    await handleEvent(inGroup("Uanna", "จด ราเมน 1500 JPY"), deps);
+    expect(entries[0]).toMatchObject({
+      title: "ราเมน",
+      amountSatang: 35_025,
+      origCurrency: "JPY",
+      origMinor: 150_000,
+      fxRate: 0.2335,
+    });
+    expect(said(reply)).toContain("1,500 JPY @ 0.2335");
+  });
+
+  it("an amount with no currency is baht", async () => {
+    const { deps } = setup();
+    await handleEvent(inGroup("Uanna", "จด ราเมน 1500"), deps);
+    expect(entries[0]).toMatchObject({ amountSatang: 150_000, origCurrency: null });
+  });
+
+  it("works together with a split in a trip", async () => {
+    trip = {
+      id: "t1",
+      groupId: "g1",
+      name: "ญี่ปุ่น",
+      startedBy: "Uanna",
+      status: "open",
+      createdAt: NOW.toISOString(),
+      closedAt: null,
+    };
+    tripMemberIds = ["Uanna", "Ubob"];
+    members.set("Ubob", { name: "บ๊อบ", updatedAt: NOW.toISOString() });
+    const { deps } = setup();
+    await handleEvent(inGroup("Uanna", "จด ตั๋ว 3000 JPY ไม่หาร บ๊อบ"), deps);
+    expect(entries[0]).toMatchObject({
+      amountSatang: 70_050,
+      splitUsers: ["Uanna"],
+      origCurrency: "JPY",
+    });
+  });
+
+  it("no rate, or VND/TWD: nothing is recorded", async () => {
+    fxAnswer = null;
+    let { deps, reply } = setup();
+    await handleEvent(inGroup("Uanna", "จด ราเมน 1500 JPY"), deps);
+    expect(said(reply)).toContain("ดึงอัตราแลกเปลี่ยนไม่ได้");
+
+    ({ deps, reply } = setup());
+    await handleEvent(inGroup("Uanna", "จด ข้าว 50000 VND"), deps);
+    expect(said(reply)).toContain("ยังไม่รองรับสกุล VND");
+    expect(entries).toHaveLength(0);
+  });
+});
+
+describe("สรุปทริป / จบทริป / ทริปเก่า / ทริป", () => {
+  const baht = (n: number) => n * 100;
+  beforeEach(() => {
+    openBook();
+    members.set("Uanna", { name: "แอน", updatedAt: NOW.toISOString() });
+    members.set("Ubob", { name: "บ๊อบ", updatedAt: NOW.toISOString() });
+    members.set("Ucarl", { name: "คาร์ล", updatedAt: NOW.toISOString() });
+    trip = {
+      id: "t1",
+      groupId: "g1",
+      name: "เชียงใหม่",
+      startedBy: "Uanna",
+      status: "open",
+      createdAt: NOW.toISOString(),
+      closedAt: null,
+    };
+    tripMemberIds = ["Uanna", "Ubob", "Ucarl"];
+    entries = [
+      {
+        id: "e1",
+        payerLineUserId: "Uanna",
+        title: "ข้าว",
+        amountSatang: baht(900),
+        occurredAt: NOW.toISOString(),
+        tripId: "t1",
+        splitUsers: ["Uanna", "Ubob", "Ucarl"],
+      },
+      {
+        id: "e2",
+        payerLineUserId: "Ubob",
+        title: "แท็กซี่",
+        amountSatang: baht(200),
+        occurredAt: NOW.toISOString(),
+        tripId: "t1",
+        splitUsers: ["Uanna", "Ubob"],
+      },
+    ];
+  });
+
+  it("says who must transfer whom, and how much", async () => {
+    const { deps, reply } = setup();
+    await handleEvent(inGroup("Ubob", "สรุปทริป"), deps);
+    const text = said(reply);
+    expect(text).toContain("เชียงใหม่");
+    expect(text).toContain("฿1,100"); // total
+    expect(text).toContain("คาร์ล → แอน");
+    expect(text).toContain("฿300");
+    expect(text).toContain("บ๊อบ → แอน");
+    expect(text).toContain("฿200");
+    expect(text).toContain("ทริปกำลังดำเนินอยู่");
+  });
+
+  it("the trip status lists who is on it and the total", async () => {
+    const { deps, reply } = setup();
+    await handleEvent(inGroup("Ubob", "ทริป"), deps);
+    expect(said(reply)).toContain("ร่วมทริป 3 คน: แอน, บ๊อบ, คาร์ล");
+    expect(said(reply)).toContain("2 รายการ รวม ฿1,100");
+  });
+
+  it("the starter or the owner can close it; nobody else", async () => {
+    let { deps, reply } = setup();
+    await handleEvent(inGroup("Ubob", "จบทริป"), deps);
+    expect(closedTripIds).toHaveLength(0);
+    expect(said(reply)).toContain("เฉพาะคนที่เริ่มทริปหรือเจ้าของสมุด");
+
+    ({ deps, reply } = setup());
+    await handleEvent(inGroup("Uanna", "จบทริป"), deps);
+    expect(closedTripIds).toEqual(["t1"]);
+    expect(said(reply)).toContain("จบทริป");
+    expect(said(reply)).toContain("ปิดทริปแล้ว");
+  });
+
+  it("the owner can close a trip somebody else started", async () => {
+    const { deps } = setup();
+    await handleEvent(inGroup("Uowner", "จบทริป"), deps);
+    expect(closedTripIds).toEqual(["t1"]);
+  });
+
+  it("after closing, new entries are not part of the trip and สรุปทริป shows the closed one", async () => {
+    let { deps, reply } = setup();
+    await handleEvent(inGroup("Uanna", "จบทริป"), deps);
+    await handleEvent(inGroup("Uanna", "จด ข้าว 50"), deps);
+    expect(entries.at(-1)).toMatchObject({ tripId: null });
+
+    ({ deps, reply } = setup());
+    await handleEvent(inGroup("Ubob", "สรุปทริป"), deps);
+    expect(said(reply)).toContain("ปิดทริปแล้ว");
+  });
+
+  it("ทริปเก่า lists closed trips with totals", async () => {
+    let { deps, reply } = setup();
+    await handleEvent(inGroup("Uanna", "จบทริป"), deps);
+    ({ deps, reply } = setup());
+    await handleEvent(inGroup("Uanna", "ทริปเก่า"), deps);
+    expect(said(reply)).toContain("เชียงใหม่");
+    expect(said(reply)).toContain("฿1,100");
+  });
+
+  it("with no trip ever: says how to start one; no open trip: closing says so", async () => {
+    trip = null;
+    let { deps, reply } = setup();
+    await handleEvent(inGroup("Uanna", "สรุปทริป"), deps);
+    expect(said(reply)).toContain("ยังไม่เคยมีทริป");
+
+    ({ deps, reply } = setup());
+    await handleEvent(inGroup("Uanna", "จบทริป"), deps);
+    expect(said(reply)).toContain("ยังไม่มีทริปที่เปิดอยู่");
+
+    ({ deps, reply } = setup());
+    await handleEvent(inGroup("Uanna", "ทริปเก่า"), deps);
+    expect(said(reply)).toContain("ยังไม่มีทริปที่จบแล้ว");
   });
 });

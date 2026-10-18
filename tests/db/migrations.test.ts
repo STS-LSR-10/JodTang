@@ -310,6 +310,113 @@ describe("wallets (0019)", () => {
   });
 });
 
+describe("group trips (0028)", () => {
+  async function seed() {
+    const owner = await newUser(db, `gt-${Math.random()}`);
+    const group = (
+      await one<{ id: string }>(
+        db,
+        "insert into bot_groups (line_group_id, owner_user_id) values ($1,$2) returning id",
+        [`C${Math.random().toString(16).slice(2)}`, owner],
+      )
+    ).id;
+    const trip = async (name: string, status = "open", g = group) =>
+      (
+        await one<{ id: string }>(
+          db,
+          "insert into group_trips (group_id,name,started_by,status) values ($1,$2,'Uanna',$3) returning id",
+          [g, name, status],
+        )
+      ).id;
+    return { group, trip };
+  }
+
+  it("a group has one open trip at a time, but any number of closed ones", async () => {
+    const { group, trip } = await seed();
+    await trip("เชียงใหม่");
+    await expect(trip("ภูเก็ต")).rejects.toThrow();
+    await trip("เก่า 1", "closed");
+    await trip("เก่า 2", "closed");
+    const open = await one<{ n: string }>(
+      db,
+      "select count(*)::text as n from group_trips where group_id = $1 and status = 'open'",
+      [group],
+    );
+    expect(open.n).toBe("1");
+  });
+
+  it("another group can have its own open trip", async () => {
+    const a = await seed();
+    const b = await seed();
+    await a.trip("ทริป");
+    await b.trip("ทริป");
+  });
+
+  it("a member joins a trip once", async () => {
+    const { trip } = await seed();
+    const t = await trip("x");
+    await db.query("insert into group_trip_members (trip_id,line_user_id) values ($1,'Uanna')", [
+      t,
+    ]);
+    await expect(
+      db.query("insert into group_trip_members (trip_id,line_user_id) values ($1,'Uanna')", [t]),
+    ).rejects.toThrow();
+  });
+
+  it("entries keep their trip, the people it was split between and the original currency", async () => {
+    const { group, trip } = await seed();
+    const t = await trip("ญี่ปุ่น");
+    const e = await one<{
+      split_mode: string;
+      split_users: string[];
+      orig_currency: string;
+      orig_amount: string;
+    }>(
+      db,
+      "insert into group_entries (group_id,payer_line_user_id,title,amount,trip_id,split_mode,split_users,orig_currency,orig_amount,fx_rate) values ($1,'Uanna','ราเมน',350.25,$2,'only','{Uanna,Ubob}','JPY',1500,0.2335) returning split_mode, split_users, orig_currency, orig_amount::text",
+      [group, t],
+    );
+    expect(e).toEqual({
+      split_mode: "only",
+      split_users: ["Uanna", "Ubob"],
+      orig_currency: "JPY",
+      orig_amount: "1500.00",
+    });
+  });
+
+  it("a plain entry is split 'all' with nobody listed, and has no trip", async () => {
+    const { group } = await seed();
+    const e = await one<{ split_mode: string; split_users: string[]; trip_id: string | null }>(
+      db,
+      "insert into group_entries (group_id,payer_line_user_id,title,amount) values ($1,'Uanna','x',5) returning split_mode, split_users, trip_id",
+      [group],
+    );
+    expect(e).toEqual({ split_mode: "all", split_users: [], trip_id: null });
+  });
+
+  it("refuses an unknown split mode; deleting a trip keeps its entries (without the trip)", async () => {
+    const { group, trip } = await seed();
+    await expect(
+      db.query(
+        "insert into group_entries (group_id,payer_line_user_id,title,amount,split_mode) values ($1,'U','x',5,'half')",
+        [group],
+      ),
+    ).rejects.toThrow();
+    const t = await trip("x");
+    await db.query(
+      "insert into group_entries (group_id,payer_line_user_id,title,amount,trip_id) values ($1,'U','x',5,$2)",
+      [group, t],
+    );
+    await db.query("delete from group_trips where id = $1", [t]);
+    const left = await one<{ n: string; t: string | null }>(
+      db,
+      "select count(*)::text as n, max(trip_id::text) as t from group_entries where group_id = $1",
+      [group],
+    );
+    expect(left).toEqual({ n: "1", t: null });
+  });
+});
+
 describe("group ledger (0027)", () => {
   async function seed() {
     const owner = await newUser(db, `gl-${Math.random()}`);

@@ -30,3 +30,53 @@ describe("buildGroupSummaryCard", () => {
     expect(json).toContain("฿350 · 23%");
   });
 });
+
+import { computeSettlement } from "@/lib/trip";
+import { buildTripSummaryCard } from "./group-flex";
+
+describe("buildTripSummaryCard", () => {
+  const settlement = computeSettlement(
+    [
+      { payer: "Ua", amountSatang: 90_000, participants: ["Ua", "Ub", "Uc"] },
+      { payer: "Ub", amountSatang: 20_000, participants: ["Ua", "Ub"] },
+    ],
+    ["Ua", "Ub", "Uc"],
+  );
+  const nameOf = (id: string) => ({ Ua: "แอน", Ub: "บ๊อบ", Uc: "คาร์ล" })[id] ?? "?";
+  const card = (closed: boolean) =>
+    JSON.stringify(
+      buildTripSummaryCard({ name: "เชียงใหม่", closed, entryCount: 2, settlement, nameOf }),
+    );
+
+  it("the total, each person's paid and share, and what they get back or must pay", () => {
+    const json = card(false);
+    expect(json).toContain("เชียงใหม่");
+    expect(json).toContain("฿1,100");
+    expect(json).toContain("2 รายการ");
+    expect(json).toContain("ได้คืน ฿500");
+    expect(json).toContain("ต้องจ่าย ฿300");
+    expect(json).toContain("จ่ายไป ฿900 · ส่วนของตัวเอง ฿400");
+  });
+
+  it("who transfers whom", () => {
+    const json = card(false);
+    expect(json).toContain("คาร์ล → แอน");
+    expect(json).toContain("บ๊อบ → แอน");
+  });
+
+  it("open or closed in the header", () => {
+    expect(card(false)).toContain("ทริปกำลังดำเนินอยู่");
+    expect(card(true)).toContain("ปิดทริปแล้ว");
+  });
+
+  it("nothing to transfer says so", () => {
+    const even = computeSettlement(
+      [{ payer: "Ua", amountSatang: 100, participants: ["Ua"] }],
+      ["Ua"],
+    );
+    const json = JSON.stringify(
+      buildTripSummaryCard({ name: "x", closed: true, entryCount: 1, settlement: even, nameOf }),
+    );
+    expect(json).toContain("ไม่มีใครต้องโอนเพิ่ม");
+  });
+});

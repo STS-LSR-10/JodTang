@@ -325,3 +325,21 @@ export const GROUP_NOTHING_TO_DELETE_TEXT = "ไม่มีรายการ�
 export const GROUP_DELETED_TEXT = "ลบแล้ว";
 export const GROUP_CANNOT_DELETE_TEXT = "ลบได้เฉพาะรายการของตัวเอง (หรือเจ้าของสมุดลบได้ทุกรายการ)";
 export const GROUP_ENTRY_GONE_TEXT = "ไม่พบรายการนี้แล้ว";
+export const GROUP_TRIP_EXISTS_TEXT =
+  'มีทริปที่เปิดอยู่แล้ว พิมพ์ "จบทริป" ก่อนแล้วค่อยเริ่มทริปใหม่นะ';
+export const GROUP_NO_TRIP_TEXT =
+  'ยังไม่มีทริปที่เปิดอยู่ พิมพ์ "เริ่มทริป ชื่อทริป" เพื่อเริ่มหารค่าใช้จ่ายนะ';
+export const GROUP_TRIP_NO_EXIST_TEXT =
+  'ยังไม่เคยมีทริปในกลุ่มนี้ พิมพ์ "เริ่มทริป ชื่อทริป" ได้เลย';
+export const GROUP_TRIP_CLOSE_DENIED_TEXT = "จบทริปได้เฉพาะคนที่เริ่มทริปหรือเจ้าของสมุดนะ";
+export const GROUP_SPLIT_NEEDS_TRIP_TEXT =
+  'ใช้ "หาร" / "ไม่หาร" ได้เฉพาะตอนมีทริปที่เปิดอยู่ พิมพ์ "เริ่มทริป ชื่อทริป" ก่อนนะ';
+export const groupTripStartedText = (name: string) =>
+  `เริ่มทริป "${name}" แล้ว 🧳 ต่อไปทุกรายการที่ "จด" จะหารเท่ากันทุกคนที่ร่วมทริป\nกดปุ่มด้านล่างเพื่อร่วมทริป (หรือพิมพ์ "ร่วมทริป") ถ้าจะหารไม่เท่ากันพิมพ์เช่น "จด ไวน์ 900 หาร แอน บ๊อบ" หรือ "จด ค่าห้อง 3000 ไม่หาร บ๊อบ" จบแล้วพิมพ์ "สรุปทริป"`;
+export const groupTripJoinedText = (who: string, trip: string, count: number) =>
+  `${who} ร่วมทริป "${trip}" แล้ว (ตอนนี้ ${count} คน)`;
+export const groupSplitUnknownText = (names: string[]) =>
+  `ไม่รู้จัก ${names.join(", ")} ในทริปนี้ ให้เขาพิมพ์ "ร่วมทริป" ก่อน (หรือพิมพ์ชื่อให้ตรงกับชื่อใน LINE) เลยยังไม่ได้จดรายการนี้นะ`;
+export const groupSplitAmbiguousText = (names: string[]) =>
+  `${names.join(", ")} ตรงกับหลายคน พิมพ์ชื่อให้ชัดขึ้นอีกนิดนะ เลยยังไม่ได้จดรายการนี้`;
+export const GROUP_TRIP_OLD_EMPTY_TEXT = "ยังไม่มีทริปที่จบแล้ว";
