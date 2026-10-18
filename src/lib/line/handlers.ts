@@ -28,7 +28,7 @@ import {
   type TxRow,
   type UserRow,
 } from "@/lib/repo";
-import { formatThaiDate } from "@/lib/thai-date";
+import { bangkokParts, formatThaiDate, fromBangkok, isValidYmd } from "@/lib/thai-date";
 import type { LineMessage, TxType } from "@/lib/types";
 import type { SlipImage, SlipOcrProvider } from "@/lib/ocr/provider";
 import { can, effectivePlan } from "@/lib/plan";
@@ -49,9 +49,12 @@ import type { TextStructurer } from "@/lib/ai/text-structurer";
 import { recordSmartEntries } from "./smart-entries";
 import { getLivePhotoWait, getPhotoTx, startPhotoWait } from "@/lib/photo-repo";
 import {
+  BACKDATE_MAX_DAYS,
+  buildBackdatePrompt,
   buildCategoryKeyboardList,
   buildComposeCard,
   buildConfirmMessage,
+  buildDatePicker,
   buildPhotoAsk,
   buildTypeQuestion,
 } from "./flex";
@@ -59,7 +62,9 @@ import { buildCategoryChooser } from "./slip-flex";
 import {
   EDIT_HINT_TEXT,
   EDIT_USAGE_TEXT,
+  BACKDATE_BAD_DATE_TEXT,
   BACKDATE_LOCKED_TEXT,
+  BACKDATE_PICKER_LOCKED_TEXT,
   MULTI_ENTRY_LOCKED_TEXT,
   TAGS_LOCKED_TEXT,
   ERROR_TEXT,
@@ -98,7 +103,11 @@ export interface LineEvent {
   replyToken?: string;
   source?: { type: string; userId?: string };
   message?: { type: string; id?: string; text?: string; duration?: number };
-  postback?: { data: string };
+  postback?: {
+    data: string;
+    /** Filled by the LINE date picker: { date: "2026-10-12" }. */
+    params?: { date?: string; time?: string; datetime?: string };
+  };
 }
 
 export interface HandlerDeps {
@@ -216,7 +225,8 @@ export async function handleEvent(event: LineEvent, deps: HandlerDeps): Promise<
       }
       return;
     case "postback":
-      if (event.postback?.data) await reply(await handlePostback(event.postback.data, user, deps));
+      if (event.postback?.data)
+        await reply(await handlePostback(event.postback.data, user, deps, event.postback.params));
       return;
     default:
       return;
@@ -248,6 +258,22 @@ async function handleText(input: string, user: UserRow, deps: HandlerDeps): Prom
     return [text(TAGS_LOCKED_TEXT)];
   }
   return saveEntries(entries, user, deps);
+}
+
+/** A day from the LINE date picker ("2026-10-12"): real, not in the future, within a year. */
+export function backdateFromPicker(
+  value: string | undefined,
+  now: Date,
+): { iso: string; thai: string } | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value ?? "");
+  if (!m) return null;
+  const [year, month, day] = [Number(m[1]), Number(m[2]), Number(m[3])] as [number, number, number];
+  if (!isValidYmd(year, month, day)) return null;
+  const at = fromBangkok(year, month, day);
+  const today = bangkokParts(now);
+  if (at.getTime() > fromBangkok(today.year, today.month, today.day, 23, 59).getTime()) return null;
+  if (now.getTime() - at.getTime() > (BACKDATE_MAX_DAYS + 1) * 86_400_000) return null;
+  return { iso: `${m[1]}-${m[2]}-${m[3]}`, thai: formatThaiDate(at) };
 }
 
 /** AI reading of a message: pending entries + check cards, or null to fall back to the rules. */
@@ -614,11 +640,29 @@ async function handlePostback(
   data: string,
   user: UserRow,
   deps: HandlerDeps,
+  pickerParams?: { date?: string; time?: string; datetime?: string },
 ): Promise<LineMessage[]> {
   const params = new URLSearchParams(data);
   const action = params.get("a");
   // Rich Menu "จดตังค์": answer with the how-to card; its button opens the keyboard (a=compose-go).
   if (action === "compose") return [buildComposeCard()];
+  // "📅 จดย้อนหลัง" under that card: Professional and above get the calendar, others the upsell
+  // (checked here, before the calendar opens). a=bdk (the keyboard button) is silent.
+  if (action === "bd") {
+    if (!can(effectivePlan(user.plan, user.plan_expires_at, deps.now()), "backdate")) {
+      return [text(BACKDATE_PICKER_LOCKED_TEXT)];
+    }
+    return [buildDatePicker(deps.now())];
+  }
+  // The day chosen on the calendar -> open the keyboard with "DD/MM/YYYY " already typed.
+  if (action === "bdp") {
+    if (!can(effectivePlan(user.plan, user.plan_expires_at, deps.now()), "backdate")) {
+      return [text(BACKDATE_PICKER_LOCKED_TEXT)];
+    }
+    const picked = backdateFromPicker(pickerParams?.date, deps.now());
+    if (!picked) return [text(BACKDATE_BAD_DATE_TEXT)];
+    return [buildBackdatePrompt(picked.iso, picked.thai)];
+  }
   // Quick Reply under that card: the categories of the chosen type (a=cc taps are silent).
   if (action === "cp") {
     const type = params.get("t") === "income" ? "income" : "expense";

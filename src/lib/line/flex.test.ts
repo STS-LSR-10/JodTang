@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
+  backdatePrefix,
+  BACKDATE_MAX_DAYS,
+  buildBackdatePrompt,
   buildCategoryKeyboardList,
+  buildDatePicker,
   buildComposeCard,
   buildConfirmMessage,
   buildTypeQuestion,
@@ -176,9 +180,13 @@ describe("compose quick replies", () => {
     ...over,
   });
 
-  it("the compose card offers expense and income category lists", () => {
+  it("the compose card offers expense and income category lists, then backdating", () => {
     const card = buildComposeCard();
-    expect(items(card).map((i) => i.action.data)).toEqual(["a=cp&t=expense", "a=cp&t=income"]);
+    expect(items(card).map((i) => i.action.data)).toEqual([
+      "a=cp&t=expense",
+      "a=cp&t=income",
+      "a=bd",
+    ]);
   });
 
   it("each category button opens the keyboard with its name already typed", () => {
@@ -261,5 +269,52 @@ describe("receipt card with product lines", () => {
     const json = card([]);
     expect(json).not.toContain("รายการในใบเสร็จ");
     expect(json).not.toContain("a=sp");
+  });
+});
+
+describe("backdating with the date picker", () => {
+  type PickerItem = {
+    action: {
+      type: string;
+      data: string;
+      mode?: string;
+      initial?: string;
+      max?: string;
+      min?: string;
+      fillInText?: string;
+      inputOption?: string;
+    };
+  };
+  const items = (m: Record<string, unknown>) => (m.quickReply as { items: PickerItem[] }).items;
+  const NOW = new Date("2026-10-17T08:00:00Z"); // 15:00 on 17 Oct in Bangkok
+
+  it("the calendar is a date-only picker up to today, a year back, starting on yesterday", () => {
+    const a = items(buildDatePicker(NOW))[0]!.action;
+    expect(a).toMatchObject({
+      type: "datetimepicker",
+      data: "a=bdp",
+      mode: "date",
+      initial: "2026-10-16",
+      max: "2026-10-17",
+    });
+    const days = (Date.parse(a.max!) - Date.parse(a.min!)) / 86_400_000;
+    expect(days).toBe(BACKDATE_MAX_DAYS);
+  });
+
+  it("near midnight in Bangkok the dates follow Bangkok, not UTC", () => {
+    // 2026-10-17 18:30 UTC is already 18 Oct 01:30 in Bangkok
+    const a = items(buildDatePicker(new Date("2026-10-17T18:30:00Z")))[0]!.action;
+    expect(a.max).toBe("2026-10-18");
+    expect(a.initial).toBe("2026-10-17");
+  });
+
+  it("the prompt opens the keyboard with the chosen day already typed", () => {
+    const a = items(buildBackdatePrompt("2026-10-12", "12 ต.ค. 2569"))[0]!.action;
+    expect(a.inputOption).toBe("openKeyboard");
+    expect(a.fillInText).toBe("12/10/2026 ");
+  });
+
+  it("backdatePrefix writes DD/MM/YYYY with a trailing space", () => {
+    expect(backdatePrefix("2026-01-05")).toBe("05/01/2026 ");
   });
 });

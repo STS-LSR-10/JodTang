@@ -212,6 +212,20 @@ describe("parseMessage: rejects", () => {
   });
 });
 
+describe("the date picker's prefix", () => {
+  it("reads DD/MM/YYYY plus a typed item as a backdated entry on that day", () => {
+    const e = one("12/10/2026 กาแฟ 60");
+    expect(e.title).toBe("กาแฟ");
+    expect(e.amountSatang).toBe(6000);
+    expect(e.backdated).toBe(true);
+    expect(e.occurredAt.toISOString()).toBe("2026-10-12T05:00:00.000Z");
+  });
+
+  it("a prefix with no item typed yet is not an entry", () => {
+    expect(parseMessage("12/10/2026 ", NOW).entries).toHaveLength(0);
+  });
+});
+
 describe("#tags", () => {
   it("are taken out of the title and kept on the entry", () => {
     const e = one("หมูกระทะ 500 #ปาร์ตี้บริษัท");

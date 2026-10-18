@@ -1,5 +1,5 @@
 import { formatBaht } from "@/lib/money";
-import { formatThaiDate } from "@/lib/thai-date";
+import { bangkokParts, formatThaiDate } from "@/lib/thai-date";
 import type { ConfirmStyle, LineMessage, TxType } from "@/lib/types";
 
 // Design tokens (see docs/design-tokens.md)
@@ -408,17 +408,29 @@ export function buildComposeCard(): LineMessage {
   return {
     type: "flex",
     altText: "พิมพ์บอกจดตังค์ได้เลย เช่น ข้าวมันไก่ 50 · เงินเดือน 20000",
-    // pick a category first, then only the amount is left to type (see buildCategoryKeyboardList)
+    // pick a category first, then only the amount is left to type (see buildCategoryKeyboardList);
+    // or pick a past day first (see buildDatePicker)
     quickReply: {
-      items: (
-        [
-          ["หมวดรายจ่าย", "expense"],
-          ["หมวดรายรับ", "income"],
-        ] as const
-      ).map(([label, t]) => ({
-        type: "action",
-        action: { type: "postback", label, data: `a=cp&t=${t}`, displayText: label },
-      })),
+      items: [
+        ...(
+          [
+            ["หมวดรายจ่าย", "expense"],
+            ["หมวดรายรับ", "income"],
+          ] as const
+        ).map(([label, t]) => ({
+          type: "action",
+          action: { type: "postback", label, data: `a=cp&t=${t}`, displayText: label },
+        })),
+        {
+          type: "action",
+          action: {
+            type: "postback",
+            label: "📅 จดย้อนหลัง",
+            data: "a=bd",
+            displayText: "จดย้อนหลัง",
+          },
+        },
+      ],
     },
     contents: {
       type: "bubble",
@@ -549,6 +561,73 @@ export function buildPhotoAsk(message: string): LineMessage {
       items: [
         { type: "action", action: { type: "camera", label: "ถ่ายรูป" } },
         { type: "action", action: { type: "cameraRoll", label: "เลือกจากอัลบั้ม" } },
+      ],
+    },
+  };
+}
+
+const pad2 = (n: number) => String(n).padStart(2, "0");
+const ymd = (d: Date) => {
+  const p = bangkokParts(d);
+  return `${p.year}-${pad2(p.month)}-${pad2(p.day)}`;
+};
+const DAY_MS = 86_400_000;
+/** How far back the date picker goes. */
+export const BACKDATE_MAX_DAYS = 366;
+
+/**
+ * Step 1 of "จดย้อนหลัง": the LINE calendar (a quick-reply date picker). It reaches back a year
+ * and up to today; the chosen day comes back as a postback `a=bdp` with `params.date`.
+ */
+export function buildDatePicker(now: Date): LineMessage {
+  return {
+    type: "text",
+    text: "เลือกวันที่ที่ต้องการจดย้อนหลังได้เลย",
+    quickReply: {
+      items: [
+        {
+          type: "action",
+          action: {
+            type: "datetimepicker",
+            label: "เลือกวันที่",
+            data: "a=bdp",
+            mode: "date",
+            initial: ymd(new Date(now.getTime() - DAY_MS)),
+            max: ymd(now),
+            min: ymd(new Date(now.getTime() - BACKDATE_MAX_DAYS * DAY_MS)),
+          },
+        },
+      ],
+    },
+  };
+}
+
+/** The text a backdated entry starts with: "12/10/2026 " (the parser reads it as that day). */
+export function backdatePrefix(isoDate: string): string {
+  const [year, month, day] = isoDate.split("-");
+  return `${day}/${month}/${year} `;
+}
+
+/**
+ * Step 2: the day is chosen, so open the keyboard with it already typed. The person adds the item
+ * and amount ("กาแฟ 60"); nothing is stored between the two steps.
+ */
+export function buildBackdatePrompt(isoDate: string, thaiDate: string): LineMessage {
+  return {
+    type: "text",
+    text: `จดย้อนหลังวันที่ ${thaiDate} พิมพ์ชื่อรายการและจำนวนเงินต่อได้เลย เช่น กาแฟ 60`,
+    quickReply: {
+      items: [
+        {
+          type: "action",
+          action: {
+            type: "postback",
+            label: "พิมพ์รายการ",
+            data: "a=bdk",
+            inputOption: "openKeyboard",
+            fillInText: backdatePrefix(isoDate),
+          },
+        },
       ],
     },
   };
