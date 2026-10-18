@@ -61,7 +61,7 @@ export async function POST(request: Request, { params }: Params): Promise<Respon
       return apiError("ชำระเกินยอดที่เหลือไม่ได้", 400);
     }
 
-    const wallets = await ensureWallets(db, auth.userId);
+    const wallets = (await ensureWallets(db, auth.userId)).filter((w) => !w.shared);
     const wallet = parsed.data.accountId
       ? wallets.find((w) => w.id === parsed.data.accountId)
       : (wallets.find((w) => w.id === debt.accountId) ?? wallets.find((w) => w.isDefault));

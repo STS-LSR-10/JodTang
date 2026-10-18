@@ -38,6 +38,8 @@ export const LIMITS = {
   exportLink: { limit: 10, windowSeconds: 60 },
   /** Points redemption / referral attempts per user. */
   points: { limit: 10, windowSeconds: 60 },
+  /** Tries at a shared-wallet invite code per user (a 6-digit code can be guessed). */
+  joinWallet: { limit: 10, windowSeconds: 3600 },
   /** Account deletion attempts per user. */
   deleteAccount: { limit: 3, windowSeconds: 3600 },
 } as const satisfies Record<string, LimitRule>;

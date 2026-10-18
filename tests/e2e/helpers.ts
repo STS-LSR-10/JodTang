@@ -97,6 +97,7 @@ export const ME_FREE = {
     dailyBudget: false,
     savingsGoal: false,
     billReminder: false,
+    sharedWallet: false,
     merchantMemory: false,
     dailyReminder: false,
     advancedExport: false,

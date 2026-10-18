@@ -52,7 +52,8 @@ export async function POST(request: Request): Promise<Response> {
     }
     if (fromId === toId) return apiError("โอนไปกระเป๋าเดียวกันไม่ได้", 400);
 
-    const wallets = await ensureWallets(db, auth.userId);
+    // shared wallets take income and expenses only for now: no transfers in or out
+    const wallets = (await ensureWallets(db, auth.userId)).filter((w) => !w.shared);
     if (!wallets.some((w) => w.id === fromId) || !wallets.some((w) => w.id === toId)) {
       return apiError("ไม่พบกระเป๋า", 404);
     }

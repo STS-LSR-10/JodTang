@@ -67,6 +67,44 @@ test.describe("transactions page (360px)", () => {
     await expectNoHorizontalScroll(page);
   });
 
+  test("entries in a shared wallet show who wrote them; the other person's cannot be changed", async ({
+    page,
+  }) => {
+    await mockApi(page, {
+      "GET /api/transactions": {
+        items: [
+          TX({
+            id: "m1",
+            title: "ข้าวเย็น",
+            accountShared: true,
+            accountName: "กองกลาง",
+            mine: true,
+            writerName: "แอน",
+          }),
+          TX({
+            id: "o1",
+            title: "ค่าน้ำมัน",
+            accountShared: true,
+            accountName: "กองกลาง",
+            mine: false,
+            writerName: "บ๊อบ",
+          }),
+        ],
+        hasMore: false,
+      },
+      "GET /api/me": ME_FREE,
+    });
+    await page.goto("/transactions");
+
+    await expect(page.getByText(/คุณ · กองกลาง/)).toBeVisible();
+    await expect(page.getByText(/บ๊อบ · กองกลาง/)).toBeVisible();
+    await expect(page.getByRole("button", { name: "ลบ ข้าวเย็น" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "ลบ ค่าน้ำมัน" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "แก้ไข ค่าน้ำมัน" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "แก้ไข ข้าวเย็น" })).toBeVisible();
+    await expectNoHorizontalScroll(page);
+  });
+
   test("the type filter re-queries the server", async ({ page }) => {
     const { seen } = await mockApi(page, { "GET /api/transactions": LIST, "GET /api/me": ME_FREE });
     await page.goto("/transactions");

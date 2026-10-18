@@ -1,13 +1,14 @@
 import { z } from "zod";
 import { apiError, guard, json } from "@/lib/api";
 import { requireUser } from "@/lib/auth/require-user";
-import { walletCapacity } from "@/lib/plan";
+import { sharedWalletCapacity, walletCapacity } from "@/lib/plan";
 import { getPlanInfo } from "@/lib/plan-server";
 import { LIMITS, limitOr429 } from "@/lib/rate-limit";
 import { getAdminClient } from "@/lib/supabase/admin";
 import {
   MAX_WALLET_NAME,
   parseOpeningBalance,
+  ownedWallets,
   totalBalance,
   WALLET_KINDS,
   walletToDto,
@@ -15,6 +16,8 @@ import {
 import { cardStatusToDto } from "@/lib/card";
 import { createWallet, ensureWallets } from "@/lib/wallet-repo";
 import { cardFieldsOr400 } from "@/lib/wallet-card-input";
+import { createSharedWallet, membersOfMany, ownedSharedCount } from "@/lib/shared-wallet-repo";
+import { requireFeature } from "@/lib/plan-server";
 import { loadCardStatuses } from "@/lib/card-repo";
 import { can } from "@/lib/plan";
 
@@ -34,18 +37,30 @@ export async function GET(request: Request): Promise<Response> {
       ensureWallets(db, auth.userId),
       getPlanInfo(db, auth.userId),
     ]);
+    // the wallet limit counts the person's own wallets, not shared ones they were invited to
     const limit = walletCapacity(plan);
+    const owned = ownedWallets(wallets, auth.userId);
+    const sharedIds = wallets.filter((w) => w.shared).map((w) => w.id);
+    const members = await membersOfMany(db, sharedIds);
     const cards = can(plan, "creditCard")
       ? await loadCardStatuses(db, auth.userId, wallets, new Date())
       : new Map();
     return json({
       items: wallets.map((w) => {
         const status = cards.get(w.id);
-        return { ...walletToDto(w), card: status ? cardStatusToDto(status) : null };
+        return {
+          ...walletToDto(w),
+          card: status ? cardStatusToDto(status) : null,
+          isOwner: w.ownerId === undefined || w.ownerId === auth.userId,
+          members: w.shared ? (members.get(w.id) ?? []) : [],
+        };
       }),
       totalSatang: totalBalance(wallets),
       limit,
-      canAdd: wallets.length < limit,
+      canAdd: owned.length < limit,
+      canAddShared: can(plan, "sharedWallet"),
+      /** The person asking (so the web app knows which member is them). */
+      viewerId: auth.userId,
     });
   });
 }
@@ -55,6 +70,8 @@ const createSchema = z.object({
   kind: z.enum(WALLET_KINDS).default("cash"),
   openingBalance: z.union([z.string(), z.number()]).nullable().optional(),
   isDefault: z.boolean().optional(),
+  /** A wallet shared with other people (Professional and above). */
+  shared: z.boolean().optional(),
   creditLimit: z.union([z.string(), z.number()]).nullable().optional(),
   statementDay: z.number().int().min(1).max(28).nullable().optional(),
   dueDay: z.number().int().min(1).max(28).nullable().optional(),
@@ -82,7 +99,7 @@ export async function POST(request: Request): Promise<Response> {
       getPlanInfo(db, auth.userId),
     ]);
     const capacity = walletCapacity(plan);
-    if (wallets.length >= capacity) {
+    if (ownedWallets(wallets, auth.userId).length >= capacity) {
       return Response.json(
         {
           error:
@@ -93,6 +110,33 @@ export async function POST(request: Request): Promise<Response> {
         },
         { status: 403, headers: { "Cache-Control": "no-store" } },
       );
+    }
+
+    // a new shared wallet: Professional and above, never a card, never the main wallet
+    if (parsed.data.shared) {
+      const locked = await requireFeature(db, auth.userId, "sharedWallet");
+      if (locked) return locked;
+      if (parsed.data.kind === "card") return apiError("กระเป๋าร่วมเป็นบัตรเครดิตไม่ได้นะ", 400);
+      if (parsed.data.isDefault) return apiError("กระเป๋าร่วมตั้งเป็นกระเป๋าหลักไม่ได้นะ", 400);
+      if ((await ownedSharedCount(db, auth.userId)) >= sharedWalletCapacity(plan)) {
+        return Response.json(
+          {
+            error:
+              plan === "ultimate"
+                ? `มีกระเป๋าร่วมได้สูงสุด ${sharedWalletCapacity(plan)} ใบ`
+                : `แผน Professional มีกระเป๋าร่วมได้ ${sharedWalletCapacity(plan)} ใบ อัปเกรดเป็น Ultimate เพื่อมีได้ ${sharedWalletCapacity("ultimate")} ใบนะ`,
+            upgrade: plan !== "ultimate",
+          },
+          { status: 403, headers: { "Cache-Control": "no-store" } },
+        );
+      }
+      const id = await createSharedWallet(db, auth.userId, {
+        name: parsed.data.name,
+        kind: parsed.data.kind,
+        openingSatang: opening,
+      });
+      if (id === "duplicate") return apiError("มีกระเป๋าชื่อนี้อยู่แล้ว", 409);
+      return json({ id, shared: true }, 201);
     }
 
     const card = await cardFieldsOr400(db, auth.userId, parsed.data, parsed.data.kind);

@@ -24,6 +24,9 @@ export type Command =
   | DebtCommand
   | GoalCommand
   | BillCommand
+  | { kind: "wallet-join"; code: string | null }
+  | { kind: "wallet-invite"; name: string }
+  | { kind: "wallet-leave"; name: string }
   | { kind: "transfer"; amountSatang: number; from: string; to: string }
   | { kind: "summary"; scope: "today" | "month" }
   | { kind: "delete-latest" }
@@ -82,6 +85,16 @@ export function parseCommand(input: string): Command | null {
   const transfer = parseTransferText(text);
   if (transfer) return { kind: "transfer", ...transfer };
   // names keep their case, so the debt phrases read the original text
+  // shared wallets: "ร่วมกระเป๋า 482913" · "เชิญ กองกลาง" · "ออกจากกระเป๋า กองกลาง"
+  const join = /^ร่วมกระเป๋า(?:\s+(.+))?$/.exec(
+    normalizeThaiDigits(input).trim().replace(/\s+/g, " "),
+  );
+  if (join)
+    return { kind: "wallet-join", code: /^\d{6}$/.test(join[1] ?? "") ? (join[1] ?? null) : null };
+  const invite = /^เชิญ(?:เข้ากระเป๋า)?\s+([^\d]+)$/.exec(input.trim().replace(/\s+/g, " "));
+  if (invite?.[1]) return { kind: "wallet-invite", name: invite[1].trim() };
+  const leave = /^ออกจากกระเป๋า\s+(.+)$/.exec(input.trim().replace(/\s+/g, " "));
+  if (leave?.[1]) return { kind: "wallet-leave", name: leave[1].trim() };
   const bill = parseBillText(normalizeThaiDigits(input).trim().replace(/\s+/g, " "));
   if (bill) return bill;
   const goal = parseGoalText(normalizeThaiDigits(input).trim().replace(/\s+/g, " "));

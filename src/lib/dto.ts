@@ -23,6 +23,12 @@ export interface TxDto {
   /** The wallet the entry was put in; null = the main wallet. */
   accountId: string | null;
   accountName: string | null;
+  /** The wallet is shared with other people. */
+  accountShared?: boolean;
+  /** Who wrote the entry (shown on shared wallets, where more than one person writes). */
+  writerName?: string | null;
+  /** The entry is the viewer's own (only their own can be edited or deleted). */
+  mine?: boolean;
   /** Entered in a foreign currency: its code, the original amount (×100) and the rate used. */
   origCurrency: string | null;
   origAmountMinor: number | null;
@@ -30,7 +36,7 @@ export interface TxDto {
 }
 
 export const TX_SELECT =
-  "id,type,title,amount,occurred_at,source,category_id,slip_id,photo_path,note,tags,account_id,orig_currency,orig_amount,fx_rate,accounts(name),categories(name,icon,color)";
+  "id,type,title,amount,occurred_at,source,category_id,slip_id,photo_path,note,tags,user_id,account_id,orig_currency,orig_amount,fx_rate,accounts(name,is_shared),users(display_name),categories(name,icon,color)";
 
 interface TxJoinRow {
   id: string;
@@ -48,7 +54,9 @@ interface TxJoinRow {
   orig_currency?: string | null;
   orig_amount?: number | string | null;
   fx_rate?: number | string | null;
-  accounts?: { name: string } | { name: string }[] | null;
+  user_id?: string;
+  accounts?: { name: string; is_shared?: boolean } | { name: string; is_shared?: boolean }[] | null;
+  users?: { display_name: string | null } | { display_name: string | null }[] | null;
   // PostgREST returns a single object for a to-one embed, but be lenient.
   categories: CategoryEmbed | CategoryEmbed[] | null;
 }
@@ -82,5 +90,8 @@ export function toTxDto(row: TxJoinRow): TxDto {
       row.orig_amount === null || row.orig_amount === undefined ? null : toSatang(row.orig_amount),
     fxRate: row.fx_rate === null || row.fx_rate === undefined ? null : Number(row.fx_rate),
     accountName: (Array.isArray(row.accounts) ? row.accounts[0] : row.accounts)?.name ?? null,
+    accountShared:
+      (Array.isArray(row.accounts) ? row.accounts[0] : row.accounts)?.is_shared === true,
+    writerName: (Array.isArray(row.users) ? row.users[0] : row.users)?.display_name?.trim() || null,
   };
 }

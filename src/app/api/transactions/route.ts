@@ -22,6 +22,9 @@ import { log } from "@/lib/log";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+/** A row as PostgREST returns it for TX_SELECT (its embeds are typed loosely on purpose). */
+type ListRow = Parameters<typeof toTxDto>[0];
+
 const MAX_LIMIT = 100;
 const DEFAULT_LIMIT = 50;
 
@@ -41,15 +44,14 @@ export async function GET(request: Request): Promise<Response> {
     if (!parsed.success) return apiError("ตัวกรองไม่ถูกต้อง", 400);
     const f = parsed.data;
 
-    const defaultAccountId = f.accountId
-      ? ((await listWallets(getAdminClient(), auth.userId)).find((w) => w.isDefault)?.id ?? null)
-      : null;
+    const wallets = f.accountId ? await listWallets(getAdminClient(), auth.userId) : [];
+    const defaultAccountId = wallets.find((w) => w.isDefault)?.id ?? null;
+    // looking at one shared wallet shows what everybody on it wrote (the wallet list above already
+    // proves the person is on it); everything else is only their own entries
+    const sharedView = f.accountId ? wallets.some((w) => w.id === f.accountId && w.shared) : false;
+    const base = getAdminClient().from("transactions").select(TX_SELECT);
     const query = applyTxFilters(
-      getAdminClient()
-        .from("transactions")
-        .select(TX_SELECT)
-        .eq("user_id", auth.userId)
-        .eq("status", "confirmed"),
+      (sharedView ? base : base.eq("user_id", auth.userId)).eq("status", "confirmed"),
       f,
       { defaultAccountId },
     )
@@ -76,8 +78,10 @@ export async function GET(request: Request): Promise<Response> {
       }
     }
     return json({
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      items: rows.slice(0, f.limit).map((r: any) => toTxDto(r)),
+      items: rows.slice(0, f.limit).map((r: ListRow) => ({
+        ...toTxDto(r),
+        mine: r.user_id === auth.userId,
+      })),
       hasMore: rows.length > f.limit,
       totals,
     });

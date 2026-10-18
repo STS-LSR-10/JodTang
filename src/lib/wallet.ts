@@ -42,6 +42,12 @@ export interface Wallet {
   creditLimitSatang: number | null;
   statementDay: number | null;
   dueDay: number | null;
+  /** A wallet two or more people write into (set only for wallets from migration 0029). */
+  shared?: boolean;
+  /** Who owns it; for a private wallet this is always the person asking. */
+  ownerId?: string;
+  /** People on it, the owner included. */
+  memberCount?: number;
 }
 
 /** Opening balance + income - expense + transfers in - transfers out, in satang. */
@@ -91,11 +97,19 @@ export function walletToDto(w: Wallet) {
     creditLimitSatang: w.creditLimitSatang,
     statementDay: w.statementDay,
     dueDay: w.dueDay,
+    shared: w.shared === true,
+    memberCount: w.memberCount ?? 1,
   };
 }
 
-export const walletLabel = (w: Pick<Wallet, "name" | "kind">) =>
-  `${WALLET_KIND_EMOJI[w.kind]} ${w.name}`;
+export const walletLabel = (w: Pick<Wallet, "name" | "kind"> & { shared?: boolean }) =>
+  `${WALLET_KIND_EMOJI[w.kind]} ${w.name}${w.shared ? " 👥" : ""}`;
+
+/** Wallets the person owns (a shared wallet they only belong to is not theirs to count or change). */
+export const ownedWallets = <T extends Pick<Wallet, "ownerId">>(
+  wallets: T[],
+  userId: string,
+): T[] => wallets.filter((w) => w.ownerId === undefined || w.ownerId === userId);
 
 export type WalletMatch =
   { ok: true; wallet: Wallet } | { ok: false; reason: "none" | "ambiguous" };

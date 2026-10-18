@@ -43,6 +43,13 @@ export async function PATCH(request: Request, { params }: Params): Promise<Respo
     const wallets = await ensureWallets(db, auth.userId);
     const current = wallets.find((w) => w.id === id);
     if (!current) return apiError("ไม่พบกระเป๋านี้", 404);
+    if (current.shared) {
+      // only the owner changes a shared wallet; it is never the main wallet and never a card
+      if (current.ownerId !== auth.userId)
+        return apiError("เฉพาะเจ้าของกระเป๋าร่วมที่แก้ได้นะ", 403);
+      if (parsed.data.isDefault) return apiError("กระเป๋าร่วมตั้งเป็นกระเป๋าหลักไม่ได้นะ", 400);
+      if (parsed.data.kind === "card") return apiError("กระเป๋าร่วมเป็นบัตรเครดิตไม่ได้นะ", 400);
+    }
 
     let openingSatang: number | undefined;
     if (parsed.data.openingBalance !== undefined) {
@@ -82,6 +89,12 @@ export async function DELETE(request: Request, { params }: Params): Promise<Resp
     const wallets = await ensureWallets(db, auth.userId);
     const wallet = wallets.find((w) => w.id === id);
     if (!wallet) return apiError("ไม่พบกระเป๋านี้", 404);
+    if (wallet.shared && wallet.ownerId !== auth.userId) {
+      return apiError(
+        'เฉพาะเจ้าของที่ลบกระเป๋าร่วมได้ ถ้าไม่อยากร่วมแล้วให้กด "ออกจากกระเป๋า" นะ',
+        403,
+      );
+    }
     if (wallet.isDefault) {
       return apiError("ลบกระเป๋าหลักไม่ได้ ตั้งกระเป๋าอื่นเป็นกระเป๋าหลักก่อนนะ", 400);
     }

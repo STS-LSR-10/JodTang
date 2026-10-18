@@ -76,6 +76,9 @@ import { buildForecastCard } from "./forecast-flex";
 import { buildInsightCard } from "./insight-flex";
 import { buildTransferDone, buildWalletChooser, buildWalletsCard } from "./wallet-flex";
 import { buildCardsCard } from "./card-flex";
+import { JOIN_FAIL_TEXT } from "@/lib/shared-wallet";
+import { createInvite, membersOf, redeemInvite, removeMember } from "@/lib/shared-wallet-repo";
+import { sharedMemberLimit } from "@/lib/plan";
 import { convertForeignEntries, fxNoteOf } from "./fx-entries";
 import { handleGroupEvent } from "./group-handlers";
 import { buildBillsCard } from "./bill-flex";
@@ -202,6 +205,14 @@ import {
   BILL_USAGE_TEXT,
   billAmbiguousText,
   billFullText,
+  SHARED_INVITE_OWNER_ONLY_TEXT,
+  SHARED_JOIN_USAGE_TEXT,
+  SHARED_OWNER_CANNOT_LEAVE_TEXT,
+  SHARED_WALLET_LOCKED_TEXT,
+  SHARED_WALLET_ONLY_ENTRIES_TEXT,
+  sharedInviteText,
+  sharedJoinedText,
+  sharedLeftText,
   GOAL_BAD_DUE_TEXT,
   GOAL_EMPTY_TEXT,
   GOAL_EXISTS_TEXT,
@@ -391,6 +402,14 @@ async function handleText(input: string, user: UserRow, deps: HandlerDeps): Prom
     // "โอนค่าเช่า 5000 ไป ..." that names no wallet is an ordinary entry, so it falls through
     const done = await runTransfer(command, user, deps);
     if (done) return done;
+  } else if (
+    command?.kind === "wallet-join" ||
+    command?.kind === "wallet-invite" ||
+    command?.kind === "wallet-leave"
+  ) {
+    // "เชิญ แม่" / "ออกจากกระเป๋า ..." that names no shared wallet of theirs is an ordinary message
+    const done = await runSharedWallet(command, user, deps, user.line_user_id);
+    if (done) return done;
   } else if (command?.kind === "bill-new" || command?.kind === "bill-pay") {
     // "จ่ายบิล ค่าน้ำมัน 500" that names none of their bills is an ordinary entry
     const done = await runBill(command, user, deps);
@@ -516,6 +535,7 @@ async function runDebt(
           ),
         ];
       }
+      if (found.wallet.shared) return [text(SHARED_WALLET_ONLY_ENTRIES_TEXT)];
       wallet = found.wallet;
     }
     if (!wallet) return null;
@@ -557,6 +577,7 @@ async function runDebt(
         ),
       ];
     }
+    if (found.wallet.shared) return [text(SHARED_WALLET_ONLY_ENTRIES_TEXT)];
     wallet = found.wallet;
   }
   if (!wallet) return null;
@@ -597,6 +618,67 @@ async function runDebt(
         .join("\n"),
     }),
   ];
+}
+
+/** Join with an invite code / invite somebody / leave a shared wallet. */
+async function runSharedWallet(
+  command: Extract<Command, { kind: "wallet-join" | "wallet-invite" | "wallet-leave" }>,
+  user: UserRow,
+  deps: HandlerDeps,
+  lineUserId: string,
+): Promise<LineMessage[] | null> {
+  const { db } = deps;
+  const plan = effectivePlan(user.plan, user.plan_expires_at, deps.now());
+
+  if (command.kind === "wallet-join") {
+    if (!command.code) return [text(SHARED_JOIN_USAGE_TEXT)];
+    // a 6-digit code can be guessed, so wrong tries are limited per person
+    if (deps.limit) {
+      const tries = await deps.limit("join_wallet", lineUserId, LIMITS.joinWallet);
+      if (!tries.allowed) return [text(TOO_MANY_MESSAGES_TEXT)];
+    }
+    const result = await redeemInvite(db, command.code, user.id, deps.now());
+    if (!result.ok) return [text(JOIN_FAIL_TEXT[result.reason])];
+    return [text(sharedJoinedText(result.wallet.name))];
+  }
+
+  const wallets = await listWallets(db, user.id);
+  if (command.kind === "wallet-invite") {
+    const mine = wallets.filter((w) => w.shared && w.ownerId === user.id);
+    if (mine.length === 0) {
+      // someone without a shared wallet of their own typing "เชิญ ..." most likely means something else
+      const theirs = wallets.filter((w) => w.shared);
+      const found = resolveWallet(command.name, theirs);
+      return found.ok ? [text(SHARED_INVITE_OWNER_ONLY_TEXT)] : null;
+    }
+    const found = resolveWallet(command.name, mine);
+    if (!found.ok) {
+      return found.reason === "ambiguous"
+        ? [
+            text(
+              WALLET_AMBIGUOUS_TEXT(
+                command.name,
+                mine.map((w) => w.name),
+              ),
+            ),
+          ]
+        : null;
+    }
+    if (!can(plan, "sharedWallet")) return [text(SHARED_WALLET_LOCKED_TEXT)];
+    if ((await membersOf(db, found.wallet.id)).length >= sharedMemberLimit(plan)) {
+      return [text(JOIN_FAIL_TEXT.full)];
+    }
+    const invite = await createInvite(db, found.wallet.id, user.id, deps.now());
+    return [text(sharedInviteText(found.wallet.name, invite.code))];
+  }
+
+  // leave
+  const shared = wallets.filter((w) => w.shared);
+  const found = resolveWallet(command.name, shared);
+  if (!found.ok) return null;
+  if (found.wallet.ownerId === user.id) return [text(SHARED_OWNER_CANNOT_LEAVE_TEXT)];
+  await removeMember(db, found.wallet.id, user.id);
+  return [text(sharedLeftText(found.wallet.name))];
 }
 
 /** "<d>/<m>/<y พ.ศ.>" for a YYYY-MM-DD date. */
@@ -846,6 +928,10 @@ async function runTransfer(
   const from = resolveWallet(command.from, wallets);
   const to = resolveWallet(command.to, wallets);
   if (!from.ok && !to.ok && from.reason === "none" && to.reason === "none") return null;
+  // transfers use private wallets only (a shared one takes income / expenses)
+  if ((from.ok && from.wallet.shared) || (to.ok && to.wallet.shared)) {
+    return [text(SHARED_WALLET_ONLY_ENTRIES_TEXT)];
+  }
 
   if (!can(effectivePlan(user.plan, user.plan_expires_at, deps.now()), "transfer")) {
     return [text(TRANSFER_LOCKED_TEXT)];
@@ -1477,6 +1563,11 @@ async function runCommand(
       if (all.length === 0) return [text(BILL_EMPTY_TEXT)];
       return [buildBillsCard({ bills: all, today, manageUrl: pageUrl("/bills") })];
     }
+
+    case "wallet-join":
+    case "wallet-invite":
+    case "wallet-leave": // handled in handleText; only reached by a direct call
+      return [text(SHARED_JOIN_USAGE_TEXT)];
 
     case "bill-new-usage":
       return [text(BILL_USAGE_TEXT)];

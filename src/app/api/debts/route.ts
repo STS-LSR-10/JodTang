@@ -54,7 +54,8 @@ export async function POST(request: Request): Promise<Response> {
       return apiError("จำนวนเงินไม่ถูกต้อง (เช่น 500 หรือ 500.50)", 400);
     }
 
-    const wallets = await ensureWallets(db, auth.userId);
+    // a debt moves money in or out of a private wallet (shared wallets take income / expenses only)
+    const wallets = (await ensureWallets(db, auth.userId)).filter((w) => !w.shared);
     const wallet = parsed.data.accountId
       ? wallets.find((w) => w.id === parsed.data.accountId)
       : wallets.find((w) => w.isDefault);

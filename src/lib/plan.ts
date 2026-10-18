@@ -27,6 +27,16 @@ export const WALLET_HARD_CAP = 50;
 const GOAL_LIMIT: Record<Plan, number> = { free: 0, plus: 5, ultimate: 20 };
 export const goalCapacity = (plan: Plan): number => GOAL_LIMIT[plan];
 
+/**
+ * People on one shared wallet (the owner included), by the OWNER's plan: Professional two (a
+ * couple), Ultimate up to ten. A free plan cannot start a shared wallet (but can be invited to one).
+ */
+const SHARED_MEMBER_LIMIT: Record<Plan, number> = { free: 0, plus: 2, ultimate: 10 };
+export const sharedMemberLimit = (plan: Plan): number => SHARED_MEMBER_LIMIT[plan];
+/** Shared wallets one person may own at the same time. */
+const SHARED_WALLET_LIMIT: Record<Plan, number> = { free: 0, plus: 1, ultimate: 5 };
+export const sharedWalletCapacity = (plan: Plan): number => SHARED_WALLET_LIMIT[plan];
+
 /** The number of wallets allowed on `plan`. */
 export function walletCapacity(plan: Plan): number {
   return WALLET_LIMIT[plan] ?? WALLET_HARD_CAP;
@@ -74,7 +84,8 @@ export type Feature =
   | "dailyBudget"
   | "savingsGoal"
   | "billReminder"
-  | "groupLedger";
+  | "groupLedger"
+  | "sharedWallet";
 
 /** The lowest tier that has each feature (Ultimate always includes everything Professional has). */
 const MIN_PLAN: Record<Feature, "plus" | "ultimate"> = {
@@ -110,6 +121,7 @@ const MIN_PLAN: Record<Feature, "plus" | "ultimate"> = {
   savingsGoal: "plus",
   billReminder: "ultimate",
   groupLedger: "ultimate",
+  sharedWallet: "plus",
 };
 
 export function isPaidPlan(plan: Plan): boolean {

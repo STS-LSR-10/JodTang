@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { satangToString, toSatang } from "@/lib/money";
-import { DEFAULT_WALLET_NAME, type Wallet, type WalletKind } from "@/lib/wallet";
+import { DEFAULT_WALLET_NAME, ownedWallets, type Wallet, type WalletKind } from "@/lib/wallet";
 
 function fail(context: string, error: { message: string }): never {
   throw new Error(`${context}: ${error.message}`);
@@ -22,6 +22,9 @@ interface BalanceRow {
   due_day: number | null;
   debt_in: number | string;
   debt_out: number | string;
+  is_shared?: boolean;
+  owner_user_id?: string;
+  member_count?: number | string;
 }
 
 /** Every wallet of the person with its totals (the main wallet first). Empty if none was made yet. */
@@ -45,6 +48,9 @@ export async function listWallets(db: SupabaseClient, userId: string): Promise<W
       r.credit_limit === null || r.credit_limit === undefined ? null : toSatang(r.credit_limit),
     statementDay: r.statement_day ?? null,
     dueDay: r.due_day ?? null,
+    shared: r.is_shared === true,
+    ownerId: r.owner_user_id,
+    memberCount: r.member_count === undefined ? 1 : Number(r.member_count),
   }));
 }
 
@@ -54,11 +60,13 @@ export async function listWallets(db: SupabaseClient, userId: string): Promise<W
  */
 export async function ensureWallets(db: SupabaseClient, userId: string): Promise<Wallet[]> {
   const wallets = await listWallets(db, userId);
-  if (wallets.some((w) => w.isDefault)) return wallets;
+  // only the person's own private wallets can be their main wallet (a shared wallet never is)
+  const mine = ownedWallets(wallets, userId).filter((w) => !w.shared);
+  if (mine.some((w) => w.isDefault)) return wallets;
 
-  if (wallets.length > 0) {
+  if (mine.length > 0) {
     // wallets but no main one (should not happen): the oldest becomes the main wallet
-    const first = wallets[0];
+    const first = mine[0];
     if (first) {
       const { error } = await db
         .from("accounts")

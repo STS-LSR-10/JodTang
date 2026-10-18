@@ -32,6 +32,11 @@ interface WalletItem {
   creditLimitSatang: number | null;
   statementDay: number | null;
   dueDay: number | null;
+  /** A wallet shared with other people; `members` lists them. */
+  shared?: boolean;
+  isOwner?: boolean;
+  memberCount?: number;
+  members?: { userId: string; name: string; role: "owner" | "member" }[];
   card: {
     owedSatang: number;
     limitSatang: number | null;
@@ -49,6 +54,9 @@ interface WalletsResponse {
   totalSatang: number;
   limit: number;
   canAdd: boolean;
+  /** The plan allows starting a shared wallet. */
+  canAddShared?: boolean;
+  viewerId?: string;
 }
 
 const money = (satang: number) => `${satang < 0 ? "-" : ""}฿${formatBaht(Math.abs(satang))}`;
@@ -61,8 +69,21 @@ export default function WalletsPage() {
   const transfers = useApi<{ items: TransferDto[] }>("/api/transfers");
   const [transferring, setTransferring] = useState(false);
   const [editing, setEditing] = useState<WalletItem | "new" | null>(null);
+  const [inviting, setInviting] = useState<WalletItem | null>(null);
+  const [joinCode, setJoinCode] = useState("");
   const [notice, setNotice] = useState<string | null>(null);
   const items = wallets.data?.items ?? [];
+  // transfers move money between private wallets (a shared wallet takes income and expenses)
+  const privateItems = items.filter((w) => !w.shared);
+
+  async function join() {
+    const code = normalizeThaiDigits(joinCode).trim();
+    if (!/^\d{6}$/.test(code)) return setNotice("รหัสต้องเป็นตัวเลข 6 หลักนะ");
+    await act(async () => {
+      await api("/api/wallets/join", { method: "POST", body: JSON.stringify({ code }) });
+      setJoinCode("");
+    }, "ร่วมกระเป๋าแล้ว");
+  }
 
   async function act(run: () => Promise<unknown>, done: string) {
     setNotice(null);
@@ -128,6 +149,11 @@ export default function WalletsPage() {
                             หลัก
                           </span>
                         ) : null}
+                        {w.shared ? (
+                          <span className="ml-2 rounded-full bg-primary-soft px-2 py-0.5 text-[11px] text-primary">
+                            👥 ร่วมกัน {w.memberCount ?? 1} คน
+                          </span>
+                        ) : null}
                       </p>
                       <p className="text-xs text-muted">
                         {WALLET_KIND_LABEL[w.kind]} · {w.entryCount} รายการ
@@ -141,7 +167,7 @@ export default function WalletsPage() {
                     >
                       {money(w.balanceSatang)}
                     </p>
-                    {!w.isDefault ? (
+                    {!w.isDefault && !w.shared ? (
                       <button
                         type="button"
                         aria-label={`ตั้ง ${w.name} เป็นกระเป๋าหลัก`}
@@ -160,15 +186,17 @@ export default function WalletsPage() {
                         <Star className="h-4 w-4" aria-hidden />
                       </button>
                     ) : null}
-                    <button
-                      type="button"
-                      aria-label={`แก้ไข ${w.name}`}
-                      onClick={() => setEditing(w)}
-                      className="flex h-11 w-9 shrink-0 items-center justify-center text-muted"
-                    >
-                      <Pencil className="h-4 w-4" aria-hidden />
-                    </button>
-                    {!w.isDefault ? (
+                    {!w.shared || w.isOwner ? (
+                      <button
+                        type="button"
+                        aria-label={`แก้ไข ${w.name}`}
+                        onClick={() => setEditing(w)}
+                        className="flex h-11 w-9 shrink-0 items-center justify-center text-muted"
+                      >
+                        <Pencil className="h-4 w-4" aria-hidden />
+                      </button>
+                    ) : null}
+                    {!w.isDefault && (!w.shared || w.isOwner) ? (
                       <button
                         type="button"
                         aria-label={`ลบ ${w.name}`}
@@ -191,11 +219,22 @@ export default function WalletsPage() {
                     ) : null}
                   </div>
                   {w.card ? <CardDetails card={w.card} /> : null}
+                  {w.shared ? (
+                    <SharedDetails
+                      wallet={w}
+                      viewerId={wallets.data?.viewerId}
+                      onInvite={() => setInviting(w)}
+                      onChanged={(msg) => {
+                        setNotice(msg);
+                        wallets.reload();
+                      }}
+                    />
+                  ) : null}
                 </li>
               ))}
             </ul>
 
-            {items.length > 1 ? (
+            {privateItems.length > 1 ? (
               <section className={cardClass} aria-label="โอนระหว่างกระเป๋า">
                 <div className="flex items-center justify-between gap-3">
                   <div>
@@ -281,6 +320,31 @@ export default function WalletsPage() {
               </p>
             ) : null}
 
+            <section className={cardClass} aria-label="ร่วมกระเป๋าด้วยรหัส">
+              <h2 className="font-semibold">มีรหัสเชิญเข้ากระเป๋าร่วม?</h2>
+              <div className="flex gap-2">
+                <input
+                  value={joinCode}
+                  onChange={(e) => setJoinCode(e.target.value)}
+                  inputMode="numeric"
+                  maxLength={6}
+                  placeholder="รหัส 6 หลัก"
+                  aria-label="รหัสเชิญ"
+                  className="num h-11 min-w-0 flex-1 rounded-2xl border border-border bg-background px-4 outline-none focus:border-primary"
+                />
+                <button
+                  type="button"
+                  onClick={() => void join()}
+                  className="h-11 rounded-2xl border border-border px-4 text-sm font-semibold"
+                >
+                  ร่วมกระเป๋า
+                </button>
+              </div>
+              <p className="text-xs text-muted">
+                คนที่ร่วมเห็นเฉพาะรายการที่ลงกระเป๋านั้น กระเป๋าและรายการส่วนตัวของคุณยังเป็นส่วนตัว
+              </p>
+            </section>
+
             {wallets.data.canAdd ? (
               <button
                 type="button"
@@ -304,7 +368,7 @@ export default function WalletsPage() {
 
       {transferring ? (
         <TransferSheet
-          wallets={items}
+          wallets={privateItems}
           onClose={() => setTransferring(false)}
           onSaved={() => {
             setTransferring(false);
@@ -315,10 +379,13 @@ export default function WalletsPage() {
         />
       ) : null}
 
+      {inviting ? <InviteSheet wallet={inviting} onClose={() => setInviting(null)} /> : null}
+
       {editing ? (
         <WalletSheet
           wallet={editing === "new" ? null : editing}
           canCard={me.data?.features.creditCard === true}
+          canShare={wallets.data?.canAddShared === true}
           onClose={() => setEditing(null)}
           onSaved={(msg) => {
             setEditing(null);
@@ -408,11 +475,13 @@ const DAYS = Array.from({ length: 28 }, (_, i) => i + 1);
 function WalletSheet({
   wallet,
   canCard,
+  canShare,
   onClose,
   onSaved,
 }: {
   wallet: WalletItem | null;
   canCard: boolean;
+  canShare: boolean;
   onClose: () => void;
   onSaved: (message: string) => void;
 }) {
@@ -425,6 +494,7 @@ function WalletSheet({
   const [limit, setLimit] = useState(
     wallet?.creditLimitSatang ? (wallet.creditLimitSatang / 100).toFixed(2) : "",
   );
+  const [shared, setShared] = useState(false);
   const [statementDay, setStatementDay] = useState(wallet?.statementDay ?? 0);
   const [dueDay, setDueDay] = useState(wallet?.dueDay ?? 0);
   const [saving, setSaving] = useState(false);
@@ -448,6 +518,8 @@ function WalletSheet({
         name: name.trim(),
         kind,
         openingBalance: normalized || null,
+        // only a NEW wallet can be made shared (an old one would show its past entries)
+        ...(!wallet && shared ? { shared: true } : {}),
         // only a card has these; a locked plan sends nothing so the save still works
         ...(kind === "card" && canCard
           ? {
@@ -501,6 +573,30 @@ function WalletSheet({
           className={cn(fieldClass, "num")}
         />
         <p className="text-xs text-muted">บัตรเครดิตที่มียอดค้าง ใส่ติดลบได้ เช่น -3500</p>
+        {!wallet ? (
+          canShare ? (
+            <label className="flex min-h-11 items-start gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={shared}
+                onChange={(e) => {
+                  setShared(e.target.checked);
+                  if (e.target.checked && kind === "card") setKind("bank");
+                }}
+                className="mt-1 h-4 w-4"
+              />
+              <span>
+                <span className="font-semibold">กระเป๋าร่วมกับคนอื่น (เช่น แฟน)</span>
+                <span className="block text-xs text-muted">
+                  ต่างคนต่างจดลงกระเป๋านี้จากแชทของตัวเอง ยอดเดียวกัน ชวนด้วยรหัส 6 หลักทีหลังได้
+                  (ใช้ได้เฉพาะรายรับ/รายจ่าย)
+                </span>
+              </span>
+            </label>
+          ) : (
+            <PlusLock>กระเป๋าร่วมกับแฟนหรือคนอื่น จดจากแชทของตัวเองได้ยอดเดียวกัน</PlusLock>
+          )
+        ) : null}
         {kind === "card" ? (
           canCard ? (
             <>
@@ -652,6 +748,158 @@ function TransferSheet({
           {saving ? "กำลังโอน..." : "โอน"}
         </button>
       </form>
+    </Sheet>
+  );
+}
+
+function SharedDetails({
+  wallet,
+  viewerId,
+  onInvite,
+  onChanged,
+}: {
+  wallet: WalletItem;
+  viewerId?: string;
+  onInvite: () => void;
+  onChanged: (message: string) => void;
+}) {
+  const { api } = useLiff();
+  const members = wallet.members ?? [];
+  const mine = wallet.isOwner === true;
+
+  async function removeMember(userId: string, name: string, leaving: boolean) {
+    const ask = leaving
+      ? `ออกจากกระเป๋า "${wallet.name}" ใช่ไหม? รายการที่เคยจดไว้ยังอยู่ในกระเป๋านั้น`
+      : `เอา ${name} ออกจากกระเป๋า "${wallet.name}" ใช่ไหม? รายการที่เขาเคยจดยังอยู่`;
+    if (!window.confirm(ask)) return;
+    try {
+      await api(`/api/wallets/${wallet.id}/members/${userId}`, { method: "DELETE" });
+      onChanged(leaving ? "ออกจากกระเป๋าแล้ว" : "เอาออกแล้ว");
+    } catch (err) {
+      onChanged(err instanceof Error ? err.message : "ทำรายการไม่สำเร็จ");
+    }
+  }
+
+  return (
+    <div className="mt-3 space-y-2 border-t border-border pt-3 text-sm">
+      <p className="text-xs text-muted">
+        คนที่ร่วม: เห็นและจดรายการที่ลงกระเป๋านี้ได้ทุกคน แต่แก้/ลบได้เฉพาะของตัวเอง
+      </p>
+      <ul className="space-y-1" aria-label={`สมาชิกของ ${wallet.name}`}>
+        {members.map((m) => (
+          <li key={m.userId} className="flex items-center justify-between gap-2">
+            <span className="truncate">
+              {m.name}
+              {m.role === "owner" ? <span className="ml-2 text-xs text-muted">เจ้าของ</span> : null}
+            </span>
+            {mine && m.role === "member" ? (
+              <button
+                type="button"
+                aria-label={`เอา ${m.name} ออกจาก ${wallet.name}`}
+                onClick={() => void removeMember(m.userId, m.name, false)}
+                className="flex h-11 items-center px-2 text-xs text-expense"
+              >
+                เอาออก
+              </button>
+            ) : null}
+          </li>
+        ))}
+      </ul>
+      <div className="flex gap-2">
+        {mine ? (
+          <button
+            type="button"
+            onClick={onInvite}
+            aria-label={`ชวนเข้า ${wallet.name}`}
+            className="h-11 flex-1 rounded-2xl border border-border text-sm font-semibold"
+          >
+            ชวนเข้ากระเป๋า
+          </button>
+        ) : null}
+        {!mine && viewerId ? (
+          <button
+            type="button"
+            aria-label={`ออกจากกระเป๋า ${wallet.name}`}
+            onClick={() => void removeMember(viewerId, "", true)}
+            className="h-11 flex-1 rounded-2xl border border-border text-sm font-semibold text-expense"
+          >
+            ออกจากกระเป๋านี้
+          </button>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+function InviteSheet({ wallet, onClose }: { wallet: WalletItem; onClose: () => void }) {
+  const { api } = useLiff();
+  const [invite, setInvite] = useState<{ code: string; expiresAt: string } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  async function make() {
+    setBusy(true);
+    setError(null);
+    try {
+      setInvite(await api(`/api/wallets/${wallet.id}/invite`, { method: "POST" }));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "สร้างรหัสไม่สำเร็จ");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function copy() {
+    if (!invite) return;
+    try {
+      await navigator.clipboard.writeText(`ร่วมกระเป๋า ${invite.code}`);
+      setCopied(true);
+    } catch {
+      setCopied(false);
+    }
+  }
+
+  return (
+    <Sheet title={`ชวนเข้า ${wallet.name}`} onClose={onClose}>
+      <div className="space-y-3">
+        {invite ? (
+          <>
+            <p
+              className="num text-center text-4xl font-bold tracking-widest"
+              aria-label="รหัสเชิญของกระเป๋า"
+            >
+              {invite.code}
+            </p>
+            <p className="text-sm text-muted">
+              ให้เขาพิมพ์ในแชทกับบอทว่า{" "}
+              <span className="font-semibold">ร่วมกระเป๋า {invite.code}</span>{" "}
+              (หรือใส่รหัสในหน้ากระเป๋าเงิน) ใช้ได้ครั้งเดียวและหมดอายุใน 24 ชั่วโมง
+            </p>
+            <button
+              type="button"
+              onClick={() => void copy()}
+              className="h-11 w-full rounded-2xl border border-border text-sm font-semibold"
+            >
+              {copied ? "คัดลอกแล้ว" : "คัดลอกข้อความ"}
+            </button>
+          </>
+        ) : (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => void make()}
+            className="h-12 w-full rounded-2xl bg-primary text-base font-semibold text-surface disabled:opacity-60"
+          >
+            {busy ? "กำลังสร้างรหัส..." : "สร้างรหัสเชิญ"}
+          </button>
+        )}
+        {error ? (
+          <p role="alert" className="text-sm text-expense">
+            {error}
+          </p>
+        ) : null}
+      </div>
     </Sheet>
   );
 }

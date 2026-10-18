@@ -343,3 +343,18 @@ export const groupSplitUnknownText = (names: string[]) =>
 export const groupSplitAmbiguousText = (names: string[]) =>
   `${names.join(", ")} ตรงกับหลายคน พิมพ์ชื่อให้ชัดขึ้นอีกนิดนะ เลยยังไม่ได้จดรายการนี้`;
 export const GROUP_TRIP_OLD_EMPTY_TEXT = "ยังไม่มีทริปที่จบแล้ว";
+export const SHARED_WALLET_ONLY_ENTRIES_TEXT =
+  "กระเป๋าร่วมใช้ได้เฉพาะรายรับ/รายจ่ายตอนนี้ โอน หนี้ และบัตรเครดิตยังใช้ได้กับกระเป๋าส่วนตัวเท่านั้นนะ";
+export const SHARED_WALLET_LOCKED_TEXT =
+  'กระเป๋าร่วมกับคนอื่นเป็นฟีเจอร์ของแผน Professional ขึ้นไป (Professional 2 คน, Ultimate สูงสุด 10 คน) ลองทดลองใช้ฟรี 7 วันได้ที่เมนู "อัปเกรด" นะ ส่วนการถูกชวนเข้ากระเป๋าร่วม ใช้แผนไหนก็ร่วมได้ฟรี';
+export const sharedInviteText = (wallet: string, code: string) =>
+  `ชวนเข้ากระเป๋า "${wallet}" 💑\nรหัส: ${code}\nให้เขาพิมพ์ในแชทกับบอทว่า\nร่วมกระเป๋า ${code}\n(ใช้ได้ครั้งเดียว ภายใน 24 ชั่วโมง)`;
+export const sharedJoinedText = (wallet: string) =>
+  `ร่วมกระเป๋า "${wallet}" แล้ว 🎉 จดลงกระเป๋านี้ได้ด้วย @${wallet} เช่น "ข้าวเย็น 300 @${wallet}" ส่วนกระเป๋าและรายการส่วนตัวของคุณยังเป็นส่วนตัวเหมือนเดิม คนที่ร่วมเห็นเฉพาะรายการที่ลงกระเป๋านี้`;
+export const sharedLeftText = (wallet: string) =>
+  `ออกจากกระเป๋า "${wallet}" แล้ว รายการที่เคยจดไว้ยังอยู่ในกระเป๋านั้น`;
+export const SHARED_INVITE_OWNER_ONLY_TEXT = "เฉพาะเจ้าของกระเป๋าที่ชวนคนอื่นได้นะ";
+export const SHARED_OWNER_CANNOT_LEAVE_TEXT =
+  "เจ้าของออกจากกระเป๋าร่วมไม่ได้ ถ้าไม่ใช้แล้วให้ลบกระเป๋าที่หน้ากระเป๋าเงินนะ";
+export const SHARED_JOIN_USAGE_TEXT =
+  'พิมพ์ "ร่วมกระเป๋า" ตามด้วยรหัส 6 หลัก เช่น "ร่วมกระเป๋า 482913" นะ';

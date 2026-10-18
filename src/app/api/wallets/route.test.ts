@@ -16,6 +16,18 @@ vi.mock("@/lib/rate-limit", async (original) => ({
   ...(await original<typeof import("@/lib/rate-limit")>()),
   limitOr429: async () => null,
 }));
+let sharedOwned = 0;
+const sharedCreated: Record<string, unknown>[] = [];
+let sharedResult = "shared-id";
+vi.mock("@/lib/shared-wallet-repo", () => ({
+  ownedSharedCount: async () => sharedOwned,
+  membersOfMany: async (_db: unknown, ids: string[]) =>
+    new Map(ids.map((id) => [id, [{ userId: "u1", name: "แอน", role: "owner" }]])),
+  createSharedWallet: async (_db: unknown, _u: string, input: Record<string, unknown>) => {
+    sharedCreated.push(input);
+    return sharedResult;
+  },
+}));
 vi.mock("@/lib/supabase/admin", () => ({ getAdminClient: () => ({}) }));
 vi.mock("@/lib/wallet-repo", () => ({
   ensureWallets: async () => existing,
@@ -60,6 +72,9 @@ beforeEach(() => {
   existing = wallets(1);
   created.length = 0;
   createResult = "new-id";
+  sharedOwned = 0;
+  sharedCreated.length = 0;
+  sharedResult = "shared-id";
 });
 
 describe("POST /api/wallets: how many each plan may have", () => {
@@ -170,5 +185,96 @@ describe("POST /api/wallets: credit-card fields", () => {
     plan = "plus";
     expect((await post({ name: "KTC", kind: "card", ...extra })).status).toBe(400);
     expect(created).toHaveLength(0);
+  });
+});
+
+describe("shared wallets in the wallets API", () => {
+  const shared = (over: Partial<Wallet> = {}): Wallet => ({
+    ...wallet(2),
+    id: "ws",
+    name: "กองกลาง",
+    isDefault: false,
+    shared: true,
+    ownerId: "u1",
+    memberCount: 2,
+    ...over,
+  });
+
+  it("GET lists a shared wallet with its members and says whether the person owns it", async () => {
+    plan = "plus";
+    existing = [wallet(1), shared()];
+    const body = await (await get()).json();
+    const item = body.items.find((i: { id: string }) => i.id === "ws");
+    expect(item).toMatchObject({ shared: true, isOwner: true, memberCount: 2 });
+    expect(item.members).toEqual([{ userId: "u1", name: "แอน", role: "owner" }]);
+    expect(body.canAddShared).toBe(true);
+    expect(body.viewerId).toBe("u1");
+  });
+
+  it("a shared wallet somebody else owns is not counted against the person's own wallet limit", async () => {
+    existing = [wallet(1), shared({ ownerId: "someone-else" })]; // Free: limit 1 wallet
+    const body = await (await get()).json();
+    expect(body).toMatchObject({ limit: 1, canAdd: false });
+    expect(body.items.find((i: { id: string }) => i.id === "ws")).toMatchObject({ isOwner: false });
+    // ...and one they own does count
+    existing = [wallet(1)];
+    expect((await (await get()).json()).canAdd).toBe(false);
+    plan = "plus";
+    existing = [wallet(1), wallet(2), wallet(3), wallet(4), shared({ ownerId: "someone-else" })];
+    expect((await (await get()).json()).canAdd).toBe(true); // 4 of their own, the 5th is theirs to add
+  });
+
+  it("Free cannot start a shared wallet", async () => {
+    existing = [];
+    const res = await post({ name: "กองกลาง", kind: "bank", shared: true });
+    expect(res.status).toBe(403);
+    expect(await res.json()).toMatchObject({ upgrade: true });
+    expect(sharedCreated).toHaveLength(0);
+  });
+
+  it("Professional starts one (a new wallet, with its opening balance); a second needs Ultimate", async () => {
+    plan = "plus";
+    existing = [wallet(1)];
+    const res = await post({
+      name: "กองกลาง",
+      kind: "bank",
+      shared: true,
+      openingBalance: "5,000",
+    });
+    expect(res.status).toBe(201);
+    expect(await res.json()).toMatchObject({ id: "shared-id", shared: true });
+    expect(sharedCreated[0]).toMatchObject({
+      name: "กองกลาง",
+      kind: "bank",
+      openingSatang: 500_000,
+    });
+    expect(created).toHaveLength(0); // not a private wallet
+
+    sharedOwned = 1;
+    const second = await post({ name: "ทริป", kind: "cash", shared: true });
+    expect(second.status).toBe(403);
+    expect(await second.json()).toMatchObject({ upgrade: true });
+  });
+
+  it("Ultimate may own several", async () => {
+    plan = "ultimate";
+    existing = [wallet(1)];
+    sharedOwned = 4;
+    expect((await post({ name: "ห้า", kind: "cash", shared: true })).status).toBe(201);
+    sharedOwned = 5;
+    const full = await post({ name: "หก", kind: "cash", shared: true });
+    expect(full.status).toBe(403);
+    expect(await full.json()).toMatchObject({ upgrade: false });
+  });
+
+  it("never a card, never the main wallet; a name in use is a 409", async () => {
+    plan = "plus";
+    existing = [wallet(1)];
+    expect((await post({ name: "x", kind: "card", shared: true })).status).toBe(400);
+    expect((await post({ name: "x", kind: "cash", shared: true, isDefault: true })).status).toBe(
+      400,
+    );
+    sharedResult = "duplicate";
+    expect((await post({ name: "ซ้ำ", kind: "cash", shared: true })).status).toBe(409);
   });
 });

@@ -340,9 +340,16 @@ function TransactionsView() {
                 <TxItem
                   key={tx.id}
                   tx={tx}
-                  onOpen={selecting ? () => toggle(tx.id) : () => setEditFor(tx)}
+                  // somebody else's entry in a shared wallet can be read but not changed
+                  onOpen={
+                    tx.mine === false
+                      ? undefined
+                      : selecting
+                        ? () => toggle(tx.id)
+                        : () => setEditFor(tx)
+                  }
                   leading={
-                    selecting ? (
+                    selecting && tx.mine !== false ? (
                       <input
                         type="checkbox"
                         checked={selected.has(tx.id)}
@@ -353,7 +360,7 @@ function TransactionsView() {
                     ) : null
                   }
                   action={
-                    selecting ? null : (
+                    selecting || tx.mine === false ? null : (
                       <div className="flex shrink-0">
                         {tx.hasPhoto ? (
                           <button

@@ -20,7 +20,7 @@ interface DebtsResponse {
   borrowedSatang: number;
 }
 interface WalletsLite {
-  items: { id: string; name: string; kind: WalletKind; isDefault: boolean }[];
+  items: { id: string; name: string; kind: WalletKind; isDefault: boolean; shared?: boolean }[];
 }
 interface PaymentItem {
   id: string;
@@ -206,7 +206,7 @@ export default function DebtsPage() {
       {editing ? (
         <DebtSheet
           debt={editing === "new" ? null : editing}
-          wallets={wallets.data?.items ?? []}
+          wallets={(wallets.data?.items ?? []).filter((w) => !w.shared)}
           onClose={() => setEditing(null)}
           onSaved={(msg) => {
             setEditing(null);
@@ -218,7 +218,7 @@ export default function DebtsPage() {
       {paying ? (
         <PaySheet
           debt={paying}
-          wallets={wallets.data?.items ?? []}
+          wallets={(wallets.data?.items ?? []).filter((w) => !w.shared)}
           locked={locked}
           onClose={() => setPaying(null)}
           onChanged={(msg) => {

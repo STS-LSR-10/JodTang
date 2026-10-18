@@ -272,3 +272,177 @@ test.describe("credit-card wallets (360px)", () => {
     await expect(page.getByText("สำหรับแผน Professional").last()).toBeVisible();
   });
 });
+
+test.describe("shared wallets (360px)", () => {
+  const SHARED_OWNED = wallet({
+    id: "ws",
+    name: "กองกลาง",
+    kind: "bank",
+    isDefault: false,
+    shared: true,
+    isOwner: true,
+    memberCount: 2,
+    openingSatang: 0,
+    balanceSatang: 520_000,
+    members: [
+      { userId: "u-ann", name: "แอน", role: "owner" },
+      { userId: "u-bob", name: "บ๊อบ", role: "member" },
+    ],
+  });
+  const SHARED_JOINED = {
+    ...SHARED_OWNED,
+    id: "wj",
+    name: "ทริป",
+    isOwner: false,
+    members: [
+      { userId: "u-ann", name: "แอน", role: "owner" },
+      { userId: "u-bob", name: "บ๊อบ", role: "member" },
+    ],
+  };
+  const LIST = (items: unknown[], extra: Record<string, unknown> = {}) => ({
+    items,
+    totalSatang: 0,
+    limit: 5,
+    canAdd: true,
+    canAddShared: true,
+    viewerId: "u-bob",
+    ...extra,
+  });
+
+  test("shows the shared badge and the people; the owner can invite and take someone off", async ({
+    page,
+  }) => {
+    await mockApi(page, {
+      "GET /api/me": ME_PLUS,
+      "GET /api/wallets": LIST([wallet({}), SHARED_OWNED], { viewerId: "u-ann" }),
+      "GET /api/transfers": { items: [] },
+    });
+    await page.goto("/wallets");
+
+    await expect(page.getByText("👥 ร่วมกัน 2 คน")).toBeVisible();
+    const members = page.getByRole("list", { name: "สมาชิกของ กองกลาง" });
+    await expect(members.getByText("แอน")).toBeVisible();
+    await expect(members.getByText("บ๊อบ")).toBeVisible();
+    await expect(page.getByRole("button", { name: "ชวนเข้า กองกลาง" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "เอา บ๊อบ ออกจาก กองกลาง" })).toBeVisible();
+    await expectNoHorizontalScroll(page);
+    await expectNoSeriousA11yViolations(page);
+  });
+
+  test("the owner makes an invite code and sees how to use it", async ({ page }) => {
+    await mockApi(page, {
+      "GET /api/me": ME_PLUS,
+      "GET /api/wallets": LIST([wallet({}), SHARED_OWNED], { viewerId: "u-ann" }),
+      "GET /api/transfers": { items: [] },
+      "POST /api/wallets/ws/invite": { code: "482913", expiresAt: "2026-10-19T05:00:00Z" },
+    });
+    await page.goto("/wallets");
+
+    await page.getByRole("button", { name: "ชวนเข้า กองกลาง" }).click();
+    await page.getByRole("button", { name: "สร้างรหัสเชิญ" }).click();
+    await expect(page.getByLabel("รหัสเชิญของกระเป๋า")).toContainText("482913");
+    await expect(page.getByText("ร่วมกระเป๋า 482913").first()).toBeVisible();
+  });
+
+  test("a member sees no edit, delete or invite, but can leave", async ({ page }) => {
+    let left = false;
+    page.on("dialog", (d) => void d.accept());
+    await mockApi(page, {
+      "GET /api/me": ME_PLUS,
+      "GET /api/wallets": LIST([wallet({}), SHARED_JOINED]),
+      "GET /api/transfers": { items: [] },
+      "DELETE /api/wallets/wj/members/u-bob": () => {
+        left = true;
+        return { ok: true };
+      },
+    });
+    await page.goto("/wallets");
+
+    await expect(page.getByRole("button", { name: "แก้ไข ทริป" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "ลบ ทริป" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "ชวนเข้า ทริป" })).toHaveCount(0);
+    await page.getByRole("button", { name: "ออกจากกระเป๋า ทริป" }).click();
+    await expect(page.getByRole("status")).toContainText("ออกจากกระเป๋าแล้ว");
+    expect(left).toBe(true);
+  });
+
+  test("transfers leave shared wallets out", async ({ page }) => {
+    await mockApi(page, {
+      "GET /api/me": ME_PLUS,
+      "GET /api/wallets": LIST([wallet({}), SHARED_OWNED]), // only one private wallet
+      "GET /api/transfers": { items: [] },
+    });
+    await page.goto("/wallets");
+    await expect(page.getByRole("region", { name: "โอนระหว่างกระเป๋า" })).toHaveCount(0);
+  });
+
+  test("a new wallet can be made shared (Professional), and Free is told it needs Professional", async ({
+    page,
+  }) => {
+    let body: unknown = null;
+    await mockApi(page, {
+      "GET /api/me": ME_PLUS,
+      "GET /api/wallets": LIST([wallet({})]),
+      "GET /api/transfers": { items: [] },
+      "POST /api/wallets": async (route: Route) => {
+        body = route.request().postDataJSON();
+        return { id: "new", shared: true };
+      },
+    });
+    await page.goto("/wallets");
+
+    await page.getByRole("button", { name: "เพิ่มกระเป๋า" }).click();
+    await page.getByLabel("ชื่อกระเป๋า").fill("กองกลาง");
+    await page.getByLabel("กระเป๋าร่วมกับคนอื่น", { exact: false }).check();
+    await page.getByRole("button", { name: "บันทึก" }).click();
+    await expect(page.getByRole("status")).toContainText("เพิ่มกระเป๋าแล้ว");
+    expect(body).toMatchObject({ name: "กองกลาง", shared: true });
+
+    await mockApi(page, {
+      "GET /api/me": ME_FREE,
+      "GET /api/wallets": LIST([], { canAdd: true, canAddShared: false }),
+      "GET /api/transfers": { items: [] },
+    });
+    await page.goto("/wallets");
+    await page.getByRole("button", { name: "เพิ่มกระเป๋า" }).click();
+    await expect(page.getByText("สำหรับแผน Professional").last()).toBeVisible();
+    await expect(page.getByLabel("กระเป๋าร่วมกับคนอื่น", { exact: false })).toHaveCount(0);
+  });
+
+  test("joining with a code sends it", async ({ page }) => {
+    let body: unknown = null;
+    await mockApi(page, {
+      "GET /api/me": ME_FREE,
+      "GET /api/wallets": LIST([wallet({})], { canAddShared: false }),
+      "GET /api/transfers": { items: [] },
+      "POST /api/wallets/join": async (route: Route) => {
+        body = route.request().postDataJSON();
+        return { ok: true, walletId: "ws", name: "กองกลาง" };
+      },
+    });
+    await page.goto("/wallets");
+
+    await page.getByLabel("รหัสเชิญ").fill("482913");
+    await page.getByRole("button", { name: "ร่วมกระเป๋า", exact: true }).click();
+    await expect(page.getByRole("status")).toContainText("ร่วมกระเป๋าแล้ว");
+    expect(body).toEqual({ code: "482913" });
+  });
+
+  test("a code that is not 6 digits is refused before sending", async ({ page }) => {
+    let posted = false;
+    await mockApi(page, {
+      "GET /api/me": ME_FREE,
+      "GET /api/wallets": LIST([wallet({})]),
+      "GET /api/transfers": { items: [] },
+      "POST /api/wallets/join": () => {
+        posted = true;
+        return { ok: true };
+      },
+    });
+    await page.goto("/wallets");
+    await page.getByLabel("รหัสเชิญ").fill("123");
+    await page.getByRole("button", { name: "ร่วมกระเป๋า", exact: true }).click();
+    await expect(page.getByRole("status")).toContainText("ตัวเลข 6 หลัก");
+    expect(posted).toBe(false);
+  });
+});

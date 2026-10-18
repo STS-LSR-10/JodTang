@@ -57,7 +57,7 @@ export async function PATCH(request: Request, { params }: Params): Promise<Respo
       }
     }
     if (parsed.data.accountId) {
-      const wallets = await ensureWallets(db, auth.userId);
+      const wallets = (await ensureWallets(db, auth.userId)).filter((w) => !w.shared);
       if (!wallets.some((w) => w.id === parsed.data.accountId))
         return apiError("ไม่พบกระเป๋า", 404);
     }

@@ -310,6 +310,167 @@ describe("wallets (0019)", () => {
   });
 });
 
+describe("shared wallets (0029)", () => {
+  async function seed() {
+    const ann = await newUser(db, `sw-a-${Math.random()}`);
+    const bob = await newUser(db, `sw-b-${Math.random()}`);
+    const carl = await newUser(db, `sw-c-${Math.random()}`); // not on the wallet
+    const wallet = async (
+      user: string,
+      name: string,
+      over: { shared?: boolean; isDefault?: boolean; kind?: string } = {},
+    ) =>
+      (
+        await one<{ id: string }>(
+          db,
+          "insert into accounts (user_id,name,kind,is_default,is_shared,opening_balance) values ($1,$2,$3::account_kind,$4,$5,1000) returning id",
+          [user, name, over.kind ?? "cash", over.isDefault ?? false, over.shared ?? false],
+        )
+      ).id;
+    const member = (walletId: string, user: string, role = "member") =>
+      db.query("insert into wallet_members (wallet_id,user_id,role) values ($1,$2,$3)", [
+        walletId,
+        user,
+        role,
+      ]);
+    const spend = (user: string, account: string | null, amount: number, type = "expense") =>
+      db.query(
+        "insert into transactions (user_id,type,amount,title,account_id) values ($1,$2,$3,'x',$4)",
+        [user, type, amount, account],
+      );
+    const annMain = await wallet(ann, "เงินสดแอน", { isDefault: true });
+    const bobMain = await wallet(bob, "เงินสดบ๊อบ", { isDefault: true });
+    const shared = await wallet(ann, "กองกลาง", { shared: true });
+    await member(shared, ann, "owner");
+    await member(shared, bob);
+    return { ann, bob, carl, annMain, bobMain, shared, member, spend, wallet };
+  }
+  const balances = (u: string) =>
+    rows<{
+      name: string;
+      income: string;
+      expense: string;
+      tx_count: number;
+      is_shared: boolean;
+      member_count: number;
+    }>(
+      db,
+      "select name, income::text, expense::text, tx_count::int, is_shared, member_count::int from wallet_balances($1)",
+      [u],
+    );
+
+  it("both members see the shared wallet with the entries of both added up, and the member count", async () => {
+    const { ann, bob, shared, spend } = await seed();
+    await spend(ann, shared, 300);
+    await spend(bob, shared, 120);
+    await spend(bob, shared, 5000, "income");
+    for (const u of [ann, bob]) {
+      const w = (await balances(u)).find((x) => x.name === "กองกลาง");
+      expect(w).toEqual({
+        name: "กองกลาง",
+        income: "5000.00",
+        expense: "420.00",
+        tx_count: 3,
+        is_shared: true,
+        member_count: 2,
+      });
+    }
+  });
+
+  it("each person's private wallets stay private: the other never sees them or their entries", async () => {
+    const { ann, bob, annMain, bobMain, spend } = await seed();
+    await spend(ann, annMain, 111);
+    await spend(bob, bobMain, 222);
+    const forAnn = await balances(ann);
+    const forBob = await balances(bob);
+    expect(forAnn.map((w) => w.name).sort()).toEqual(["กองกลาง", "เงินสดแอน"].sort());
+    expect(forBob.map((w) => w.name).sort()).toEqual(["กองกลาง", "เงินสดบ๊อบ"].sort());
+    expect(forAnn.find((w) => w.name === "เงินสดแอน")?.expense).toBe("111.00");
+    expect(forBob.find((w) => w.name === "เงินสดบ๊อบ")?.expense).toBe("222.00");
+    // the shared wallet shows neither private entry
+    expect(forAnn.find((w) => w.name === "กองกลาง")?.expense).toBe("0");
+  });
+
+  it("someone who is not on the wallet sees nothing of it", async () => {
+    const { carl, ann, shared, spend } = await seed();
+    await spend(ann, shared, 300);
+    expect(await balances(carl)).toEqual([]);
+  });
+
+  it("an entry with no wallet is still the writer's own main wallet, never the shared one", async () => {
+    const { ann, bob, spend } = await seed();
+    await spend(bob, null, 77);
+    const forBob = await balances(bob);
+    expect(forBob.find((w) => w.name === "เงินสดบ๊อบ")?.expense).toBe("77.00");
+    expect((await balances(ann)).find((w) => w.name === "กองกลาง")?.expense).toBe("0");
+  });
+
+  it("a member who left no longer sees it, and what they wrote stays in it", async () => {
+    const { ann, bob, shared, spend } = await seed();
+    await spend(bob, shared, 50);
+    await db.query("delete from wallet_members where wallet_id = $1 and user_id = $2", [
+      shared,
+      bob,
+    ]);
+    expect((await balances(bob)).map((w) => w.name)).toEqual(["เงินสดบ๊อบ"]);
+    const w = (await balances(ann)).find((x) => x.name === "กองกลาง");
+    expect(w).toMatchObject({ expense: "50.00", member_count: 1 });
+  });
+
+  it("the person's own wallets come first", async () => {
+    const { bob } = await seed();
+    expect((await balances(bob))[0]?.name).toBe("เงินสดบ๊อบ");
+  });
+
+  it("a shared wallet cannot be the main wallet or a card", async () => {
+    const { ann, wallet } = await seed();
+    await expect(wallet(ann, "x1", { shared: true, isDefault: true })).rejects.toThrow();
+    await expect(wallet(ann, "x2", { shared: true, kind: "card" })).rejects.toThrow();
+  });
+
+  it("members: once per wallet, only owner / member roles; deleting the wallet clears them and the invites", async () => {
+    const { bob, carl, shared, member } = await seed();
+    await expect(member(shared, bob)).rejects.toThrow();
+    await expect(member(shared, carl, "boss")).rejects.toThrow();
+    await db.query(
+      "insert into wallet_invites (code,wallet_id,created_by,expires_at) select '482913', $1, user_id, now() + interval '1 day' from accounts where id = $1",
+      [shared],
+    );
+    await expect(
+      db.query(
+        "insert into wallet_invites (code,wallet_id,created_by,expires_at) select '482913', $1, user_id, now() from accounts where id = $1",
+        [shared],
+      ),
+    ).rejects.toThrow();
+    await expect(
+      db.query(
+        "insert into wallet_invites (code,wallet_id,created_by,expires_at) select '12345', $1, user_id, now() from accounts where id = $1",
+        [shared],
+      ),
+    ).rejects.toThrow();
+    await db.query("delete from accounts where id = $1", [shared]);
+    const left = await one<{ n: string }>(
+      db,
+      "select ((select count(*) from wallet_members where wallet_id=$1) + (select count(*) from wallet_invites where wallet_id=$1))::text as n",
+      [shared],
+    );
+    expect(left.n).toBe("0");
+  });
+
+  it("deleting a shared wallet keeps everybody's entries, unpointed", async () => {
+    const { ann, bob, shared, spend } = await seed();
+    await spend(ann, shared, 1);
+    await spend(bob, shared, 2);
+    await db.query("delete from accounts where id = $1", [shared]);
+    const left = await one<{ n: string; a: string | null }>(
+      db,
+      "select count(*)::text as n, max(account_id::text) as a from transactions where user_id in ($1,$2)",
+      [ann, bob],
+    );
+    expect(left).toEqual({ n: "2", a: null });
+  });
+});
+
 describe("group trips (0028)", () => {
   async function seed() {
     const owner = await newUser(db, `gt-${Math.random()}`);

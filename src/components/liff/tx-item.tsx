@@ -27,6 +27,9 @@ export function TxItem({
         <p className="truncate text-xs text-muted">
           {tx.categoryName ? categoryLabel(tx.categoryName, tx.categoryIcon) : "ไม่ระบุหมวด"} ·{" "}
           {formatThaiDate(new Date(tx.occurredAt))}
+          {tx.accountShared
+            ? ` · ${tx.mine === false ? (tx.writerName ?? "สมาชิก") : "คุณ"} · ${tx.accountName ?? ""}`
+            : ""}
         </p>
         {tx.origCurrency && tx.origAmountMinor ? (
           <p className="num truncate text-xs text-muted">

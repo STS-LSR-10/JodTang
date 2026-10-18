@@ -79,6 +79,10 @@ export const FEATURE_GROUPS: FeatureGroup[] = [
       { label: "เตือนวันครบกำหนดจ่ายบิล (บัตรเครดิต ค่าไฟ ฯลฯ)", cells: [false, false, true] },
       { label: "สมุดกลุ่ม LINE: ดึงบอทเข้ากลุ่ม ช่วยกันจด แยกคนจ่าย", cells: [false, false, true] },
       { label: "หารค่าใช้จ่ายทริป สรุปว่าใครโอนคืนใครกี่บาท", cells: [false, false, true] },
+      {
+        label: "กระเป๋าร่วมกับแฟน/ครอบครัว (จดจากแชทตัวเอง ยอดเดียวกัน)",
+        cells: [false, "2 คน", "สูงสุด 10 คน"],
+      },
       { label: "สร้างหมวดของตัวเอง + เลือกอีโมจิ", cells: [false, true, true] },
       { label: "บอทจำร้านค้า → หมวด", cells: [false, true, true] },
     ],

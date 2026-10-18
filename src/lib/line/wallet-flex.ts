@@ -21,7 +21,7 @@ export function buildWalletsCard(input: {
       contents: [
         {
           type: "text",
-          text: `${walletLabel(w)}${w.isDefault && input.wallets.length > 1 ? " (หลัก)" : ""}`,
+          text: `${walletLabel(w)}${w.isDefault && input.wallets.length > 1 ? " (หลัก)" : ""}${w.shared ? ` · ${w.memberCount ?? 1} คน` : ""}`,
           size: "sm",
           color: COLOR.text,
           wrap: true,
