@@ -6,11 +6,29 @@ import {
   VOICE_DAY_LIMIT_TEXT,
   VOICE_EMPTY_TEXT,
   VOICE_FAILED_TEXT,
-  VOICE_LOCKED_TEXT,
+  VOICE_TASTE_TEXT,
   VOICE_TOO_LONG_TEXT,
+  voiceQuotaText,
 } from "./messages";
 
 const inserted: Record<string, unknown>[] = [];
+// in-memory stand-in for the take_usage / refund_usage database functions
+const counters = new Map<string, number>();
+const rpc = async (fn: string, args: Record<string, unknown>) => {
+  const key = `${args.p_kind}|${args.p_month}`;
+  if (fn === "take_usage") {
+    const used = counters.get(key) ?? 0;
+    if (used >= (args.p_limit as number)) return { data: false, error: null };
+    counters.set(key, used + 1);
+    return { data: true, error: null };
+  }
+  if (fn === "refund_usage") {
+    counters.set(key, Math.max(0, (counters.get(key) ?? 0) - 1));
+    return { data: null, error: null };
+  }
+  return { data: true, error: null }; // claim_upsell_card
+};
+const used = (kind: string, month = "2026-10-01") => counters.get(`${kind}|${month}`) ?? 0;
 
 vi.mock("@/lib/repo", () => ({
   loadCategories: async () => [
@@ -83,7 +101,7 @@ function deps(over: Partial<VoiceDeps> & { heard?: string | Error } = {}): Voice
   const heard = over.heard ?? "กาแฟ 30 บาท";
   const fetchAudio = vi.fn(async () => ({ bytes: new Uint8Array([1]), mimeType: "audio/x-m4a" }));
   return {
-    db: {} as SupabaseClient,
+    db: { rpc } as unknown as SupabaseClient,
     now: () => NOW,
     fetchAudio: over.fetchAudio ?? fetchAudio,
     transcriber: {
@@ -108,23 +126,83 @@ const textOf = (m: unknown) => (m as { text?: string }).text;
 
 beforeEach(() => {
   inserted.length = 0;
+  counters.clear();
 });
 
 describe("handleVoiceMessage", () => {
-  it("a Professional user only gets the Ultimate upsell and nothing is downloaded", async () => {
+  it("a Professional user can use voice, counted against the 20 a month", async () => {
     const d = deps();
     const out = await run(d, PROFESSIONAL_USER as never);
-    expect(textOf(out[0])).toBe(VOICE_LOCKED_TEXT);
+    expect(textOf(out[0])).toBe('ได้ยินว่า: "กาแฟ 30 บาท"');
+    expect(used("voice")).toBe(1);
+    expect(inserted).toHaveLength(1);
+  });
+
+  it("a Professional user past 20 a month is told so, and nothing is downloaded", async () => {
+    counters.set("voice|2026-10-01", 20);
+    const d = deps();
+    const out = await run(d, PROFESSIONAL_USER as never);
+    expect(textOf(out[0])).toBe(voiceQuotaText("plus", 20));
+    expect(textOf(out[0])).toContain("Ultimate");
     expect(d.fetchAudio).not.toHaveBeenCalled();
     expect(inserted).toHaveLength(0);
   });
 
-  it("a Free user only gets the upsell and nothing is downloaded or transcribed", async () => {
+  it("Ultimate stops at the fair-use ceiling with its own wording", async () => {
+    counters.set("voice|2026-10-01", 200);
     const d = deps();
-    const out = await run(d, FREE_USER as never);
-    expect(textOf(out[0])).toBe(VOICE_LOCKED_TEXT);
+    const out = await run(d, ULTIMATE_USER);
+    expect(textOf(out[0])).toBe(voiceQuotaText("ultimate", 200));
+    expect(textOf(out[0])).toContain("ต้นเดือนหน้า");
     expect(d.fetchAudio).not.toHaveBeenCalled();
-    expect(inserted).toHaveLength(0);
+  });
+
+  it("a new month starts the count again", async () => {
+    counters.set("voice|2026-10-01", 20);
+    const d = deps();
+    d.now = () => new Date("2026-11-02T08:00:00Z");
+    const out = await run(d, PROFESSIONAL_USER as never);
+    expect(textOf(out[0])).toBe('ได้ยินว่า: "กาแฟ 30 บาท"');
+  });
+
+  it("a Free user gets one free taste for life, then the upgrade card", async () => {
+    const first = await run(deps(), FREE_USER as never);
+    expect(textOf(first[0])).toBe('ได้ยินว่า: "กาแฟ 30 บาท"');
+    expect(textOf(first[first.length - 1])).toBe(VOICE_TASTE_TEXT);
+    expect(used("teaser_voice", "2000-01-01")).toBe(1);
+
+    const d = deps();
+    const second = await run(d, FREE_USER as never);
+    expect(JSON.stringify(second)).toContain("จดด้วยเสียงสำหรับสมาชิก Professional");
+    expect(d.fetchAudio).not.toHaveBeenCalled();
+    expect(inserted).toHaveLength(1);
+  });
+
+  it("a failed read gives the use back (the free taste too)", async () => {
+    await run(deps({ heard: new Error("down") }), FREE_USER as never);
+    expect(used("teaser_voice", "2000-01-01")).toBe(0);
+    await run(deps({ heard: "" }), PROFESSIONAL_USER as never);
+    expect(used("voice")).toBe(0);
+    const broken = deps({
+      fetchAudio: vi.fn(async () => {
+        throw new ImageError("download_failed", "x");
+      }),
+    });
+    await run(broken, PROFESSIONAL_USER as never);
+    expect(used("voice")).toBe(0);
+  });
+
+  it("a Professional voice note never reaches the long-sentence AI (that stays Ultimate)", async () => {
+    const structure = vi.fn(async () => ({ entries: [] }));
+    await run(
+      deps({
+        heard: "วันนี้ไปกินข้าวกับแฟนมา จ่ายไป 850 บาท เอาออกจากกระเป๋าเงินสดนะ",
+        structurer: { name: "t", structure },
+      }),
+      PROFESSIONAL_USER as never,
+    );
+    expect(structure).not.toHaveBeenCalled();
+    expect(inserted).toHaveLength(1); // the rules still read it
   });
 
   it("a long voice note is refused before downloading it", async () => {

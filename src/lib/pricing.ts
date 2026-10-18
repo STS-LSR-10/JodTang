@@ -1,4 +1,4 @@
-import type { Feature, Plan } from "@/lib/plan";
+import { FAIR_USE, type Feature, type Plan } from "@/lib/plan";
 
 export type Period = "monthly" | "yearly";
 export type PaidPlan = Exclude<Plan, "free">;
@@ -9,11 +9,48 @@ export interface PlanPrice {
   yearly: number;
 }
 
-/** Display prices. The payment provider stays the source of truth for what is actually charged. */
+/** The normal prices. */
 export const PRICES: Record<PaidPlan, PlanPrice> = {
-  plus: { monthly: 59, yearly: 299 },
+  plus: { monthly: 59, yearly: 339 },
   ultimate: { monthly: 139, yearly: 799 },
 };
+
+/** Launch prices, for everything bought before LAUNCH_ENDS_AT. */
+export const LAUNCH_PRICES: Record<PaidPlan, PlanPrice> = {
+  plus: { monthly: 39, yearly: 299 },
+  ultimate: { monthly: 119, yearly: 699 },
+};
+
+/** The launch prices end at the end of 31 Dec 2026 (B.E. 2569), Bangkok time. */
+export const LAUNCH_ENDS_AT = new Date("2027-01-01T00:00:00+07:00");
+export const LAUNCH_ENDS_TEXT = "31 ธ.ค. 2569";
+
+export const launchActive = (now: Date): boolean => now.getTime() < LAUNCH_ENDS_AT.getTime();
+
+/** What a plan costs right now: the launch price until it ends, the normal price after. */
+export function priceFor(plan: PaidPlan, now: Date): PlanPrice {
+  return (launchActive(now) ? LAUNCH_PRICES : PRICES)[plan];
+}
+
+export interface PricingNow {
+  /** True while the launch prices apply. */
+  launch: boolean;
+  endsText: string;
+  /** What is charged now. */
+  prices: Record<PaidPlan, PlanPrice>;
+  /** The normal prices (shown struck through during the launch). */
+  list: Record<PaidPlan, PlanPrice>;
+}
+
+export function pricingAt(now: Date): PricingNow {
+  const launch = launchActive(now);
+  return {
+    launch,
+    endsText: LAUNCH_ENDS_TEXT,
+    prices: launch ? LAUNCH_PRICES : PRICES,
+    list: PRICES,
+  };
+}
 
 export const PERIOD_MONTHS: Record<Period, number> = { monthly: 1, yearly: 12 };
 
@@ -29,6 +66,9 @@ export function yearlySavingPercent(price: PlanPrice): number {
 
 /** A cell of the comparison table: included, not included, or a short text. */
 export type Cell = boolean | string;
+
+/** Under the comparison table: what "ไม่จำกัด*" means. Built from the real ceilings so it cannot drift. */
+export const FAIR_USE_NOTE = `*ไม่จำกัดสำหรับการใช้งานตามปกติ: สูงสุดราว ${FAIR_USE.slips} ใบ/เดือน (อ่านสลิป), ${FAIR_USE.voice} ครั้ง/เดือน (จดด้วยเสียง), ${FAIR_USE.smartParse} ครั้ง/เดือน (AI อ่านประโยคยาว) ครบแล้วพิมพ์จดได้ตามปกติ และใช้ได้ใหม่ต้นเดือนหน้า`;
 
 export interface FeatureRow {
   /** Short, one line. */
@@ -96,7 +136,7 @@ export const FEATURE_GROUPS: FeatureGroup[] = [
       {
         label: "อ่านสลิปอัตโนมัติ",
         icon: "slip",
-        cells: ["ลองฟรี 1 ใบ", "5 ใบ/เดือน", "ไม่จำกัด"],
+        cells: ["ลองฟรี 1 ใบ", "30 ใบ/เดือน", "ไม่จำกัด*"],
       },
       { label: "จดย้อนหลัง", icon: "calendar", cells: [false, true, true], feature: "backdate" },
       {
@@ -116,10 +156,15 @@ export const FEATURE_GROUPS: FeatureGroup[] = [
       {
         label: "ให้ AI อ่านประโยคยาวๆ",
         icon: "sparkles",
-        cells: [false, false, true],
+        cells: [false, false, "ไม่จำกัด*"],
         feature: "smartParse",
       },
-      { label: "จดด้วยเสียง", icon: "mic", cells: [false, false, true], feature: "voiceLog" },
+      {
+        label: "จดด้วยเสียง",
+        icon: "mic",
+        cells: ["ลองฟรี 1 ครั้ง", "20 ครั้ง/เดือน", "ไม่จำกัด*"],
+        feature: "voiceLog",
+      },
       {
         label: "จดเงินต่างสกุล",
         icon: "globe",
@@ -129,7 +174,7 @@ export const FEATURE_GROUPS: FeatureGroup[] = [
       {
         label: "ตั้งรายการจดอัตโนมัติ",
         icon: "repeat",
-        cells: [false, "20 รายการ", "20 รายการ"],
+        cells: [false, "20 รายการ", "100 รายการ"],
         feature: "recurring",
       },
       {
@@ -302,7 +347,7 @@ export const FEATURE_GROUPS: FeatureGroup[] = [
 export const PLAN_HIGHLIGHTS: Record<Plan, string[]> = {
   free: ["จดด้วยข้อความ", "ตั้งหมวดและงบรวม"],
   plus: [
-    "อ่านสลิป 5 ใบ/เดือน + จดย้อนหลัง",
+    "อ่านสลิป 30 ใบ/เดือน + จดด้วยเสียง 20 ครั้ง + จดย้อนหลัง",
     "รายการจดอัตโนมัติ + เตือนประจำวัน",
     "ส่งออก CSV/Excel + กราฟวิเคราะห์",
     "กราฟเก็บออม + สรุปในแชท",
@@ -353,9 +398,9 @@ export function prepaidUpgradeQuote(input: {
     Math.ceil((input.expiresAt.getTime() - input.now.getTime()) / 86_400_000),
   );
   // integer arithmetic first, so an exact result (e.g. 40) is not pushed up by float rounding
-  const raw = Math.ceil(
-    ((PRICES[input.to][period] - PRICES[input.from][period]) * days) / periodDays,
-  );
-  const amountBaht = Math.min(PRICES[input.to][period], Math.max(MIN_CHARGE_BAHT, raw));
+  const to = priceFor(input.to, input.now)[period];
+  const from = priceFor(input.from, input.now)[period];
+  const raw = Math.ceil(((to - from) * days) / periodDays);
+  const amountBaht = Math.min(to, Math.max(MIN_CHARGE_BAHT, raw));
   return { amountBaht, days };
 }

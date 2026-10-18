@@ -6,6 +6,18 @@ import { createStripeProvider } from "./stripe";
 const USER = "11111111-1111-1111-1111-111111111111";
 
 describe("buildChangeFields", () => {
+  it("a switch during the launch is charged the launch price", () => {
+    const f = buildChangeFields({
+      userId: USER,
+      itemId: "si_1",
+      productId: "prod_1",
+      plan: "ultimate",
+      period: "yearly",
+      now: new Date("2026-11-01T00:00:00Z"),
+    });
+    expect(f["items[0][price_data][unit_amount]"]).toBe("69900");
+  });
+
   it("swaps the item for the new price and settles the difference immediately", () => {
     const f = buildChangeFields({
       userId: USER,
@@ -13,6 +25,7 @@ describe("buildChangeFields", () => {
       productId: "prod_1",
       plan: "ultimate",
       period: "yearly",
+      now: new Date("2027-02-01T00:00:00Z"),
     });
     expect(f["items[0][id]"]).toBe("si_1");
     expect(f["items[0][price_data][product]"]).toBe("prod_1");

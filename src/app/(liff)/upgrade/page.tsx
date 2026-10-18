@@ -55,16 +55,20 @@ import {
   type Cell,
   type FeatureIcon,
   PLAN_HIGHLIGHTS,
-  PRICES,
+  FAIR_USE_NOTE,
+  pricingAt,
   yearlyPerDay,
   yearlySavingPercent,
   type PaidPlan,
   type Period,
+  type PricingNow,
 } from "@/lib/pricing";
 import { cn } from "@/lib/utils";
 
 interface MeLite {
   plan: Plan;
+  /** Prices as the server sees them now (launch or normal), so a wrong phone clock cannot mislead. */
+  pricing?: PricingNow;
   planExpiresAt: string | null;
   trial?: { days: number; available: { plus: boolean; ultimate: boolean } };
   payments?: {
@@ -117,6 +121,7 @@ export default function UpgradePage() {
   const [notice, setNotice] = useState<string | null>(null);
 
   const current: Plan = me.data?.plan ?? "free";
+  const pricing: PricingNow = me.data?.pricing ?? pricingAt(new Date());
   // The same rules the server enforces (src/lib/payments/policy.ts), so the button explains itself.
   const autoRenew = me.data?.payments?.autoRenew === true;
   const prepaidRunning = me.data?.payments?.prepaidRunning === true;
@@ -257,12 +262,13 @@ export default function UpgradePage() {
         </div>
 
         <div role="radiogroup" aria-label="เลือกแผน" className="space-y-3">
-          <PlanCard plan="free" current={current} />
+          <PlanCard plan="free" current={current} pricing={pricing} />
           {PAID.map((plan) => (
             <PlanCard
               key={plan}
               plan={plan}
               current={current}
+              pricing={pricing}
               period={period}
               selected={picked === plan}
               onSelect={() => setPicked(plan)}
@@ -377,18 +383,21 @@ export default function UpgradePage() {
 function PlanCard({
   plan,
   current,
+  pricing,
   period,
   selected,
   onSelect,
 }: {
   plan: Plan;
   current: Plan;
+  pricing: PricingNow;
   period?: Period;
   selected?: boolean;
   onSelect?: () => void;
 }) {
   const style = TIER_STYLE[plan];
-  const price = plan === "free" ? null : PRICES[plan];
+  const price = plan === "free" ? null : pricing.prices[plan];
+  const listPrice = plan === "free" ? null : pricing.list[plan];
   const isCurrent = current === plan;
   const body = (
     <>
@@ -406,6 +415,16 @@ function PlanCard({
 
       {price && period ? (
         <div>
+          {pricing.launch && listPrice ? (
+            <p className="flex flex-wrap items-center gap-2 text-xs">
+              <span className="rounded-full bg-accent/20 px-2 py-0.5 font-semibold text-foreground">
+                ราคาเปิดตัว ถึง {pricing.endsText}
+              </span>
+              <span className="num text-foreground/80 line-through">
+                <span className="sr-only">ราคาปกติ </span>฿{listPrice[period]}
+              </span>
+            </p>
+          ) : null}
           <p className="num text-2xl font-extrabold">
             ฿{price[period]}
             <span className="ml-1 text-sm font-medium text-foreground/80">
@@ -589,6 +608,7 @@ function Comparison() {
           </tbody>
         ))}
       </table>
+      <p className="border-t border-border px-4 py-3 text-xs text-muted">{FAIR_USE_NOTE}</p>
     </section>
   );
 }

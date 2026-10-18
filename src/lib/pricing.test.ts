@@ -2,6 +2,10 @@ import { describe, expect, it } from "vitest";
 import { MIN_PLAN, type Feature } from "./plan";
 import {
   FEATURE_GROUPS,
+  LAUNCH_PRICES,
+  launchActive,
+  priceFor,
+  pricingAt,
   MIN_CHARGE_BAHT,
   PRICES,
   prepaidUpgradeQuote,
@@ -12,15 +16,15 @@ import {
 
 describe("pricing", () => {
   it("has the agreed prices", () => {
-    expect(PRICES.plus).toEqual({ monthly: 59, yearly: 299 });
+    expect(PRICES.plus).toEqual({ monthly: 59, yearly: 339 });
     expect(PRICES.ultimate).toEqual({ monthly: 139, yearly: 799 });
   });
 
   it("yearly is cheaper than twelve months and per-day is derived", () => {
     for (const p of Object.values(PRICES)) expect(p.yearly).toBeLessThan(p.monthly * 12);
-    expect(yearlyPerDay(PRICES.plus)).toBe("0.8");
+    expect(yearlyPerDay(PRICES.plus)).toBe("0.9");
     expect(yearlyPerDay(PRICES.ultimate)).toBe("2.2");
-    expect(yearlySavingPercent(PRICES.plus)).toBe(58);
+    expect(yearlySavingPercent(PRICES.plus)).toBe(52);
     expect(yearlySavingPercent(PRICES.ultimate)).toBe(52);
   });
 
@@ -58,6 +62,33 @@ describe("what each plan can do", () => {
   });
 });
 
+describe("launch prices", () => {
+  it("are the agreed ones and are cheaper than the normal ones", () => {
+    expect(LAUNCH_PRICES.plus).toEqual({ monthly: 39, yearly: 299 });
+    expect(LAUNCH_PRICES.ultimate).toEqual({ monthly: 119, yearly: 699 });
+    for (const plan of ["plus", "ultimate"] as const) {
+      expect(LAUNCH_PRICES[plan].monthly).toBeLessThan(PRICES[plan].monthly);
+      expect(LAUNCH_PRICES[plan].yearly).toBeLessThanOrEqual(PRICES[plan].yearly);
+    }
+  });
+
+  it("end at the end of 31 Dec 2569 Bangkok time, not a second later", () => {
+    expect(launchActive(new Date("2026-10-18T00:00:00Z"))).toBe(true);
+    expect(launchActive(new Date("2026-12-31T16:59:59Z"))).toBe(true);
+    expect(launchActive(new Date("2026-12-31T17:00:00Z"))).toBe(false);
+    expect(priceFor("plus", new Date("2027-01-02T00:00:00Z"))).toEqual(PRICES.plus);
+    expect(priceFor("plus", new Date("2026-11-01T00:00:00Z"))).toEqual(LAUNCH_PRICES.plus);
+  });
+
+  it("pricingAt tells the page what to show", () => {
+    const during = pricingAt(new Date("2026-11-01T00:00:00Z"));
+    expect(during.launch).toBe(true);
+    expect(during.prices).toEqual(LAUNCH_PRICES);
+    expect(during.list).toEqual(PRICES);
+    expect(pricingAt(new Date("2027-03-01T00:00:00Z")).launch).toBe(false);
+  });
+});
+
 describe("trial", () => {
   it("is 7 days", () => {
     expect(TRIAL_DAYS).toBe(7);
@@ -81,7 +112,7 @@ describe("prepaidUpgradeQuote", () => {
   });
 
   it("yearly prepaid uses the yearly rates", () => {
-    // (799 - 299) / 365 * 200 = 273.97 -> 274
+    // launch prices: (699 - 299) / 365 * 200 = 219.18 -> 220
     expect(
       prepaidUpgradeQuote({
         from: "plus",
@@ -90,7 +121,18 @@ describe("prepaidUpgradeQuote", () => {
         expiresAt: inDays(200),
         now,
       }),
-    ).toEqual({ amountBaht: 274, days: 200 });
+    ).toEqual({ amountBaht: 220, days: 200 });
+    // normal prices (after 31 Dec 2569): (799 - 339) / 365 * 200 = 252.05 -> 253
+    const later = new Date("2027-02-01T00:00:00Z");
+    expect(
+      prepaidUpgradeQuote({
+        from: "plus",
+        to: "ultimate",
+        months: 12,
+        expiresAt: new Date(later.getTime() + 200 * 86_400_000),
+        now: later,
+      }),
+    ).toEqual({ amountBaht: 253, days: 200 });
   });
 
   it("never charges less than Stripe's minimum or more than a full new period", () => {
@@ -109,7 +151,7 @@ describe("prepaidUpgradeQuote", () => {
       expiresAt: inDays(400),
       now,
     });
-    expect(huge?.amountBaht).toBe(PRICES.ultimate.monthly);
+    expect(huge?.amountBaht).toBe(LAUNCH_PRICES.ultimate.monthly);
   });
 
   it("counts a started day as a whole day", () => {

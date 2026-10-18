@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { can, effectivePlan, slipsRemaining } from "./plan";
+import { can, effectivePlan, FAIR_USE, recurringLimit, slipsRemaining, VOICE_LIMIT } from "./plan";
 
 const NOW = new Date("2026-10-15T08:00:00Z");
 
@@ -33,17 +33,25 @@ describe("limits", () => {
     expect(slipsRemaining("free", 99)).toBe(0);
   });
 
-  it("professional has 5 slips a month", () => {
-    expect(slipsRemaining("plus", 0)).toBe(5);
-    expect(slipsRemaining("plus", 4)).toBe(1);
-    expect(slipsRemaining("plus", 5)).toBe(0);
+  it("professional has 30 slips a month", () => {
+    expect(slipsRemaining("plus", 0)).toBe(30);
+    expect(slipsRemaining("plus", 29)).toBe(1);
+    expect(slipsRemaining("plus", 30)).toBe(0);
     expect(slipsRemaining("plus", 99)).toBe(0);
   });
 
-  it("voice logging is Ultimate only", () => {
+  it("voice logging is Professional and above, with a monthly number each", () => {
     expect(can("free", "voiceLog")).toBe(false);
-    expect(can("plus", "voiceLog")).toBe(false);
+    expect(can("plus", "voiceLog")).toBe(true);
     expect(can("ultimate", "voiceLog")).toBe(true);
+    expect(VOICE_LIMIT.plus).toBe(20);
+    expect(VOICE_LIMIT.ultimate).toBe(FAIR_USE.voice);
+  });
+
+  it("Ultimate has more recurring entries than Professional", () => {
+    expect(recurringLimit("free")).toBe(0);
+    expect(recurringLimit("plus")).toBe(20);
+    expect(recurringLimit("ultimate")).toBe(100);
   });
 
   it("ultimate is unlimited and has every paid feature", () => {

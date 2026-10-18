@@ -4,7 +4,7 @@ import { bangkokDateKey } from "@/lib/points";
 /** Slip reads every account gets for free, once in a lifetime (a taste of the Professional feature). */
 export const TEASER_SLIPS = 1;
 
-export type UpsellFeature = "backdate" | "slip";
+export type UpsellFeature = "backdate" | "slip" | "voice";
 
 /** Take one free slip read. False when they are used up (or the counter could not be reached). */
 export async function takeTeaserSlip(db: SupabaseClient, userId: string): Promise<boolean> {

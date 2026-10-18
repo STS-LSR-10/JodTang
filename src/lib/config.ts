@@ -16,9 +16,6 @@ export const REFERRAL_BONUS_REFEREE = 10;
 /** A referral code can only be applied by users who joined within this many days. */
 export const REFERRAL_WINDOW_DAYS = 14;
 
-/** Most recurring rules one user can have. */
-export const MAX_RECURRING_RULES = 20;
-
 /** Most rows in one export file. */
 export const MAX_EXPORT_ROWS = 5000;
 

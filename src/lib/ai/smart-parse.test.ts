@@ -38,6 +38,57 @@ const good = { entries: [{ type: "expense", title: "ค่าข้าว", amou
 const mk = (structure: TextStructurer["structure"]): TextStructurer => ({ name: "t", structure });
 const input = { text: sentence, subject: "U1", categories: [] };
 
+describe("runSmartParse fair-use ceiling", () => {
+  const counters = new Map<string, number>();
+  const cap = (limitLeft: boolean) => ({
+    db: {
+      rpc: async (fn: string, args: Record<string, unknown>) => {
+        const key = `${args.p_kind}|${args.p_month}`;
+        if (fn === "take_usage") {
+          if (!limitLeft) return { data: false, error: null };
+          counters.set(key, (counters.get(key) ?? 0) + 1);
+          return { data: true, error: null };
+        }
+        counters.set(key, Math.max(0, (counters.get(key) ?? 0) - 1));
+        return { data: null, error: null };
+      },
+    } as never,
+    userId: "u1",
+  });
+
+  it("counts a successful read for the month", async () => {
+    counters.clear();
+    const out = await runSmartParse(
+      { structurer: mk(async () => good), now: () => NOW },
+      { ...input, cap: cap(true) },
+    );
+    expect(out).not.toBeNull();
+    expect(counters.get("smart_parse|2026-10-01")).toBe(1);
+  });
+
+  it("past the ceiling the AI is not called and the rules read instead", async () => {
+    const structure = vi.fn(async () => good);
+    const out = await runSmartParse(
+      { structurer: mk(structure), now: () => NOW },
+      { ...input, cap: cap(false) },
+    );
+    expect(out).toBeNull();
+    expect(structure).not.toHaveBeenCalled();
+  });
+
+  it("a read that fails or finds nothing gives its use back", async () => {
+    counters.clear();
+    const boom = mk(async () => {
+      throw new Error("down");
+    });
+    await runSmartParse({ structurer: boom, now: () => NOW }, { ...input, cap: cap(true) });
+    expect(counters.get("smart_parse|2026-10-01")).toBe(0);
+    const empty = mk(async () => ({ entries: [] }));
+    await runSmartParse({ structurer: empty, now: () => NOW }, { ...input, cap: cap(true) });
+    expect(counters.get("smart_parse|2026-10-01")).toBe(0);
+  });
+});
+
 describe("runSmartParse", () => {
   it("returns the validated entries", async () => {
     const out = await runSmartParse({ structurer: mk(async () => good), now: () => NOW }, input);

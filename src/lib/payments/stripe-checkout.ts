@@ -1,4 +1,4 @@
-import { PERIOD_MONTHS, PRICES } from "@/lib/pricing";
+import { PERIOD_MONTHS, priceFor } from "@/lib/pricing";
 import { PLAN_LABEL } from "@/lib/plan";
 import type { CheckoutRequest } from "./provider";
 
@@ -26,7 +26,11 @@ export function resultUrls(baseUrl: string) {
  * The price is built inline (`price_data`) from src/lib/pricing.ts, so there is nothing to create
  * in the Stripe dashboard. Our own user id travels in metadata and comes back in the webhook.
  */
-export function buildCheckoutFields(req: CheckoutRequest, baseUrl: string): Record<string, string> {
+export function buildCheckoutFields(
+  req: CheckoutRequest,
+  baseUrl: string,
+  now: Date = new Date(),
+): Record<string, string> {
   const urls = resultUrls(baseUrl);
   const subscription = req.method === "card";
   const upgrade = !subscription && req.upgrade ? req.upgrade : null;
@@ -47,7 +51,7 @@ export function buildCheckoutFields(req: CheckoutRequest, baseUrl: string): Reco
     "line_items[0][quantity]": "1",
     "line_items[0][price_data][currency]": "thb",
     "line_items[0][price_data][unit_amount]": String(
-      upgrade ? upgrade.amountSatang : PRICES[req.plan][req.period] * 100,
+      upgrade ? upgrade.amountSatang : priceFor(req.plan, now)[req.period] * 100,
     ),
     "line_items[0][price_data][product_data][name]": upgrade
       ? `จดตังค์ อัปเกรดเป็น ${PLAN_LABEL[req.plan]} (ส่วนต่าง ${upgrade.days} วัน)`
@@ -82,13 +86,16 @@ export function buildChangeFields(input: {
   productId: string;
   plan: "plus" | "ultimate";
   period: "monthly" | "yearly";
+  now?: Date;
 }): Record<string, string> {
   const meta = { user_id: input.userId, plan: input.plan, period: input.period, method: "card" };
   const f: Record<string, string> = {
     "items[0][id]": input.itemId,
     "items[0][price_data][currency]": "thb",
     "items[0][price_data][product]": input.productId,
-    "items[0][price_data][unit_amount]": String(PRICES[input.plan][input.period] * 100),
+    "items[0][price_data][unit_amount]": String(
+      priceFor(input.plan, input.now ?? new Date())[input.period] * 100,
+    ),
     "items[0][price_data][recurring][interval]": input.period === "yearly" ? "year" : "month",
     proration_behavior: "always_invoice",
     payment_behavior: "error_if_incomplete",

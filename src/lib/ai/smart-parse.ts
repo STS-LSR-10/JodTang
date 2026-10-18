@@ -1,6 +1,9 @@
 import { log, safeMessage } from "@/lib/log";
 import { CONFIRM_THRESHOLD, SPLIT_RE, type ParseResult } from "@/lib/parse/text-parser";
+import { FAIR_USE } from "@/lib/plan";
 import { bangkokParts } from "@/lib/thai-date";
+import { monthKey, refundUsage, takeUsage } from "@/lib/usage";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { LIMITS, type LimitRule, type RateLimitResult } from "@/lib/rate-limit";
 import {
   sanitizeStructured,
@@ -36,11 +39,33 @@ export interface SmartDeps {
  */
 export async function runSmartParse(
   deps: SmartDeps,
-  input: { text: string; subject: string; categories: CategoryHint[] },
+  input: {
+    text: string;
+    subject: string;
+    categories: CategoryHint[];
+    /** Count this read against the month's fair-use ceiling (Ultimate); past it the rules read instead. */
+    cap?: { db: SupabaseClient; userId: string };
+  },
 ): Promise<SmartEntry[] | null> {
   const { structurer } = deps;
   if (!structurer) return null;
+  let counted: { db: SupabaseClient; userId: string; month: string } | null = null;
   try {
+    if (input.cap) {
+      const month = monthKey(deps.now());
+      if (
+        !(await takeUsage(
+          input.cap.db,
+          input.cap.userId,
+          "smart_parse",
+          FAIR_USE.smartParse,
+          month,
+        ))
+      ) {
+        return null;
+      }
+      counted = { ...input.cap, month };
+    }
     if (deps.limit) {
       const day = await deps.limit("smart_day", input.subject, LIMITS.smartDay);
       if (!day.allowed) return null;
@@ -58,9 +83,22 @@ export async function runSmartParse(
       now,
       categories: input.categories,
     });
-    return entries.length > 0 ? entries : null;
+    if (entries.length > 0) return entries;
+    await giveBack(counted);
+    return null;
   } catch (error) {
     log.warn("smart_parse_failed", { provider: structurer.name, reason: safeMessage(error) });
+    await giveBack(counted);
     return null;
   }
+}
+
+/** A read that produced nothing does not count against the ceiling. Best effort. */
+async function giveBack(
+  counted: { db: SupabaseClient; userId: string; month: string } | null,
+): Promise<void> {
+  if (!counted) return;
+  await refundUsage(counted.db, counted.userId, "smart_parse", counted.month).catch(
+    () => undefined,
+  );
 }

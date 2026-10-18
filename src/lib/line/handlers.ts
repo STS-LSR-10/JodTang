@@ -1082,6 +1082,7 @@ async function readWithAi(
     {
       text: input,
       subject: user.line_user_id,
+      cap: { db, userId: user.id },
       categories: categories
         .filter((c) => !c.is_hidden)
         .map((c) => ({ name: c.name, type: c.type })),

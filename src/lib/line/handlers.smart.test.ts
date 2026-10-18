@@ -67,7 +67,7 @@ function setup(withStructurer = true, limitAllowed = true) {
     async () => undefined,
   );
   const deps: HandlerDeps = {
-    db: {} as SupabaseClient,
+    db: { rpc: async () => ({ data: true, error: null }) } as unknown as SupabaseClient,
     reply: sent,
     getProfile: async () => null,
     now: () => new Date("2026-10-17T08:00:00Z"),

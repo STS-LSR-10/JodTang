@@ -45,12 +45,28 @@ export function walletCapacity(plan: Plan): number {
 /** Photos a person can attach to entries per month (a cost guard; same for every paid plan). */
 export const PHOTOS_PER_MONTH = 100;
 
-/** Slips a person can have read per month, by plan. Null means unlimited. */
+/**
+ * Slips a person can have read per month, by plan. Null means "unlimited" as far as the plan is
+ * concerned; the fair-use ceiling below still applies.
+ */
 export const SLIP_LIMIT: Record<Plan, number | null> = {
   free: 0,
-  plus: 5,
+  plus: 30,
   ultimate: null,
 };
+
+/**
+ * "Unlimited" on Ultimate means normal use. Past these a month, the paid-per-use AI calls stop until
+ * the 1st (typing still works). Shown on the upgrade page as a footnote, so nobody is surprised.
+ */
+export const FAIR_USE = { slips: 300, voice: 200, smartParse: 300 } as const;
+
+/** Voice messages a person can have read per month, by plan (Free has one free taste for life). */
+export const VOICE_LIMIT: Record<Plan, number> = { free: 0, plus: 20, ultimate: FAIR_USE.voice };
+
+/** Recurring entries ("รายการประจำ") a plan may have set up at once. */
+const RECURRING_LIMIT: Record<Plan, number> = { free: 0, plus: 20, ultimate: 100 };
+export const recurringLimit = (plan: Plan): number => RECURRING_LIMIT[plan];
 
 export type Feature =
   | "savingsChart"
@@ -98,7 +114,7 @@ export const MIN_PLAN: Record<Feature, "plus" | "ultimate"> = {
   dailyReminder: "plus",
   advancedExport: "plus",
   autoSummary: "plus",
-  voiceLog: "ultimate",
+  voiceLog: "plus",
   backdate: "plus",
   multiEntry: "plus",
   tags: "plus",

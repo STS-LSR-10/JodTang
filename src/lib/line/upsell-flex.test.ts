@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { PRICES } from "@/lib/pricing";
+import { LAUNCH_PRICES, PRICES } from "@/lib/pricing";
+
+const AFTER = new Date("2027-02-01T00:00:00Z");
+const LAUNCH = new Date("2026-11-01T00:00:00Z");
 import { buildUpsellCard } from "./upsell-flex";
 
 const json = (m: unknown) => JSON.stringify(m);
@@ -10,6 +13,7 @@ describe("upgrade card", () => {
       buildUpsellCard({
         feature: "backdate",
         trialAvailable: true,
+        now: AFTER,
         upgradeUrl: "https://x.test/upgrade",
         retryText: "เมื่อวาน ข้าวผัด 60",
       }),
@@ -22,10 +26,24 @@ describe("upgrade card", () => {
   });
 
   it("slip: shows both tiers and no 'as today' button", () => {
-    const card = json(buildUpsellCard({ feature: "slip", trialAvailable: true }));
+    const card = json(buildUpsellCard({ feature: "slip", trialAvailable: true, now: AFTER }));
     expect(card).toContain(`฿${PRICES.plus.monthly}`);
     expect(card).toContain(`฿${PRICES.ultimate.monthly}`);
     expect(card).not.toContain("a=bdt");
+  });
+
+  it("during the launch it shows the launch price and when it ends", () => {
+    const card = json(buildUpsellCard({ feature: "slip", trialAvailable: true, now: LAUNCH }));
+    expect(card).toContain(`฿${LAUNCH_PRICES.plus.monthly}`);
+    expect(card).toContain(`฿${LAUNCH_PRICES.ultimate.monthly}`);
+    expect(card).toContain("31 ธ.ค. 2569");
+    expect(card).not.toContain(`฿${PRICES.ultimate.monthly}/`);
+  });
+
+  it("voice: names the Professional allowance", () => {
+    const card = json(buildUpsellCard({ feature: "voice", trialAvailable: true, now: AFTER }));
+    expect(card).toContain("20 ครั้ง/เดือน");
+    expect(card).toContain("a=trial&p=plus");
   });
 
   it("no trial button once the trial was used, and a too-long text drops the 'as today' button", () => {

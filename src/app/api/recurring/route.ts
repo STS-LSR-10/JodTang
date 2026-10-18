@@ -2,7 +2,8 @@ import { z } from "zod";
 import { apiError, guard, json } from "@/lib/api";
 import { requireUser } from "@/lib/auth/require-user";
 import { categorizeByRules } from "@/lib/categorize/rules";
-import { MAX_RECURRING_RULES } from "@/lib/config";
+import { recurringLimit } from "@/lib/plan";
+import { getPlanInfo } from "@/lib/plan-server";
 import { toSatang } from "@/lib/money";
 import { requireFeature } from "@/lib/plan-server";
 import { describeRule, firstRunAt } from "@/lib/recurring";
@@ -21,13 +22,14 @@ export async function GET(request: Request): Promise<Response> {
     if (auth instanceof Response) return auth;
 
     const db = getAdminClient();
+    const { plan } = await getPlanInfo(db, auth.userId, new Date());
     const [rules, categories] = await Promise.all([
       listRules(db, auth.userId),
       loadCategories(db, auth.userId),
     ]);
     const names = new Map(categories.map((c) => [c.id, c.name]));
     return json({
-      limit: MAX_RECURRING_RULES,
+      limit: recurringLimit(plan),
       items: rules.map((r) => ({
         id: r.id,
         type: r.type,
@@ -98,8 +100,10 @@ export async function POST(request: Request): Promise<Response> {
 
     const amountSatang = toSatang(body.amount);
     if (amountSatang <= 0) return apiError("จำนวนเงินต้องมากกว่า 0", 400);
-    if ((await countRules(db, auth.userId)) >= MAX_RECURRING_RULES) {
-      return apiError(`ตั้งรายการประจำได้สูงสุด ${MAX_RECURRING_RULES} รายการนะ`, 400);
+    const { plan } = await getPlanInfo(db, auth.userId, new Date());
+    const max = recurringLimit(plan);
+    if ((await countRules(db, auth.userId)) >= max) {
+      return apiError(`ตั้งรายการประจำได้สูงสุด ${max} รายการนะ`, 400);
     }
 
     const categories = await loadCategories(db, auth.userId);

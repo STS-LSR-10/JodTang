@@ -2297,3 +2297,47 @@ describe("upsell helpers (0033)", () => {
     expect(await claim("backdate", "2026-10-19")).toBe(true);
   });
 });
+
+describe("usage counters (0034)", () => {
+  it("takes up to the limit per month, a new month starts again, refunds never go below zero", async () => {
+    const u = await newUser(db, `use-${Math.random()}`);
+    const take = async (month: string, limit = 2) =>
+      (
+        await one<{ ok: boolean }>(db, "select take_usage($1, 'voice', $2::date, $3) as ok", [
+          u,
+          month,
+          limit,
+        ])
+      ).ok;
+    expect(await take("2026-10-01")).toBe(true);
+    expect(await take("2026-10-01")).toBe(true);
+    expect(await take("2026-10-01")).toBe(false);
+    expect(await take("2026-11-01")).toBe(true);
+    await db.query("select refund_usage($1, 'voice', '2026-10-01'::date)", [u]);
+    expect(await take("2026-10-01")).toBe(true);
+    for (let i = 0; i < 4; i++)
+      await db.query("select refund_usage($1, 'voice', '2026-12-01'::date)", [u]);
+    const row = await one<{ n: number }>(
+      db,
+      "select coalesce(sum(used), 0)::int as n from usage_counters where user_id = $1 and month = '2026-12-01'",
+      [u],
+    );
+    expect(row.n).toBe(0);
+  });
+
+  it("different kinds count separately, and the lifetime bucket never rolls over", async () => {
+    const u = await newUser(db, `use-${Math.random()}`);
+    const take = async (kind: string, month: string) =>
+      (
+        await one<{ ok: boolean }>(db, "select take_usage($1, $2, $3::date, 1) as ok", [
+          u,
+          kind,
+          month,
+        ])
+      ).ok;
+    expect(await take("voice", "2026-10-01")).toBe(true);
+    expect(await take("smart_parse", "2026-10-01")).toBe(true);
+    expect(await take("teaser_voice", "2000-01-01")).toBe(true);
+    expect(await take("teaser_voice", "2000-01-01")).toBe(false);
+  });
+});

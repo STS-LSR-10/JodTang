@@ -8,19 +8,66 @@ import {
 } from "./helpers";
 
 test.describe("upgrade page (360px)", () => {
-  test("shows three plans with the agreed prices and switches period", async ({ page }) => {
+  test("during the launch it shows the launch price, the normal one struck through, and the end date", async ({
+    page,
+  }) => {
+    await page.clock.setFixedTime(new Date("2026-11-01T10:00:00+07:00"));
     await mockApi(page, { "GET /api/me": ME_FREE });
     await page.goto("/upgrade");
 
     const plans = page.getByRole("radiogroup", { name: "เลือกแผน" });
     await expect(plans.getByText("Free", { exact: true })).toBeVisible();
-    await expect(plans.getByRole("radio", { name: /^Professional/ })).toContainText("฿299");
-    await expect(plans.getByRole("radio", { name: /Ultimate/ })).toContainText("฿799");
+    const pro = plans.getByRole("radio", { name: /^Professional/ });
+    const ultimate = plans.getByRole("radio", { name: /Ultimate/ });
+    await expect(pro).toContainText("ราคาเปิดตัว ถึง 31 ธ.ค. 2569");
+    await expect(pro).toContainText("฿299"); // yearly launch
+    await expect(pro).toContainText("฿339"); // yearly normal (struck through)
+    await expect(ultimate).toContainText("฿699");
+    await expect(ultimate).toContainText("฿799");
 
     await page.getByRole("radio", { name: /รายเดือน/ }).click();
-    await expect(plans.getByRole("radio", { name: /^Professional/ })).toContainText("฿59");
-    await expect(plans.getByRole("radio", { name: /Ultimate/ })).toContainText("฿139");
+    await expect(pro).toContainText("฿39");
+    await expect(pro).toContainText("฿59");
+    await expect(ultimate).toContainText("฿119");
+    await expect(ultimate).toContainText("฿139");
     await expectNoHorizontalScroll(page);
+    await expectNoSeriousA11yViolations(page);
+  });
+
+  test("after the launch only the normal prices show", async ({ page }) => {
+    await page.clock.setFixedTime(new Date("2027-02-01T10:00:00+07:00"));
+    await mockApi(page, { "GET /api/me": ME_FREE });
+    await page.goto("/upgrade");
+
+    const plans = page.getByRole("radiogroup", { name: "เลือกแผน" });
+    const pro = plans.getByRole("radio", { name: /^Professional/ });
+    await expect(pro).toContainText("฿339");
+    await expect(pro).not.toContainText("ราคาเปิดตัว");
+    await expect(plans.getByRole("radio", { name: /Ultimate/ })).toContainText("฿799");
+    await page.getByRole("radio", { name: /รายเดือน/ }).click();
+    await expect(pro).toContainText("฿59");
+    await expect(plans.getByRole("radio", { name: /Ultimate/ })).toContainText("฿139");
+  });
+
+  test("the prices the server sends win over the phone's clock", async ({ page }) => {
+    await page.clock.setFixedTime(new Date("2027-02-01T10:00:00+07:00")); // phone says: launch is over
+    await mockApi(page, {
+      "GET /api/me": {
+        ...ME_FREE,
+        pricing: {
+          launch: true,
+          endsText: "31 ธ.ค. 2569",
+          prices: { plus: { monthly: 39, yearly: 299 }, ultimate: { monthly: 119, yearly: 699 } },
+          list: { plus: { monthly: 59, yearly: 339 }, ultimate: { monthly: 139, yearly: 799 } },
+        },
+      },
+    });
+    await page.goto("/upgrade");
+    await expect(
+      page
+        .getByRole("radiogroup", { name: "เลือกแผน" })
+        .getByRole("radio", { name: /^Professional/ }),
+    ).toContainText("ราคาเปิดตัว");
   });
 
   test("shows short rows with a tick for the plans that have each function", async ({ page }) => {
@@ -32,9 +79,12 @@ test.describe("upgrade page (360px)", () => {
     await expect(has(/จดด้วยข้อความ/).getByText("มี", { exact: true })).toHaveCount(3);
     await expect(has(/จดย้อนหลัง/).getByText("ไม่มี", { exact: true })).toHaveCount(1); // Free only
     await expect(has(/จดย้อนหลัง/).getByText("มี", { exact: true })).toHaveCount(2);
-    await expect(has(/จดด้วยเสียง/).getByText("ไม่มี", { exact: true })).toHaveCount(2); // Free and Pro
+    await expect(has(/จดหนี้/).getByText("ไม่มี", { exact: true })).toHaveCount(2); // Free and Pro
+    await expect(has(/จดด้วยเสียง/)).toContainText("20 ครั้ง/เดือน");
+    await expect(has(/จดด้วยเสียง/)).toContainText("ลองฟรี 1 ครั้ง");
+    await expect(page.getByText("ไม่จำกัดสำหรับการใช้งานตามปกติ")).toBeVisible();
     await expect(has(/อ่านสลิปอัตโนมัติ/)).toContainText("ลองฟรี 1 ใบ");
-    await expect(has(/อ่านสลิปอัตโนมัติ/)).toContainText("5 ใบ/เดือน");
+    await expect(has(/อ่านสลิปอัตโนมัติ/)).toContainText("30 ใบ/เดือน");
     await expect(table.getByText("เร็วๆ นี้")).toHaveCount(0);
     await expectNoHorizontalScroll(page);
   });

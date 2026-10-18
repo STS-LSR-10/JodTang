@@ -136,7 +136,7 @@ export const ME_PLUS = {
   planExpiresAt: "2026-12-31T00:00:00Z",
   features: {
     ...Object.fromEntries(Object.keys(ME_FREE.features).map((k) => [k, true])),
-    voiceLog: false,
+
     smartParse: false,
     forecast: false,
     insight: false,

@@ -1,4 +1,5 @@
-import { PRICES, TRIAL_DAYS } from "@/lib/pricing";
+import { SLIP_LIMIT, VOICE_LIMIT } from "@/lib/plan";
+import { LAUNCH_ENDS_TEXT, launchActive, priceFor, TRIAL_DAYS } from "@/lib/pricing";
 import type { LineMessage } from "@/lib/types";
 import { COLOR } from "./flex";
 
@@ -6,19 +7,27 @@ import { COLOR } from "./flex";
 const MAX_POSTBACK = 300;
 
 export interface UpsellCardInput {
-  feature: "backdate" | "slip";
+  feature: "backdate" | "slip" | "voice";
   /** The Professional trial can still be started from the chat. */
   trialAvailable: boolean;
   /** Public /upgrade page; the button is left out when the app URL is unknown. */
   upgradeUrl?: string;
   /** For the backdated entry: its original text, so "record as today instead" can redo it. */
   retryText?: string;
+  /** For the launch price check (defaults to now). */
+  now?: Date;
 }
+
+const SLIP_PRO = SLIP_LIMIT.plus;
 
 const COPY = {
   backdate: {
     title: "จดย้อนหลังสำหรับสมาชิก Professional",
     body: "ระบบตรวจพบการระบุวันที่ย้อนหลัง (เช่น “เมื่อวาน”) ฟังก์ชันนี้สำหรับสมาชิกแพ็กเกจ Professional ขึ้นไป ยังไม่ได้จดรายการนี้นะ",
+  },
+  voice: {
+    title: "จดด้วยเสียงสำหรับสมาชิก Professional",
+    body: "พูดสั้น ๆ เช่น “กาแฟสามสิบบาท” แล้วบอทจดให้ ไม่ต้องพิมพ์ ใช้สิทธิ์ลองจดด้วยเสียงฟรีครบแล้ว",
   },
   slip: {
     title: "ให้บอทอ่านสลิปให้อัตโนมัติ",
@@ -38,12 +47,16 @@ const button = (label: string, action: Record<string, unknown>, primary: boolean
 /** The card that offers an upgrade at the moment a Free user reaches for a paid feature. */
 export function buildUpsellCard(input: UpsellCardInput): LineMessage {
   const copy = COPY[input.feature];
-  const plus = PRICES.plus.monthly;
-  const ultimate = PRICES.ultimate.monthly;
+  const now = input.now ?? new Date();
+  const plus = priceFor("plus", now).monthly;
+  const ultimate = priceFor("ultimate", now).monthly;
+  const launch = launchActive(now) ? ` (ราคาเปิดตัวถึง ${LAUNCH_ENDS_TEXT})` : "";
   const price =
     input.feature === "slip"
-      ? `Professional ฿${plus}/เดือน อ่านสลิปได้ 5 ใบ/เดือน · Ultimate ฿${ultimate}/เดือน อ่านไม่จำกัด`
-      : `อัปเกรดวันนี้เพียง ฿${plus}/เดือน${input.trialAvailable ? ` หรือทดลองใช้ฟรี ${TRIAL_DAYS} วัน!` : ""}`;
+      ? `Professional ฿${plus}/เดือน อ่านสลิปได้ ${SLIP_PRO} ใบ/เดือน · Ultimate ฿${ultimate}/เดือน อ่านสลิปไม่จำกัด${launch}`
+      : input.feature === "voice"
+        ? `Professional ฿${plus}/เดือน จดด้วยเสียงได้ ${VOICE_LIMIT.plus} ครั้ง/เดือน · Ultimate ฿${ultimate}/เดือน ไม่จำกัด${launch}`
+        : `อัปเกรดวันนี้เพียง ฿${plus}/เดือน${launch}${input.trialAvailable ? ` หรือทดลองใช้ฟรี ${TRIAL_DAYS} วัน!` : ""}`;
 
   const buttons: unknown[] = [];
   if (input.trialAvailable) {

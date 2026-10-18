@@ -9,6 +9,7 @@ import {
   IMAGE_TOO_LARGE_TEXT,
   NOT_A_SLIP_TEXT,
   SLIP_LOCKED_TEXT,
+  SLIP_FAIR_USE_TEXT,
   SLIP_QUOTA_TEXT,
   SLIP_TEASER_TEXT,
   SLIP_UNREADABLE_TEXT,
@@ -17,7 +18,7 @@ import {
 import { formatBaht, toSatang } from "@/lib/money";
 import type { SlipImage, SlipOcrProvider } from "@/lib/ocr/provider";
 import { sanitizeSlip } from "@/lib/ocr/slip-schema";
-import { effectivePlan, SLIP_LIMIT, slipsRemaining } from "@/lib/plan";
+import { effectivePlan, FAIR_USE, SLIP_LIMIT, slipsRemaining } from "@/lib/plan";
 import { insertTransaction, loadCategories, loadMemoryFor, type UserRow } from "@/lib/repo";
 import {
   countSlipsThisMonth,
@@ -85,8 +86,13 @@ export async function handleSlipImage(
   }
 
   async function readSlip(): Promise<LineMessage[]> {
-    const remaining = slipsRemaining(plan, await countSlipsThisMonth(db, user.id, now));
+    const used = await countSlipsThisMonth(db, user.id, now);
+    const remaining = slipsRemaining(plan, used);
     if (!teaser && remaining !== null && remaining <= 0) return [text(SLIP_QUOTA_TEXT)];
+    // "unlimited" is normal use: past the fair-use ceiling the paid-per-use reading stops until the 1st
+    if (plan === "ultimate" && used >= FAIR_USE.slips) {
+      return [text(SLIP_FAIR_USE_TEXT(FAIR_USE.slips))];
+    }
 
     // 2. download
     let image: SlipImage;

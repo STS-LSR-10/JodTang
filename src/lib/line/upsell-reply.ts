@@ -41,6 +41,7 @@ export async function upsellReply(
         trialAvailable,
         upgradeUrl: base ? `${base}/upgrade` : undefined,
         retryText,
+        now,
       }),
     ];
   } catch (error) {
