@@ -7,7 +7,7 @@ import {
   buildDatePicker,
   buildRangeEndPicker,
   buildRangeStartPicker,
-  withRangeButton,
+  withSummaryShortcuts,
   buildComposeCard,
   buildConfirmMessage,
   buildTypeQuestion,
@@ -328,11 +328,15 @@ describe("custom range pickers", () => {
   const first = (m: Record<string, unknown>) => (m.quickReply as { items: A[] }).items[0]!.action;
   const NOW = new Date("2026-10-17T08:00:00Z");
 
-  it("the shortcut keeps the card and adds one quick reply", () => {
+  it("the shortcuts keep the card and add the range, category and latest buttons", () => {
     const card = { type: "flex", altText: "x", contents: { type: "bubble" } };
-    const out = withRangeButton(card);
+    const out = withSummaryShortcuts(card);
     expect(out.contents).toEqual(card.contents);
-    expect(first(out)).toMatchObject({ type: "postback", data: "a=sr" });
+    const items = (out.quickReply as { items: A[] }).items.map((i) => i.action);
+    expect(items[0]).toMatchObject({ type: "postback", data: "a=sr" });
+    expect(items[1]).toMatchObject({ type: "message", text: "สรุปหมวด" });
+    expect(items[2]).toMatchObject({ type: "message", text: "ล่าสุด" });
+    expect(items.every((a) => (a.label ?? "").length <= 20)).toBe(true);
   });
 
   it("the first-day picker reaches back about three years and stops at today", () => {

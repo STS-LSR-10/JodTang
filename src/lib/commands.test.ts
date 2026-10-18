@@ -92,3 +92,25 @@ describe("parseCommand: search", () => {
     expect(parseCommand("ค้นหาของ 50")).toBeNull();
   });
 });
+
+describe("parseCommand: latest entries and spend by category", () => {
+  it.each([
+    ["ล่าสุด", { kind: "recent" }],
+    ["รายการล่าสุด", { kind: "recent" }],
+    ["5 รายการล่าสุด", { kind: "recent" }],
+    ["๕ รายการล่าสุด", { kind: "recent" }],
+    ["สรุปหมวด", { kind: "category-spend" }],
+    ["สรุปตามหมวด", { kind: "category-spend" }],
+    ["สรุปหมวดหมู่", { kind: "category-spend" }],
+    ["  สรุป  หมวด ", null],
+  ])("%s", (input, expected) => {
+    expect(parseCommand(input)).toEqual(expected);
+  });
+
+  it("does not take over the neighbouring commands or entries", () => {
+    expect(parseCommand("ลบล่าสุด")).toEqual({ kind: "delete-latest" });
+    expect(parseCommand("แก้ล่าสุด 45")).toEqual({ kind: "edit-latest", amountSatang: 4500 });
+    expect(parseCommand("ล่าสุด 50")).toBeNull();
+    expect(parseCommand("สรุปเดือนนี้")).toEqual({ kind: "summary", scope: "month" });
+  });
+});

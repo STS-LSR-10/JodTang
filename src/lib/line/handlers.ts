@@ -41,8 +41,9 @@ import {
 } from "@/lib/points";
 import { getSlip, getSlipItems, learnMerchant } from "@/lib/slip-repo";
 import { planReceiptSplit } from "@/lib/receipt-split";
+import { buildCategorySlices } from "@/lib/category-spend";
 import { loadSearchItems, loadSearchTotals, parseSearchTerm } from "@/lib/search";
-import { loadSummaryData, loadSummaryTransactions } from "@/lib/summary-load";
+import { loadCategorySpend, loadSummaryData, loadSummaryTransactions } from "@/lib/summary-load";
 import { daySpecFromIso, resolveRange, type DaySpec } from "@/lib/summary-range";
 import { buildSummaryCard, previousRange, summarize } from "@/lib/summary-report";
 import { handleSlipImage } from "@/lib/slips";
@@ -51,6 +52,7 @@ import { needsSmartParse, runSmartParse } from "@/lib/ai/smart-parse";
 import type { TextStructurer } from "@/lib/ai/text-structurer";
 import { recordSmartEntries } from "./smart-entries";
 import { buildSearchCard } from "./search-flex";
+import { buildCategorySpendCard, buildRecentCard } from "./spend-flex";
 import { getLivePhotoWait, getPhotoTx, startPhotoWait } from "@/lib/photo-repo";
 import {
   BACKDATE_MAX_DAYS,
@@ -62,7 +64,7 @@ import {
   buildPhotoAsk,
   buildRangeEndPicker,
   buildRangeStartPicker,
-  withRangeButton,
+  withSummaryShortcuts,
   buildTypeQuestion,
 } from "./flex";
 import { buildCategoryChooser } from "./slip-flex";
@@ -81,6 +83,7 @@ import {
   NOT_UNDERSTOOD_TEXT,
   PHOTO_ASK_REPLACE_TEXT,
   PHOTO_ASK_TEXT,
+  RECENT_EMPTY_TEXT,
   SEARCH_LOCKED_TEXT,
   SEARCH_USAGE_TEXT,
   searchEmptyText,
@@ -275,12 +278,20 @@ async function handleText(input: string, user: UserRow, deps: HandlerDeps): Prom
   return saveEntries(entries, user, deps);
 }
 
+/** A page of the web app, through the LIFF link inside LINE (undefined when no address is known). */
+function pageUrl(path: string): string | undefined {
+  const liffId = process.env.NEXT_PUBLIC_LIFF_ID;
+  if (liffId) return `https://liff.line.me/${liffId}${path}`;
+  const base = process.env.APP_BASE_URL?.replace(/\/$/, "");
+  return base ? `${base}${path}` : undefined;
+}
+
 /**
  * Link that opens the entries list with a search already typed: inside LINE it goes through the
  * LIFF link (which keeps the path and query), otherwise the plain app URL.
  */
 function listUrl(term: string): string | undefined {
-  const query = `?q=${encodeURIComponent(term)}`;
+  const query = term ? `?q=${encodeURIComponent(term)}` : "";
   const liffId = process.env.NEXT_PUBLIC_LIFF_ID;
   if (liffId) return `https://liff.line.me/${liffId}/transactions${query}`;
   const base = process.env.APP_BASE_URL?.replace(/\/$/, "");
@@ -639,7 +650,7 @@ async function runCommand(
         const subtitle = formatThaiDate(now);
         if (data.current.count === 0) return [text(`สรุปวันนี้ (${subtitle})\nยังไม่มีรายการเลย`)];
         return [
-          withRangeButton(
+          withSummaryShortcuts(
             buildSummaryCard({ title: "สรุปวันนี้", range, data, subtitle, liffUrl }),
           ),
         ];
@@ -659,7 +670,7 @@ async function runCommand(
       const subtitle = `${formatThaiDate(range.from)} – ${formatThaiDate(last)}`;
       if (data.current.count === 0) return [text(`สรุปเดือนนี้ (${subtitle})\nยังไม่มีรายการเลย`)];
       return [
-        withRangeButton(
+        withSummaryShortcuts(
           buildSummaryCard({
             title: "สรุปเดือนนี้",
             range,
@@ -674,6 +685,29 @@ async function runCommand(
 
     case "summary-range-usage":
       return [text(SUMMARY_RANGE_USAGE_TEXT)];
+
+    case "recent": {
+      const items = await loadSearchItems(db, user.id, { q: null, tag: null }, 5);
+      if (items.length === 0) return [text(RECENT_EMPTY_TEXT)];
+      return [buildRecentCard({ items, moreUrl: listUrl("") })];
+    }
+
+    case "category-spend": {
+      const now = deps.now();
+      const settings = await getSettings(db, user.id);
+      const range =
+        settings.budget_cycle === "monthly"
+          ? cycleRange(now, "monthly", settings.cycle_start_day)
+          : calendarMonthRange(now);
+      const subtitle = `${formatThaiDate(range.from)} – ${formatThaiDate(new Date(range.to.getTime() - 1))}`;
+      const slices = buildCategorySlices(await loadCategorySpend(db, user.id, range));
+      if (slices.length === 0)
+        return [text(`ใช้จ่ายตามหมวด (${subtitle})\nยังไม่มีรายจ่ายในรอบนี้`)];
+      const totalSatang = slices.reduce((sum, s) => sum + s.amountSatang, 0);
+      return [
+        buildCategorySpendCard({ subtitle, slices, totalSatang, moreUrl: pageUrl("/analytics") }),
+      ];
+    }
 
     case "search-usage":
       return [text(SEARCH_USAGE_TEXT)];

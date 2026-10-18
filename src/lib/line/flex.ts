@@ -633,8 +633,11 @@ export function buildBackdatePrompt(isoDate: string, thaiDate: string): LineMess
   };
 }
 
-/** The "📆 ช่วงวันเอง" shortcut under a summary card; the plan is checked when it is tapped. */
-export function withRangeButton(message: LineMessage): LineMessage {
+/**
+ * Shortcuts under a summary card: the calendar range (its plan is checked when tapped), the spend
+ * by category and the latest entries (the last two just send the command as a message).
+ */
+export function withSummaryShortcuts(message: LineMessage): LineMessage {
   return {
     ...message,
     quickReply: {
@@ -648,6 +651,8 @@ export function withRangeButton(message: LineMessage): LineMessage {
             displayText: "ช่วงวันเอง",
           },
         },
+        { type: "action", action: { type: "message", label: "📊 ตามหมวด", text: "สรุปหมวด" } },
+        { type: "action", action: { type: "message", label: "🕘 ล่าสุด", text: "ล่าสุด" } },
       ],
     },
   };

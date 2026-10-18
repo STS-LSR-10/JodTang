@@ -77,3 +77,21 @@ export async function loadSummaryData(
     topExpenses,
   };
 }
+
+/** Expense per category in [range.from, range.to), added up by the database, biggest first. */
+export async function loadCategorySpend(
+  db: SupabaseClient,
+  userId: string,
+  range: DateRange,
+): Promise<{ name: string; amountSatang: number }[]> {
+  const { data, error } = await db.rpc("spend_by_category", {
+    p_user: userId,
+    p_from: range.from.toISOString(),
+    p_to: range.to.toISOString(),
+    p_type: "expense",
+  });
+  if (error) throw new Error(`load category spend: ${error.message}`);
+  return ((data ?? []) as CategorySpendRow[])
+    .map((r) => ({ name: r.name, amountSatang: toSatang(r.total) }))
+    .sort((a, b) => b.amountSatang - a.amountSatang);
+}

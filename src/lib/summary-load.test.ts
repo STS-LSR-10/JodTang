@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { describe, expect, it, vi } from "vitest";
-import { loadSummaryData } from "./summary-load";
+import { loadCategorySpend, loadSummaryData } from "./summary-load";
 
 const range = {
   from: new Date("2026-10-01T00:00:00+07:00"),
@@ -60,5 +60,35 @@ describe("loadSummaryData", () => {
     await expect(loadSummaryData(fakeDb([], true).db, "u1", range, previous)).rejects.toThrow(
       "load category totals: boom",
     );
+  });
+});
+
+describe("loadCategorySpend", () => {
+  it("returns every category with its exact satang, biggest first", async () => {
+    const rpc = vi.fn(async () => ({
+      data: [
+        { name: "เดินทาง", total: "120.50" },
+        { name: "อาหาร", total: "300.00" },
+      ],
+      error: null,
+    }));
+    const out = await loadCategorySpend({ rpc } as unknown as SupabaseClient, "u1", range);
+    expect(out).toEqual([
+      { name: "อาหาร", amountSatang: 30_000 },
+      { name: "เดินทาง", amountSatang: 12_050 },
+    ]);
+    expect(rpc).toHaveBeenCalledWith("spend_by_category", {
+      p_user: "u1",
+      p_from: range.from.toISOString(),
+      p_to: range.to.toISOString(),
+      p_type: "expense",
+    });
+  });
+
+  it("throws on a database error", async () => {
+    const rpc = async () => ({ data: null, error: { message: "boom" } });
+    await expect(
+      loadCategorySpend({ rpc } as unknown as SupabaseClient, "u1", range),
+    ).rejects.toThrow("load category spend: boom");
   });
 });
