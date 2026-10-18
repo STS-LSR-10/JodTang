@@ -310,6 +310,315 @@ describe("wallets (0019)", () => {
   });
 });
 
+describe("data reset (0030)", () => {
+  async function seed() {
+    const me = await newUser(db, `dr-${Math.random()}`);
+    const other = await newUser(db, `dr-other-${Math.random()}`);
+    const wallet = async (
+      user: string,
+      name: string,
+      over: { shared?: boolean; isDefault?: boolean; opening?: number } = {},
+    ) =>
+      (
+        await one<{ id: string }>(
+          db,
+          "insert into accounts (user_id,name,kind,is_default,is_shared,opening_balance) values ($1,$2,'cash'::account_kind,$3,$4,$5) returning id",
+          [user, name, over.isDefault ?? false, over.shared ?? false, over.opening ?? 0],
+        )
+      ).id;
+    const main = await wallet(me, "เงินสด", { isDefault: true, opening: 1000 });
+    const bank = await wallet(me, "ธนาคาร", { opening: 5000 });
+    const shared = await wallet(me, "กองกลาง", { shared: true, opening: 100 });
+    const theirs = await wallet(other, "ของเขา", { isDefault: true, opening: 50 });
+    const tx = async (
+      user: string,
+      account: string | null,
+      amount: number,
+      at: string,
+      type = "expense",
+      extra: { slip?: string | null; photo?: string | null } = {},
+    ) =>
+      one<{ id: string }>(
+        db,
+        "insert into transactions (user_id,type,amount,title,account_id,occurred_at,slip_id,photo_path) values ($1,$2,$3,'x',$4,$5,$6,$7) returning id",
+        [user, type, amount, account, at, extra.slip ?? null, extra.photo ?? null],
+      );
+    const slip = async (user: string, hash: string, path: string) =>
+      (
+        await one<{ id: string }>(
+          db,
+          "insert into slips (user_id,storage_path,image_sha256,slip_ref,amount,payee) values ($1,$2,$3,$4,120,'ร้านนี้') returning id",
+          [user, path, hash, `ref-${hash}`],
+        )
+      ).id;
+    return { me, other, main, bank, shared, theirs, tx, slip };
+  }
+  const OCT = ["2026-09-30T17:00:00Z", "2026-11-01T17:00:00Z"]; // October in Bangkok
+  const count = async (sql: string, params: unknown[]) =>
+    Number((await one<{ n: string }>(db, `select count(*)::text as n from ${sql}`, params)).n);
+  const balances = (u: string) =>
+    rows<{ name: string; opening: string; expense: string }>(
+      db,
+      "select name, opening_balance::text as opening, expense::text from wallet_balances($1) where not is_shared order by name",
+      [u],
+    );
+
+  it("a reset removes the person's own history and nothing of anybody else's", async () => {
+    const { me, other, main, bank, theirs, tx } = await seed();
+    await tx(me, main, 100, "2026-10-05T05:00:00Z");
+    await tx(me, bank, 200, "2026-09-05T05:00:00Z");
+    await tx(me, null, 5, "2026-08-05T05:00:00Z");
+    await tx(other, theirs, 999, "2026-10-05T05:00:00Z");
+    await db.query(
+      "insert into transfers (user_id,from_account,to_account,amount) values ($1,$2,$3,50)",
+      [me, main, bank],
+    );
+    await db.query(
+      "insert into debts (user_id,direction,person,amount) values ($1,'lent','ก',10)",
+      [me],
+    );
+    await db.query(
+      "insert into debts (user_id,direction,person,amount) values ($1,'lent','ข',10)",
+      [other],
+    );
+    const goal = (
+      await one<{ id: string }>(
+        db,
+        "insert into savings_goals (user_id,name,target_amount) values ($1,'g',100) returning id",
+        [me],
+      )
+    ).id;
+    await db.query("insert into savings_deposits (user_id,goal_id,amount) values ($1,$2,30)", [
+      me,
+      goal,
+    ]);
+
+    const r = await one<{
+      entries: string;
+      transfers: string;
+      debts: string;
+      goal_deposits: string;
+    }>(
+      db,
+      "select entries::text, transfers::text, debts::text, goal_deposits::text from data_erase($1, null, null, true, false)",
+      [me],
+    );
+    expect(r).toEqual({ entries: "3", transfers: "1", debts: "1", goal_deposits: "1" });
+
+    expect(await count("transactions where user_id = $1", [me])).toBe(0);
+    expect(await count("transactions where user_id = $1", [other])).toBe(1);
+    expect(await count("debts where user_id = $1", [other])).toBe(1);
+    // the account, its wallets, the goal itself and everything set up stay
+    expect(await count("users where id = $1", [me])).toBe(1);
+    expect(await count("accounts where user_id = $1", [me])).toBe(3);
+    expect(await count("savings_goals where user_id = $1", [me])).toBe(1);
+  });
+
+  it("without keeping the balance a wallet goes back to its opening balance", async () => {
+    const { me, main, tx } = await seed();
+    await tx(me, main, 300, "2026-10-05T05:00:00Z");
+    await tx(me, main, 500, "2026-10-06T05:00:00Z", "income");
+    await db.query("select * from data_erase($1, null, null, true, false)", [me]);
+    expect(await balances(me)).toEqual([
+      { name: "ธนาคาร", opening: "5000.00", expense: "0" },
+      { name: "เงินสด", opening: "1000.00", expense: "0" },
+    ]);
+  });
+
+  it("keeping the balance makes each private wallet's current money its new opening balance", async () => {
+    const { me, main, bank, tx } = await seed();
+    await tx(me, main, 300, "2026-10-05T05:00:00Z"); // 1000 - 300
+    await tx(me, main, 500, "2026-10-06T05:00:00Z", "income"); // + 500 = 1200
+    await tx(me, null, 20, "2026-10-07T05:00:00Z"); // no wallet = main: 1180
+    await db.query(
+      "insert into transfers (user_id,from_account,to_account,amount) values ($1,$2,$3,200)",
+      [me, main, bank],
+    ); // main 980, bank 5200
+    await db.query(
+      "insert into debts (user_id,direction,person,amount,account_id) values ($1,'lent','ก',80,$2)",
+      [me, main],
+    ); // main 900
+    await db.query("select * from data_erase($1, null, null, true, true)", [me]);
+    expect(await balances(me)).toEqual([
+      { name: "ธนาคาร", opening: "5200.00", expense: "0" },
+      { name: "เงินสด", opening: "900.00", expense: "0" },
+    ]);
+  });
+
+  it("entries in a shared wallet are never erased (the other people see them) and the shared wallet is untouched", async () => {
+    const { me, main, shared, tx } = await seed();
+    await tx(me, shared, 400, "2026-10-05T05:00:00Z");
+    await tx(me, main, 100, "2026-10-05T05:00:00Z");
+    const preview = await one<{ entries: string; kept_shared: string }>(
+      db,
+      "select entries::text, kept_shared::text from data_erase_preview($1, null, null, true)",
+      [me],
+    );
+    expect(preview).toEqual({ entries: "1", kept_shared: "1" });
+    await db.query("select * from data_erase($1, null, null, true, true)", [me]);
+    expect(await count("transactions where account_id = $1", [shared])).toBe(1);
+    const w = await one<{ opening: string; expense: string }>(
+      db,
+      "select opening_balance::text as opening, expense::text from wallet_balances($1) where is_shared",
+      [me],
+    );
+    expect(w).toEqual({ opening: "100.00", expense: "400.00" });
+  });
+
+  it("a month removes only that Bangkok month's entries and transfers, nothing else", async () => {
+    const { me, main, bank, tx } = await seed();
+    await tx(me, main, 1, "2026-09-30T16:59:59Z"); // 30 Sep 23:59:59 Bangkok: September
+    await tx(me, main, 2, "2026-09-30T17:00:00Z"); // 1 Oct 00:00 Bangkok: October
+    await tx(me, main, 3, "2026-11-01T16:59:59Z"); // 31 Oct 23:59:59: October
+    await tx(me, main, 4, "2026-11-01T17:00:00Z"); // 1 Nov: November
+    await db.query(
+      "insert into transfers (user_id,from_account,to_account,amount,occurred_at) values ($1,$2,$3,9,'2026-10-15T05:00:00Z')",
+      [me, main, bank],
+    );
+    await db.query(
+      "insert into transfers (user_id,from_account,to_account,amount,occurred_at) values ($1,$2,$3,9,'2026-09-15T05:00:00Z')",
+      [me, main, bank],
+    );
+    await db.query(
+      "insert into debts (user_id,direction,person,amount) values ($1,'lent','ก',10)",
+      [me],
+    );
+
+    const r = await one<{ entries: string; transfers: string; debts: string }>(
+      db,
+      "select entries::text, transfers::text, debts::text from data_erase($1, $2, $3, false, false)",
+      [me, OCT[0], OCT[1]],
+    );
+    expect(r).toEqual({ entries: "2", transfers: "1", debts: "0" });
+    const left = await rows<{ amount: string }>(
+      db,
+      "select amount::text from transactions where user_id = $1 order by amount",
+      [me],
+    );
+    expect(left.map((x) => x.amount)).toEqual(["1.00", "4.00"]);
+    expect(await count("transfers where user_id = $1", [me])).toBe(1);
+    expect(await count("debts where user_id = $1", [me])).toBe(1);
+    // a month delete never touches the opening balances
+    expect((await balances(me)).map((b) => b.opening)).toEqual(["5000.00", "1000.00"]);
+  });
+
+  it("the preview says exactly what the erase then does", async () => {
+    const { me, main, tx } = await seed();
+    await tx(me, main, 1, "2026-10-05T05:00:00Z");
+    await tx(me, main, 2, "2026-10-06T05:00:00Z");
+    const p = await one<{ entries: string }>(
+      db,
+      "select entries::text from data_erase_preview($1,$2,$3,false)",
+      [me, OCT[0], OCT[1]],
+    );
+    const e = await one<{ entries: string }>(
+      db,
+      "select entries::text from data_erase($1,$2,$3,false,false)",
+      [me, OCT[0], OCT[1]],
+    );
+    expect(p.entries).toBe(e.entries);
+  });
+
+  it("slips of erased entries are scrubbed so they can be read again, but still count for the monthly quota; photos and images are listed for removal", async () => {
+    const { me, main, tx, slip } = await seed();
+    const s1 = await slip(me, "h1", `${me}/slip-1.jpg`);
+    const s2 = await slip(me, "h2", `${me}/slip-2.jpg`);
+    await tx(me, main, 100, "2026-10-05T05:00:00Z", "expense", {
+      slip: s1,
+      photo: `${me}/photo-a.jpg`,
+    });
+    await tx(me, main, 100, "2026-09-05T05:00:00Z", "expense", { slip: s2 }); // another month
+    const paths = await rows<{ path: string }>(
+      db,
+      "select path from data_erase_paths($1,$2,$3,false) order by path",
+      [me, OCT[0], OCT[1]],
+    );
+    expect(paths.map((p) => p.path)).toEqual([`${me}/photo-a.jpg`, `${me}/slip-1.jpg`]);
+
+    await db.query("select * from data_erase($1,$2,$3,false,false)", [me, OCT[0], OCT[1]]);
+    const scrubbed = await one<{
+      storage_path: string;
+      image_sha256: string;
+      slip_ref: string | null;
+      amount: string | null;
+      payee: string | null;
+    }>(
+      db,
+      "select storage_path, image_sha256, slip_ref, amount::text, payee from slips where id = $1",
+      [s1],
+    );
+    expect(scrubbed).toEqual({
+      storage_path: "",
+      image_sha256: `erased:${s1}`,
+      slip_ref: null,
+      amount: null,
+      payee: null,
+    });
+    expect(await count("slips where user_id = $1", [me])).toBe(2); // the quota still sees both
+    const untouched = await one<{ image_sha256: string }>(
+      db,
+      "select image_sha256 from slips where id = $1",
+      [s2],
+    );
+    expect(untouched.image_sha256).toBe("h2");
+    // the same slip can be recorded again
+    await db.query(
+      "insert into slips (user_id,storage_path,image_sha256,slip_ref) values ($1,'p','h1','ref-h1')",
+      [me],
+    );
+  });
+
+  it("a full reset also scrubs slips no kept entry uses; one a shared-wallet entry uses is kept", async () => {
+    const { me, shared, tx, slip } = await seed();
+    const orphan = await slip(me, "h-orphan", `${me}/orphan.jpg`);
+    const used = await slip(me, "h-shared", `${me}/shared.jpg`);
+    await tx(me, shared, 50, "2026-10-05T05:00:00Z", "expense", { slip: used });
+    const paths = await rows<{ path: string }>(
+      db,
+      "select path from data_erase_paths($1,null,null,true)",
+      [me],
+    );
+    expect(paths.map((p) => p.path)).toEqual([`${me}/orphan.jpg`]);
+    await db.query("select * from data_erase($1,null,null,true,false)", [me]);
+    expect(
+      (
+        await one<{ image_sha256: string }>(db, "select image_sha256 from slips where id = $1", [
+          orphan,
+        ])
+      ).image_sha256,
+    ).toBe(`erased:${orphan}`);
+    expect(
+      (
+        await one<{ image_sha256: string }>(db, "select image_sha256 from slips where id = $1", [
+          used,
+        ])
+      ).image_sha256,
+    ).toBe("h-shared");
+  });
+
+  it("months_with_data lists Bangkok months, newest first, with entries and transfers", async () => {
+    const { me, main, bank, shared, tx } = await seed();
+    await tx(me, main, 1, "2026-09-30T16:59:59Z"); // September
+    await tx(me, main, 2, "2026-09-30T17:00:00Z"); // October
+    await tx(me, main, 3, "2026-10-10T05:00:00Z"); // October
+    await tx(me, shared, 4, "2026-10-10T05:00:00Z"); // shared: not listed
+    await db.query(
+      "insert into transfers (user_id,from_account,to_account,amount,occurred_at) values ($1,$2,$3,9,'2026-11-15T05:00:00Z')",
+      [me, main, bank],
+    );
+    const list = await rows<{ month: string; entries: string; transfers: string }>(
+      db,
+      "select month, entries::text, transfers::text from months_with_data($1)",
+      [me],
+    );
+    expect(list).toEqual([
+      { month: "2026-11", entries: "0", transfers: "1" },
+      { month: "2026-10", entries: "2", transfers: "0" },
+      { month: "2026-09", entries: "1", transfers: "0" },
+    ]);
+  });
+});
+
 describe("shared wallets (0029)", () => {
   async function seed() {
     const ann = await newUser(db, `sw-a-${Math.random()}`);

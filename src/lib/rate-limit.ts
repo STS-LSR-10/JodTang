@@ -42,6 +42,8 @@ export const LIMITS = {
   joinWallet: { limit: 10, windowSeconds: 3600 },
   /** Account deletion attempts per user. */
   deleteAccount: { limit: 3, windowSeconds: 3600 },
+  /** Erasing history / a month (each is permanent) per user. */
+  eraseData: { limit: 5, windowSeconds: 3600 },
 } as const satisfies Record<string, LimitRule>;
 
 /** Stable, non-reversible id for a rate-limit key (keeps raw ids out of the table). */

@@ -70,6 +70,13 @@ export function fromBangkokInputValue(value: string): Date | null {
   return fromBangkok(year, month, day, hour, minute);
 }
 
+/** "ต.ค. 2569" for a "YYYY-MM" month key (Buddhist year). */
+export function thaiMonthYear(monthKey: string): string {
+  const m = /^(\d{4})-(\d{2})$/.exec(monthKey);
+  if (!m) return monthKey;
+  return `${MONTHS[Number(m[2]) - 1] ?? ""} ${Number(m[1]) + 543}`;
+}
+
 /** "ต.ค." */
 export function formatThaiMonthShort(date: Date): string {
   return MONTHS[bangkokParts(date).month - 1] ?? "";

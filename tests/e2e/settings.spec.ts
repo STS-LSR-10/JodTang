@@ -105,6 +105,100 @@ test.describe("settings page (360px)", () => {
     await expect(page.getByText("ลบข้อมูลทั้งหมดแล้ว")).toBeVisible();
   });
 
+  test("reset-all shows what will go, asks for the phrase and sends the keep-balance choice", async ({
+    page,
+  }) => {
+    let body: unknown = null;
+    await mockApi(page, {
+      ...COMMON,
+      "GET /api/me": ME_FREE,
+      "GET /api/account/erase": {
+        entries: 1234,
+        transfers: 12,
+        debts: 3,
+        goalDeposits: 5,
+        files: 20,
+        keptShared: 7,
+      },
+      "POST /api/account/erase": async (route: Route) => {
+        body = route.request().postDataJSON();
+        return { ok: true };
+      },
+    });
+    await page.goto("/settings");
+
+    await page.getByRole("button", { name: "ล้างประวัติการเงินทั้งหมด" }).click();
+    const dialog = page.getByRole("dialog", { name: "ล้างประวัติการเงินทั้งหมด?" });
+    await expect(dialog.getByText("รายการรับ/จ่าย 1,234 รายการ")).toBeVisible();
+    await expect(dialog.getByText("รูปแนบและรูปสลิป 20 ไฟล์")).toBeVisible();
+    await expect(dialog.getByText("กระเป๋าร่วม").first()).toBeVisible();
+    await expect(dialog.getByLabel("คงยอดเงินปัจจุบันของแต่ละกระเป๋าไว้")).toBeChecked();
+    await dialog.getByLabel("คงยอดเงินปัจจุบันของแต่ละกระเป๋าไว้").uncheck();
+
+    await dialog.getByRole("button", { name: "ดำเนินการต่อ" }).click();
+    const confirm = page.getByRole("button", { name: "ลบอย่างถาวร" });
+    await expect(confirm).toBeDisabled();
+    await page.getByLabel(/พิมพ์/).fill("ล้างประวัติ");
+    await expect(confirm).toBeEnabled();
+    await confirm.click();
+
+    await expect(page.getByRole("status")).toContainText("ล้างประวัติการเงินแล้ว");
+    expect(body).toEqual({ scope: "all", keepBalance: false, confirm: "ล้างประวัติ" });
+  });
+
+  test("delete one month: pick it, see the numbers, type the month's phrase", async ({ page }) => {
+    let body: unknown = null;
+    await mockApi(page, {
+      ...COMMON,
+      "GET /api/me": ME_FREE,
+      "GET /api/account/erase": async (_route: Route, url: URL) =>
+        url.searchParams.get("scope") === "month"
+          ? { entries: 40, transfers: 0, debts: 0, goalDeposits: 0, files: 2, keptShared: 0 }
+          : {
+              months: [
+                { month: "2026-10", entries: 40, transfers: 0 },
+                { month: "2026-09", entries: 5, transfers: 1 },
+              ],
+            },
+      "POST /api/account/erase": async (route: Route) => {
+        body = route.request().postDataJSON();
+        return { ok: true };
+      },
+    });
+    await page.goto("/settings");
+
+    await page.getByRole("button", { name: "ลบเฉพาะเดือน" }).click();
+    await page.getByLabel("เดือนที่จะลบ").selectOption("2026-10");
+    await expect(page.getByText("รายการรับ/จ่าย 40 รายการ")).toBeVisible();
+    await page.getByRole("button", { name: "ดำเนินการต่อ" }).click();
+
+    const confirm = page.getByRole("button", { name: "ลบอย่างถาวร" });
+    await page.getByLabel(/พิมพ์/).fill("ลบเดือน ก.ย. 2569"); // the wrong month
+    await expect(confirm).toBeDisabled();
+    await page.getByLabel(/พิมพ์/).fill("ลบเดือน ต.ค. 2569");
+    await confirm.click();
+    await expect(page.getByRole("status")).toContainText("ลบข้อมูลเดือน ต.ค. 2569 แล้ว");
+    expect(body).toEqual({ scope: "month", month: "2026-10", confirm: "ลบเดือน ต.ค. 2569" });
+  });
+
+  test("nothing to delete: the continue button says so", async ({ page }) => {
+    await mockApi(page, {
+      ...COMMON,
+      "GET /api/me": ME_FREE,
+      "GET /api/account/erase": {
+        entries: 0,
+        transfers: 0,
+        debts: 0,
+        goalDeposits: 0,
+        files: 0,
+        keptShared: 0,
+      },
+    });
+    await page.goto("/settings");
+    await page.getByRole("button", { name: "ล้างประวัติการเงินทั้งหมด" }).click();
+    await expect(page.getByRole("button", { name: "ไม่มีอะไรให้ลบ" })).toBeDisabled();
+  });
+
   test("links to the privacy policy and terms", async ({ page }) => {
     await mockApi(page, { ...COMMON, "GET /api/me": ME_FREE });
     await page.goto("/settings");
