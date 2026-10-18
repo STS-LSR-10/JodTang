@@ -1,3 +1,4 @@
+import { categoryLabel } from "@/lib/category-emoji";
 import { formatBaht } from "@/lib/money";
 import { formatThaiDate } from "@/lib/thai-date";
 import type { LineMessage } from "@/lib/types";
@@ -150,6 +151,7 @@ export function buildSlipCard(input: SlipCardInput): LineMessage {
 export interface CategoryChoice {
   id: string;
   name: string;
+  icon?: string | null;
 }
 
 const MAX_QUICK_REPLIES = 13; // LINE limit
@@ -165,7 +167,7 @@ export function buildCategoryChooser(txId: string, categories: CategoryChoice[])
         type: "action",
         action: {
           type: "postback",
-          label: c.name.slice(0, MAX_LABEL),
+          label: categoryLabel(c.name, c.icon).slice(0, MAX_LABEL),
           data: `a=sk&id=${txId}&c=${c.id}`,
           displayText: c.name.slice(0, MAX_LABEL),
         },

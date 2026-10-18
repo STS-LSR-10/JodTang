@@ -41,6 +41,7 @@ import {
 } from "@/lib/points";
 import { getSlip, getSlipItems, learnMerchant } from "@/lib/slip-repo";
 import { planReceiptSplit } from "@/lib/receipt-split";
+import { categoryLabel } from "@/lib/category-emoji";
 import { buildCategorySlices } from "@/lib/category-spend";
 import { loadSearchItems, loadSearchTotals, parseSearchTerm } from "@/lib/search";
 import { describeTotals, sameSpanRanges } from "@/lib/period-compare";
@@ -314,6 +315,11 @@ async function handleText(input: string, user: UserRow, deps: HandlerDeps): Prom
     return [text(TAGS_LOCKED_TEXT)];
   }
   return saveEntries(entries, user, deps);
+}
+
+/** "🐱 ค่าอาหารแมว" for a category that has an emoji, its plain name otherwise, null for none. */
+function categoryLabelOf(c: { name: string; icon?: string | null } | undefined): string | null {
+  return c ? categoryLabel(c.name, c.icon) : null;
 }
 
 /** A page of the web app, through the LIFF link inside LINE (undefined when no address is known). */
@@ -647,7 +653,7 @@ async function confirmCard(
     txId: tx.id,
     type: tx.type,
     title: tx.title,
-    categoryName: categories.find((c) => c.id === categoryId)?.name ?? null,
+    categoryName: categoryLabelOf(categories.find((c) => c.id === categoryId)),
     amountSatang: txAmountSatang(tx),
     occurredAt: new Date(tx.occurred_at),
     tags,
@@ -1079,7 +1085,7 @@ async function handlePostback(
       const choices = categories
         .filter((c) => c.type === tx.type && !c.is_hidden)
         .sort((a, b) => a.sort_order - b.sort_order)
-        .map((c) => ({ id: c.id, name: c.name }));
+        .map((c) => ({ id: c.id, name: c.name, icon: c.icon }));
       return [buildCategoryChooser(id, choices)];
     }
 

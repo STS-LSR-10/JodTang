@@ -1,6 +1,8 @@
 import { z } from "zod";
 import { apiError, guard, json } from "@/lib/api";
 import { requireUser } from "@/lib/auth/require-user";
+import { parseEmoji } from "@/lib/category-emoji";
+import { requireFeature } from "@/lib/plan-server";
 import { loadCategories } from "@/lib/repo";
 import { getAdminClient } from "@/lib/supabase/admin";
 
@@ -14,6 +16,7 @@ const patchSchema = z
     name: z.string().trim().min(1).max(30),
     keywords: z.array(z.string().trim().min(1).max(30)).max(30),
     color: z.string().regex(/^#[0-9A-Fa-f]{6}$/),
+    emoji: z.string().max(16).nullable(),
     isHidden: z.boolean(),
     sortOrder: z.number().int().min(0).max(9999),
   })
@@ -47,7 +50,23 @@ export async function PATCH(request: Request, { params }: Params): Promise<Respo
     }
 
     if (category.user_id === auth.userId) {
+      // Changing what an own category is (name, words, colour, emoji) is Professional and above;
+      // hiding and reordering it stay open to everyone.
+      if (
+        patch.name !== undefined ||
+        patch.keywords !== undefined ||
+        patch.color !== undefined ||
+        patch.emoji !== undefined
+      ) {
+        const locked = await requireFeature(db, auth.userId, "customCategory");
+        if (locked) return locked;
+      }
       const row: Record<string, unknown> = {};
+      if (patch.emoji !== undefined) {
+        const emoji = parseEmoji(patch.emoji);
+        if (!emoji.ok) return apiError("เลือกอีโมจิได้ตัวเดียวเท่านั้นนะ", 400);
+        row.icon = emoji.emoji ?? "tag";
+      }
       if (patch.name !== undefined) row.name = patch.name;
       if (patch.keywords !== undefined) row.keywords = patch.keywords;
       if (patch.color !== undefined) row.color = patch.color;
@@ -66,7 +85,7 @@ export async function PATCH(request: Request, { params }: Params): Promise<Respo
     }
 
     // System category: name and color are shared, so they cannot be changed per user.
-    if (patch.name !== undefined || patch.color !== undefined) {
+    if (patch.name !== undefined || patch.color !== undefined || patch.emoji !== undefined) {
       return apiError("หมวดมาตรฐานแก้ชื่อหรือสีไม่ได้ แต่ปรับคำค้น ซ่อน และเรียงลำดับได้นะ", 400);
     }
     const override: Record<string, unknown> = { user_id: auth.userId, category_id: id };

@@ -64,6 +64,7 @@ export const FEATURE_GROUPS: FeatureGroup[] = [
     title: "หมวดและงบ",
     rows: [
       { label: "ตั้งหมวดและงบ", cells: [true, true, true] },
+      { label: "สร้างหมวดของตัวเอง + เลือกอีโมจิ", cells: [false, true, true] },
       { label: "บอทจำร้านค้า → หมวด", cells: [false, true, true] },
     ],
   },

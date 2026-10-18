@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Route } from "@playwright/test";
 import {
   expectNoHorizontalScroll,
   expectNoSeriousA11yViolations,
@@ -106,6 +106,127 @@ test.describe("analytics page (360px)", () => {
     await page.goto("/analytics");
     await expect(page.getByRole("region", { name: "กราฟรายรับรายจ่าย" })).toBeVisible();
     await expectNoSeriousA11yViolations(page);
+  });
+});
+
+const OWN_CATEGORIES = {
+  items: [
+    ...CATEGORIES.items,
+    {
+      id: "m1",
+      type: "expense",
+      name: "ค่าอาหารแมว",
+      own: true,
+      keywords: ["ทราย"],
+      color: "#7C3AED",
+      emoji: "🐱",
+      isHidden: false,
+      sortOrder: 5,
+      isFallback: false,
+    },
+  ],
+};
+
+test.describe("custom categories (360px)", () => {
+  const BASE = { "GET /api/budgets": BUDGETS, "GET /api/categories": OWN_CATEGORIES };
+
+  test("a category's emoji is shown in front of its name", async ({ page }) => {
+    await mockApi(page, { ...BASE, "GET /api/me": ME_PLUS });
+    await page.goto("/budgets");
+    const row = page.getByRole("listitem").filter({ hasText: "ค่าอาหารแมว" });
+    await expect(row).toContainText("🐱");
+    await expectNoHorizontalScroll(page);
+  });
+
+  test("Free: adding shows the Professional lock and sends nothing", async ({ page }) => {
+    const { seen } = await mockApi(page, { ...BASE, "GET /api/me": ME_FREE });
+    await page.goto("/budgets");
+    await page.getByRole("button", { name: /เพิ่มหมวด/ }).click();
+
+    const dialog = page.getByRole("dialog", { name: "หมวดของตัวเอง" });
+    await expect(dialog.getByText("สร้างหมวดของตัวเองสำหรับแผน Professional")).toBeVisible();
+    await expect(dialog.getByRole("link", { name: "ดูแผน Professional" })).toHaveAttribute(
+      "href",
+      "/upgrade",
+    );
+    await expect(page.getByLabel("ชื่อหมวด")).toHaveCount(0);
+    expect(seen.some((s) => s.startsWith("POST"))).toBe(false);
+  });
+
+  test("Free: an own category can be deleted but not edited", async ({ page }) => {
+    await mockApi(page, { ...BASE, "GET /api/me": ME_FREE });
+    await page.goto("/budgets");
+    await page.getByRole("button", { name: "แก้ไข ค่าอาหารแมว" }).click();
+
+    const dialog = page.getByRole("dialog", { name: "แก้ไขหมวด" });
+    await expect(dialog.getByLabel("ชื่อหมวด")).toBeDisabled();
+    await expect(dialog.getByText("แก้หมวดของตัวเองได้ในแผน Professional ขึ้นไป")).toBeVisible();
+    await expect(dialog.getByRole("button", { name: "บันทึก" })).toHaveCount(0);
+    await expect(dialog.getByRole("button", { name: "ลบหมวดนี้" })).toBeVisible();
+    await expect(dialog.getByRole("radiogroup", { name: "เลือกอีโมจิ" })).toHaveCount(0);
+  });
+
+  test("Professional: pick an emoji from the grid and it is sent with the new category", async ({
+    page,
+  }) => {
+    const bodies: unknown[] = [];
+    await mockApi(page, {
+      ...BASE,
+      "GET /api/me": ME_PLUS,
+      "POST /api/categories": (route: Route) => {
+        bodies.push(route.request().postDataJSON());
+        return { id: "new" };
+      },
+    });
+    await page.goto("/budgets");
+    await page.getByRole("button", { name: /เพิ่มหมวด/ }).click();
+
+    const dialog = page.getByRole("dialog", { name: /เพิ่มหมวด/ });
+    await dialog.getByLabel("ชื่อหมวด").fill("เติมเกม");
+    await dialog.getByRole("radio", { name: "อีโมจิ 🎮" }).click();
+    await expect(dialog.getByRole("radio", { name: "อีโมจิ 🎮" })).toBeChecked();
+    await expectNoSeriousA11yViolations(page);
+    await dialog.getByRole("button", { name: "เพิ่มหมวด" }).click();
+
+    await expect.poll(() => bodies.length).toBe(1);
+    expect(bodies[0]).toMatchObject({ type: "expense", name: "เติมเกม", emoji: "🎮" });
+  });
+
+  test("Professional: typing something that is not one emoji is refused before sending", async ({
+    page,
+  }) => {
+    const { seen } = await mockApi(page, { ...BASE, "GET /api/me": ME_PLUS });
+    await page.goto("/budgets");
+    await page.getByRole("button", { name: /เพิ่มหมวด/ }).click();
+
+    const dialog = page.getByRole("dialog", { name: /เพิ่มหมวด/ });
+    await dialog.getByLabel("ชื่อหมวด").fill("ทดสอบ");
+    await dialog.getByLabel("อีโมจิ (พิมพ์เอง)").fill("ab");
+    await expect(dialog.getByText("ใส่ได้เป็นอีโมจิตัวเดียวเท่านั้นนะ").first()).toBeVisible();
+    await dialog.getByRole("button", { name: "เพิ่มหมวด" }).click();
+    await expect(dialog.getByRole("alert")).toContainText("อีโมจิตัวเดียว");
+    expect(seen.some((s) => s.startsWith("POST"))).toBe(false);
+  });
+
+  test("Professional: clearing the emoji sends an empty one", async ({ page }) => {
+    const bodies: unknown[] = [];
+    await mockApi(page, {
+      ...BASE,
+      "GET /api/me": ME_PLUS,
+      "PATCH /api/categories/m1": (route: Route) => {
+        bodies.push(route.request().postDataJSON());
+        return { ok: true };
+      },
+    });
+    await page.goto("/budgets");
+    await page.getByRole("button", { name: "แก้ไข ค่าอาหารแมว" }).click();
+    const dialog = page.getByRole("dialog", { name: "แก้ไขหมวด" });
+    await expect(dialog.getByRole("radio", { name: "อีโมจิ 🐱" })).toBeChecked();
+    await dialog.getByRole("button", { name: "ล้าง" }).click();
+    await dialog.getByRole("button", { name: "บันทึก" }).click();
+
+    await expect.poll(() => bodies.length).toBe(1);
+    expect(bodies[0]).toMatchObject({ emoji: "" });
   });
 });
 

@@ -216,8 +216,8 @@ pnpm richmenu --replace   # สร้างเมนู อัปโหลดภ
 | GET | `/api/export/download?t=` | ไฟล์ส่งออก (ยืนยันด้วย token ในลิงก์) |
 | GET | `/api/cron/recurring` · `/api/cron/reminders` | cron (ต้องมี `Authorization: Bearer <CRON_SECRET>`) |
 | GET/PATCH | `/api/settings` | รูปแบบการ์ด, รอบงบ |
-| GET/POST | `/api/categories` | หมวดที่ใช้ได้ (`?all=1` รวมที่ซ่อน) / เพิ่มหมวดของตัวเอง |
-| PATCH/DELETE | `/api/categories/:id` | แก้/ซ่อน/ลบ (หมวดมาตรฐานแก้ได้เฉพาะคำค้น/ซ่อน/ลำดับ) |
+| GET/POST | `/api/categories` | หมวดที่ใช้ได้ (`?all=1` รวมที่ซ่อน, มี `emoji` ของหมวดตัวเอง) / เพิ่มหมวดของตัวเอง พร้อม `emoji` ได้ 1 ตัว (Professional ขึ้นไป สูงสุด 50 หมวด) |
+| PATCH/DELETE | `/api/categories/:id` | แก้/ซ่อน/ลบ (หมวดมาตรฐานแก้ได้เฉพาะคำค้น/ซ่อน/ลำดับ; หมวดตัวเอง แก้ชื่อ/คำค้น/สี/อีโมจิ = Professional ขึ้นไป ส่วนซ่อน เรียง และลบ ทุกแผน) |
 | POST | `/api/categories/reorder` | เรียงลำดับหมวด |
 | GET/PUT | `/api/budgets` | โหมดงบ (รวม/แยกหมวด), งบ และยอดใช้ในรอบนี้ |
 | GET | `/api/analytics?view=month\|week\|day&scope=cycle\|all` | ข้อมูลกราฟแท่งและโดนัท |

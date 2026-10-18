@@ -2,6 +2,8 @@ import { z } from "zod";
 import { apiError, guard, json } from "@/lib/api";
 import { requireUser } from "@/lib/auth/require-user";
 import { loadCategories } from "@/lib/repo";
+import { MAX_CUSTOM_CATEGORIES, parseEmoji, emojiOf } from "@/lib/category-emoji";
+import { requireFeature } from "@/lib/plan-server";
 import { LIMITS, limitOr429 } from "@/lib/rate-limit";
 import { getAdminClient } from "@/lib/supabase/admin";
 
@@ -32,6 +34,7 @@ export async function GET(request: Request): Promise<Response> {
         own: c.user_id !== null,
         keywords: c.keywords,
         color: c.color,
+        emoji: emojiOf(c.icon),
         isHidden: c.is_hidden,
         sortOrder: c.sort_order,
         isFallback: c.name === FALLBACK_NAME,
@@ -48,13 +51,18 @@ const createSchema = z.object({
     .string()
     .regex(/^#[0-9A-Fa-f]{6}$/)
     .default(DEFAULT_COLOR),
+  /** One emoji shown in front of the name; empty or missing means none. */
+  emoji: z.string().max(16).nullable().optional(),
 });
 
-/** POST /api/categories — add a custom category. */
+/** POST /api/categories — add a custom category (Professional and above). */
 export async function POST(request: Request): Promise<Response> {
   return guard(async () => {
     const auth = await requireUser(request);
     if (auth instanceof Response) return auth;
+
+    const locked = await requireFeature(getAdminClient(), auth.userId, "customCategory");
+    if (locked) return locked;
 
     const limited = await limitOr429(getAdminClient(), "write", auth.userId, LIMITS.write);
     if (limited) return limited;
@@ -62,9 +70,14 @@ export async function POST(request: Request): Promise<Response> {
     const parsed = createSchema.safeParse(await request.json().catch(() => null));
     if (!parsed.success) return apiError("กรอกชื่อหมวดให้ถูกต้องนะ (ไม่เกิน 30 ตัวอักษร)", 400);
     const body = parsed.data;
+    const emoji = parseEmoji(body.emoji);
+    if (!emoji.ok) return apiError("เลือกอีโมจิได้ตัวเดียวเท่านั้นนะ", 400);
 
     const db = getAdminClient();
     const existing = await loadCategories(db, auth.userId);
+    if (existing.filter((c) => c.user_id === auth.userId).length >= MAX_CUSTOM_CATEGORIES) {
+      return apiError(`สร้างหมวดของตัวเองได้ไม่เกิน ${MAX_CUSTOM_CATEGORIES} หมวด`, 400);
+    }
     const sameType = existing.filter((c) => c.type === body.type);
     if (sameType.some((c) => c.name === body.name)) return apiError("มีหมวดชื่อนี้อยู่แล้ว", 409);
     // Place it just before the fallback "อื่นๆ", which stays last.
@@ -77,7 +90,7 @@ export async function POST(request: Request): Promise<Response> {
         user_id: auth.userId,
         type: body.type,
         name: body.name,
-        icon: "tag",
+        icon: emoji.emoji ?? "tag",
         color: body.color,
         keywords: body.keywords,
         sort_order: order,

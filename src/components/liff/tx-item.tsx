@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import type { TxDto } from "@/lib/dto";
 import { formatBaht } from "@/lib/money";
 import { formatThaiDate } from "@/lib/thai-date";
+import { categoryLabel } from "@/lib/category-emoji";
 import { cn } from "@/lib/utils";
 
 export function TxItem({
@@ -23,7 +24,8 @@ export function TxItem({
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-semibold">{tx.title}</p>
         <p className="truncate text-xs text-muted">
-          {tx.categoryName ?? "ไม่ระบุหมวด"} · {formatThaiDate(new Date(tx.occurredAt))}
+          {tx.categoryName ? categoryLabel(tx.categoryName, tx.categoryIcon) : "ไม่ระบุหมวด"} ·{" "}
+          {formatThaiDate(new Date(tx.occurredAt))}
         </p>
         {tx.tags && tx.tags.length > 0 ? (
           <p className="truncate text-xs font-medium text-primary">

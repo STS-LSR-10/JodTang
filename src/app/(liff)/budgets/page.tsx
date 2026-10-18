@@ -1,11 +1,13 @@
 "use client";
 
-import { ArrowDown, ArrowUp, Eye, EyeOff, Pencil, Plus } from "lucide-react";
+import { ArrowDown, ArrowUp, Eye, EyeOff, Lock, Pencil, Plus } from "lucide-react";
+import Link from "next/link";
 import { useMemo, useState, type FormEvent } from "react";
 import { ProgressBar } from "@/components/liff/progress-bar";
 import { Sheet } from "@/components/liff/sheet";
 import { EmptyState, ErrorState, LoadingBlock, PageHeader } from "@/components/liff/states";
 import { useApi, useLiff } from "@/components/liff/liff-provider";
+import { EMOJI_CHOICES, isSingleEmoji } from "@/lib/category-emoji";
 import { normalizeThaiDigits } from "@/lib/parse/thai-number";
 import { formatBaht } from "@/lib/money";
 import { cn } from "@/lib/utils";
@@ -19,6 +21,8 @@ interface CategoryItem {
   own: boolean;
   keywords: string[];
   color: string | null;
+  /** One emoji shown in front of the name (custom categories only). */
+  emoji: string | null;
   isHidden: boolean;
   sortOrder: number;
   isFallback: boolean;
@@ -73,6 +77,9 @@ export default function BudgetsPage() {
   const [kind, setKind] = useState<Kind>("expense");
   const cats = useApi<{ items: CategoryItem[] }>("/api/categories?all=1");
   const budgets = useApi<BudgetsResponse>("/api/budgets");
+  const me = useApi<{ features: Record<string, boolean> }>("/api/me");
+  // Professional and above create and edit their own categories; the server checks it too.
+  const locked = !me.loading && me.data !== null && me.data?.features.customCategory !== true;
   const [notice, setNotice] = useState<string | null>(null);
   const [editing, setEditing] = useState<CategoryItem | null>(null);
   const [adding, setAdding] = useState(false);
@@ -137,7 +144,12 @@ export default function BudgetsPage() {
             onClick={() => setAdding(true)}
             className="flex h-11 items-center gap-1 rounded-2xl bg-primary px-4 text-sm font-semibold text-surface"
           >
-            <Plus className="h-4 w-4" aria-hidden /> เพิ่มหมวด
+            {locked ? (
+              <Lock className="h-4 w-4" aria-hidden />
+            ) : (
+              <Plus className="h-4 w-4" aria-hidden />
+            )}{" "}
+            เพิ่มหมวด
           </button>
         }
       />
@@ -210,6 +222,11 @@ export default function BudgetsPage() {
                         />
                         <div className="min-w-0 flex-1">
                           <p className="truncate text-sm font-semibold">
+                            {c.emoji ? (
+                              <span aria-hidden className="mr-1">
+                                {c.emoji}
+                              </span>
+                            ) : null}
                             {c.name}
                             {c.own ? (
                               <span className="ml-2 rounded-full bg-primary-soft px-2 py-0.5 text-[10px] font-semibold text-primary">
@@ -285,6 +302,7 @@ export default function BudgetsPage() {
       {editing ? (
         <EditSheet
           category={editing}
+          locked={locked}
           onClose={() => setEditing(null)}
           onSaved={(msg) => {
             setEditing(null);
@@ -293,7 +311,8 @@ export default function BudgetsPage() {
           }}
         />
       ) : null}
-      {adding ? (
+      {adding && locked ? <CustomCategoryLockedSheet onClose={() => setAdding(false)} /> : null}
+      {adding && !locked ? (
         <AddSheet
           kind={kind}
           onClose={() => setAdding(false)}
@@ -305,6 +324,76 @@ export default function BudgetsPage() {
         />
       ) : null}
     </main>
+  );
+}
+
+/** What Free sees instead of the add form: the feature is Professional and above. */
+function CustomCategoryLockedSheet({ onClose }: { onClose: () => void }) {
+  return (
+    <Sheet title="หมวดของตัวเอง" onClose={onClose}>
+      <div className="space-y-3 text-center">
+        <p className="text-base font-semibold">สร้างหมวดของตัวเองสำหรับแผน Professional</p>
+        <p className="text-sm text-muted">
+          เพิ่มหมวดเฉพาะตัว เช่น “ค่าอาหารแมว” พร้อมเลือกอีโมจิ ลองใช้ฟรี 7 วันได้ที่หน้าอัปเกรด
+          ตอนนี้ใช้หมวดมาตรฐานและปรับคำค้นได้ตามเดิม
+        </p>
+        <Link
+          href="/upgrade"
+          className="inline-flex h-11 items-center justify-center rounded-2xl bg-primary px-5 text-sm font-semibold text-surface"
+        >
+          ดูแผน Professional
+        </Link>
+      </div>
+    </Sheet>
+  );
+}
+
+/** Pick one emoji from the grid, or type your own; empty means none. */
+function EmojiPicker({ value, onChange }: { value: string; onChange: (e: string) => void }) {
+  const valid = value === "" || isSingleEmoji(value);
+  return (
+    <div className="space-y-2">
+      <p className="text-sm font-semibold">อีโมจิ (ไม่บังคับ)</p>
+      <div className="grid grid-cols-8 gap-1" role="radiogroup" aria-label="เลือกอีโมจิ">
+        {EMOJI_CHOICES.map((e) => (
+          <button
+            key={e}
+            type="button"
+            role="radio"
+            aria-checked={value === e}
+            aria-label={`อีโมจิ ${e}`}
+            onClick={() => onChange(value === e ? "" : e)}
+            className={cn(
+              "flex h-10 items-center justify-center rounded-xl border text-xl",
+              value === e ? "border-primary bg-primary-soft" : "border-transparent",
+            )}
+          >
+            <span aria-hidden>{e}</span>
+          </button>
+        ))}
+      </div>
+      <div className="flex items-center gap-2">
+        <input
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          maxLength={16}
+          placeholder="หรือพิมพ์อีโมจิเอง"
+          aria-label="อีโมจิ (พิมพ์เอง)"
+          aria-invalid={!valid}
+          className="h-11 w-full rounded-2xl border border-border bg-background px-4 outline-none focus:border-primary"
+        />
+        {value ? (
+          <button
+            type="button"
+            onClick={() => onChange("")}
+            className="h-11 shrink-0 rounded-2xl border border-border px-3 text-sm text-muted"
+          >
+            ล้าง
+          </button>
+        ) : null}
+      </div>
+      {!valid ? <p className="text-xs text-expense">ใส่ได้เป็นอีโมจิตัวเดียวเท่านั้นนะ</p> : null}
+    </div>
   );
 }
 
@@ -515,12 +604,15 @@ function AddSheet({
   const [name, setName] = useState("");
   const [keywords, setKeywords] = useState("");
   const [color, setColor] = useState(SWATCHES[0] ?? "#0F766E");
+  const [emoji, setEmoji] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function submit(e: FormEvent) {
     e.preventDefault();
     if (!name.trim()) return setError("ใส่ชื่อหมวดด้วยนะ");
+    if (emoji !== "" && !isSingleEmoji(emoji))
+      return setError("ใส่ได้เป็นอีโมจิตัวเดียวเท่านั้นนะ");
     setSaving(true);
     setError(null);
     try {
@@ -531,6 +623,7 @@ function AddSheet({
           name: name.trim(),
           keywords: keywordsFromText(keywords),
           color,
+          emoji: emoji || null,
         }),
       });
       onSaved();
@@ -559,6 +652,7 @@ function AddSheet({
           rows={3}
           className="w-full rounded-2xl border border-border bg-background p-4 outline-none focus:border-primary"
         />
+        <EmojiPicker value={emoji} onChange={setEmoji} />
         <ColorPicker value={color} onChange={setColor} />
         {error ? (
           <p role="alert" className="text-sm text-expense">
@@ -579,10 +673,13 @@ function AddSheet({
 
 function EditSheet({
   category,
+  locked,
   onClose,
   onSaved,
 }: {
   category: CategoryItem;
+  /** Free cannot change what an own category is; it can still be deleted. */
+  locked: boolean;
   onClose: () => void;
   onSaved: (message: string) => void;
 }) {
@@ -590,12 +687,17 @@ function EditSheet({
   const [name, setName] = useState(category.name);
   const [keywords, setKeywords] = useState(category.keywords.join(", "));
   const [color, setColor] = useState(category.color ?? SWATCHES[0] ?? "#0F766E");
+  const [emoji, setEmoji] = useState(category.emoji ?? "");
   const [busy, setBusy] = useState(false);
+  const frozen = category.own && locked;
   const [error, setError] = useState<string | null>(null);
 
   async function save(e: FormEvent) {
     e.preventDefault();
     if (category.own && !name.trim()) return setError("ใส่ชื่อหมวดด้วยนะ");
+    if (category.own && emoji !== "" && !isSingleEmoji(emoji)) {
+      return setError("ใส่ได้เป็นอีโมจิตัวเดียวเท่านั้นนะ");
+    }
     setBusy(true);
     setError(null);
     try {
@@ -603,6 +705,7 @@ function EditSheet({
       if (category.own) {
         body.name = name.trim();
         body.color = color;
+        if (emoji !== (category.emoji ?? "")) body.emoji = emoji;
       }
       await api(`/api/categories/${category.id}`, { method: "PATCH", body: JSON.stringify(body) });
       onSaved("บันทึกแล้ว");
@@ -632,11 +735,20 @@ function EditSheet({
         <input
           value={name}
           onChange={(e) => setName(e.target.value)}
-          disabled={!category.own}
+          disabled={!category.own || frozen}
           maxLength={30}
           aria-label="ชื่อหมวด"
-          className={cn(fieldClass, !category.own && "opacity-60")}
+          className={cn(fieldClass, (!category.own || frozen) && "opacity-60")}
         />
+        {frozen ? (
+          <p className="text-xs text-muted">
+            แก้หมวดของตัวเองได้ในแผน Professional ขึ้นไป{" "}
+            <Link href="/upgrade" className="font-semibold text-primary underline">
+              ดูแผน
+            </Link>{" "}
+            (ลบหมวดนี้ได้ตามปกติ)
+          </p>
+        ) : null}
         {!category.own ? (
           <p className="text-xs text-muted">หมวดมาตรฐานแก้ชื่อไม่ได้ แต่ปรับคำค้นได้นะ</p>
         ) : null}
@@ -646,21 +758,25 @@ function EditSheet({
           placeholder="คำค้น คั่นด้วยคอมมา"
           aria-label="คำค้น"
           rows={3}
-          className="w-full rounded-2xl border border-border bg-background p-4 outline-none focus:border-primary"
+          disabled={frozen}
+          className="w-full rounded-2xl border border-border bg-background p-4 outline-none focus:border-primary disabled:opacity-60"
         />
-        {category.own ? <ColorPicker value={color} onChange={setColor} /> : null}
+        {category.own && !frozen ? <EmojiPicker value={emoji} onChange={setEmoji} /> : null}
+        {category.own && !frozen ? <ColorPicker value={color} onChange={setColor} /> : null}
         {error ? (
           <p role="alert" className="text-sm text-expense">
             {error}
           </p>
         ) : null}
-        <button
-          type="submit"
-          disabled={busy}
-          className="h-12 w-full rounded-2xl bg-primary text-base font-semibold text-surface disabled:opacity-60"
-        >
-          บันทึก
-        </button>
+        {frozen ? null : (
+          <button
+            type="submit"
+            disabled={busy}
+            className="h-12 w-full rounded-2xl bg-primary text-base font-semibold text-surface disabled:opacity-60"
+          >
+            บันทึก
+          </button>
+        )}
         {category.own ? (
           <button
             type="button"

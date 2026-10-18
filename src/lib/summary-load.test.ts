@@ -84,15 +84,15 @@ describe("loadCategorySpend", () => {
   it("returns every category with its exact satang, biggest first", async () => {
     const rpc = vi.fn(async () => ({
       data: [
-        { name: "เดินทาง", total: "120.50" },
-        { name: "อาหาร", total: "300.00" },
+        { name: "เดินทาง", total: "120.50", icon: "bus" },
+        { name: "ค่าอาหารแมว", total: "300.00", icon: "🐱" },
       ],
       error: null,
     }));
     const out = await loadCategorySpend({ rpc } as unknown as SupabaseClient, "u1", range);
     expect(out).toEqual([
-      { name: "อาหาร", amountSatang: 30_000 },
-      { name: "เดินทาง", amountSatang: 12_050 },
+      { name: "ค่าอาหารแมว", amountSatang: 30_000, icon: "🐱" },
+      { name: "เดินทาง", amountSatang: 12_050, icon: "bus" },
     ]);
     expect(rpc).toHaveBeenCalledWith("spend_by_category", {
       p_user: "u1",

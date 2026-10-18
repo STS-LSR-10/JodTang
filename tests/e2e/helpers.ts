@@ -106,6 +106,7 @@ export const ME_FREE = {
     dashboard: false,
     forecast: false,
     insight: false,
+    customCategory: false,
   },
   slips: { used: 0, limit: 0, remaining: 0 },
   points: 7,

@@ -421,3 +421,41 @@ describe("search result card", () => {
     expect(json).toContain("และอีก 4 รายการ");
   });
 });
+
+describe("emoji in front of a category's name", () => {
+  type Btn = { action: { label: string; fillInText?: string; data?: string } };
+  const labels = (m: Record<string, unknown>) =>
+    (m.quickReply as { items: Btn[] }).items.map((i) => i.action);
+
+  it("the category buttons of จดตังค์ show it, but the text put in the box is the plain name", () => {
+    const m = buildCategoryKeyboardList("expense", [
+      { name: "ค่าอาหารแมว", icon: "🐱", type: "expense", sort_order: 1, is_hidden: false },
+      { name: "อาหาร", icon: "utensils", type: "expense", sort_order: 2, is_hidden: false },
+    ]);
+    expect(labels(m).map((a) => a.label)).toEqual(["🐱 ค่าอาหารแมว", "อาหาร"]);
+    expect(labels(m).map((a) => a.fillInText)).toEqual(["ค่าอาหารแมว ", "อาหาร "]);
+  });
+
+  it("a long name with an emoji still fits the 20-character label", () => {
+    const m = buildCategoryKeyboardList("expense", [
+      { name: "ก".repeat(30), icon: "🐱", type: "expense", sort_order: 1, is_hidden: false },
+    ]);
+    expect(labels(m)[0]!.label).toHaveLength(20);
+  });
+
+  it("the category list of a checked slip shows it", () => {
+    const m = buildCategoryChooser("t1", [
+      { id: "c1", name: "ค่าอาหารแมว", icon: "🐱" },
+      { id: "c2", name: "อาหาร", icon: "utensils" },
+    ]);
+    expect(labels(m).map((a) => a.label)).toEqual(["🐱 ค่าอาหารแมว", "อาหาร"]);
+    expect(labels(m)[0]!.data).toBe("a=sk&id=t1&c=c1");
+  });
+
+  it("the entry-saved card carries the label it is given", () => {
+    const json = JSON.stringify(
+      buildConfirmMessage({ ...base, style: "full", categoryName: "🐱 ค่าอาหารแมว" }),
+    );
+    expect(json).toContain("🐱 ค่าอาหารแมว");
+  });
+});

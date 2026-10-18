@@ -125,6 +125,18 @@ test.describe("transactions page (360px)", () => {
     await expect(page.getByRole("status", { name: "ยอดรวมของผลค้นหา" })).toHaveCount(0);
   });
 
+  test("a category's emoji is shown in front of its name in the list", async ({ page }) => {
+    await mockApi(page, {
+      "GET /api/transactions": {
+        items: [TX({ title: "ทรายแมว", categoryName: "ค่าอาหารแมว", categoryIcon: "🐱" })],
+        hasMore: false,
+      },
+      "GET /api/me": ME_FREE,
+    });
+    await page.goto("/transactions");
+    await expect(page.getByText("🐱 ค่าอาหารแมว")).toBeVisible();
+  });
+
   test("empty state", async ({ page }) => {
     await mockApi(page, {
       "GET /api/transactions": { items: [], hasMore: false },

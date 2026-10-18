@@ -4,6 +4,8 @@ export interface CategorySlice {
   amountSatang: number;
   /** Whole percent; the slices of one list add up to exactly 100. */
   percent: number;
+  /** `categories.icon` of the category (an emoji is shown in front of the name). */
+  icon?: string | null;
   /** True for the "อื่นๆ (n หมวด)" line that gathers the smallest categories. */
   other?: boolean;
 }
@@ -36,7 +38,7 @@ export function wholePercents(amounts: number[]): number[] {
  * are dropped.
  */
 export function buildCategorySlices(
-  rows: { name: string; amountSatang: number }[],
+  rows: { name: string; amountSatang: number; icon?: string | null }[],
   max = MAX_SLICES,
 ): CategorySlice[] {
   const sorted = rows
@@ -44,7 +46,9 @@ export function buildCategorySlices(
     .sort((a, b) => b.amountSatang - a.amountSatang);
   const head = sorted.slice(0, max);
   const rest = sorted.slice(max);
-  const entries: { name: string; amountSatang: number; other?: boolean }[] = [...head];
+  const entries: { name: string; amountSatang: number; icon?: string | null; other?: boolean }[] = [
+    ...head,
+  ];
   if (rest.length > 0) {
     entries.push({
       name: `อื่นๆ (${rest.length} หมวด)`,

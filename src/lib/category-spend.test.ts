@@ -51,6 +51,18 @@ describe("buildCategorySlices", () => {
     expect(out.some((s) => s.other)).toBe(false);
   });
 
+  it("keeps each category's icon, and the 'other' line has none", () => {
+    const rows = Array.from({ length: 10 }, (_, i) => ({
+      name: `หมวด${i}`,
+      amountSatang: (100 - i) * 100,
+      icon: i === 0 ? "🐱" : null,
+    }));
+    const out = buildCategorySlices(rows);
+    expect(out[0]?.icon).toBe("🐱");
+    expect(out.at(-1)?.other).toBe(true);
+    expect(out.at(-1)?.icon).toBeUndefined();
+  });
+
   it("nothing spent gives no slices", () => {
     expect(buildCategorySlices([])).toEqual([]);
     expect(buildCategorySlices([row("ก", 0)])).toEqual([]);

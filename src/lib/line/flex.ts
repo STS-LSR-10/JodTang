@@ -1,3 +1,4 @@
+import { categoryLabel } from "@/lib/category-emoji";
 import { formatBaht } from "@/lib/money";
 import { bangkokParts, formatThaiDate } from "@/lib/thai-date";
 import type { ConfirmStyle, LineMessage, TxType } from "@/lib/types";
@@ -506,6 +507,8 @@ export function buildComposeCard(): LineMessage {
 
 export interface ComposeCategory {
   name: string;
+  /** `categories.icon`: an emoji is shown in front of the name on the button. */
+  icon?: string | null;
   type: TxType;
   sort_order: number;
   is_hidden: boolean;
@@ -542,7 +545,7 @@ export function buildCategoryKeyboardList(
         type: "action",
         action: {
           type: "postback",
-          label: c.name.slice(0, MAX_COMPOSE_LABEL),
+          label: categoryLabel(c.name, c.icon).slice(0, MAX_COMPOSE_LABEL),
           data: "a=cc",
           inputOption: "openKeyboard",
           fillInText: `${c.name} `,

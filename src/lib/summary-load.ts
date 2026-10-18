@@ -47,6 +47,7 @@ export async function loadSummaryTransactions(
 
 interface CategorySpendRow {
   name: string;
+  icon?: string | null;
   total: number | string;
 }
 
@@ -95,7 +96,7 @@ export async function loadCategorySpend(
   db: SupabaseClient,
   userId: string,
   range: DateRange,
-): Promise<{ name: string; amountSatang: number }[]> {
+): Promise<{ name: string; amountSatang: number; icon: string | null }[]> {
   const { data, error } = await db.rpc("spend_by_category", {
     p_user: userId,
     p_from: range.from.toISOString(),
@@ -104,7 +105,7 @@ export async function loadCategorySpend(
   });
   if (error) throw new Error(`load category spend: ${error.message}`);
   return ((data ?? []) as CategorySpendRow[])
-    .map((r) => ({ name: r.name, amountSatang: toSatang(r.total) }))
+    .map((r) => ({ name: r.name, amountSatang: toSatang(r.total), icon: r.icon ?? null }))
     .sort((a, b) => b.amountSatang - a.amountSatang);
 }
 

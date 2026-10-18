@@ -194,3 +194,34 @@ describe("buildYearCard", () => {
     expect(card({ changePercent: 0 })).toContain("รายจ่ายเท่ากับปีก่อน");
   });
 });
+
+describe("emoji in the recent and category cards", () => {
+  it("the recent card shows the emoji of an entry's category", () => {
+    const json = JSON.stringify(
+      buildRecentCard({
+        items: [{ ...item("ทรายแมว", 15_000), categoryName: "ค่าอาหารแมว", categoryIcon: "🐱" }],
+      }),
+    );
+    expect(json).toContain("🐱 ค่าอาหารแมว · 10 ต.ค. 2569");
+  });
+
+  it("an icon name is not shown as text", () => {
+    const json = JSON.stringify(
+      buildRecentCard({ items: [{ ...item("กาแฟ", 4500), categoryIcon: "utensils" }] }),
+    );
+    expect(json).not.toContain("utensils");
+    expect(json).toContain("อาหาร · 10 ต.ค. 2569");
+  });
+
+  it("the spend-by-category card shows the emoji of a category", () => {
+    const slices = buildCategorySlices([
+      { name: "ค่าอาหารแมว", amountSatang: 30_000, icon: "🐱" },
+      { name: "อาหาร", amountSatang: 10_000, icon: "utensils" },
+    ]);
+    const json = JSON.stringify(
+      buildCategorySpendCard({ subtitle: "x", slices, totalSatang: 40_000 }),
+    );
+    expect(json).toContain("🐱 ค่าอาหารแมว");
+    expect(json).not.toContain("utensils");
+  });
+});

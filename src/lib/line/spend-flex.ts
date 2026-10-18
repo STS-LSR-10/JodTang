@@ -1,3 +1,4 @@
+import { categoryLabel } from "@/lib/category-emoji";
 import type { CategorySlice } from "@/lib/category-spend";
 import { type ChangeKind, type CompareRow } from "@/lib/period-compare";
 import type { TxDto } from "@/lib/dto";
@@ -53,7 +54,14 @@ export function buildCategorySpendCard(input: {
           type: "box",
           layout: "horizontal",
           contents: [
-            { type: "text", text: s.name, size: "sm", color: COLOR.text, flex: 4, wrap: true },
+            {
+              type: "text",
+              text: categoryLabel(s.name, s.icon),
+              size: "sm",
+              color: COLOR.text,
+              flex: 4,
+              wrap: true,
+            },
             {
               type: "text",
               text: `฿${formatBaht(s.amountSatang)} · ${s.percent}%`,
@@ -145,7 +153,7 @@ export function buildRecentCard(input: { items: TxDto[]; moreUrl?: string }): Li
             { type: "text", text: tx.title, size: "sm", color: COLOR.text, wrap: true },
             {
               type: "text",
-              text: `${tx.categoryName ?? "ไม่ระบุหมวด"} · ${formatThaiDate(new Date(tx.occurredAt), true)}`,
+              text: `${tx.categoryName ? categoryLabel(tx.categoryName, tx.categoryIcon) : "ไม่ระบุหมวด"} · ${formatThaiDate(new Date(tx.occurredAt), true)}`,
               size: "xxs",
               color: COLOR.muted,
               wrap: true,
