@@ -42,6 +42,31 @@ test.describe("transactions page (360px)", () => {
     await expectNoHorizontalScroll(page);
   });
 
+  test("a foreign-currency entry shows the original amount and the rate under the title", async ({
+    page,
+  }) => {
+    await mockApi(page, {
+      "GET /api/transactions": {
+        items: [
+          TX({
+            title: "ราเมน",
+            amountSatang: 35_025,
+            origCurrency: "JPY",
+            origAmountMinor: 150_000,
+            fxRate: 0.2335,
+          }),
+        ],
+        hasMore: false,
+      },
+      "GET /api/me": ME_FREE,
+    });
+    await page.goto("/transactions");
+
+    await expect(page.getByText("1,500 JPY @ 0.2335")).toBeVisible();
+    await expect(page.getByText("-฿350.25")).toBeVisible();
+    await expectNoHorizontalScroll(page);
+  });
+
   test("the type filter re-queries the server", async ({ page }) => {
     const { seen } = await mockApi(page, { "GET /api/transactions": LIST, "GET /api/me": ME_FREE });
     await page.goto("/transactions");

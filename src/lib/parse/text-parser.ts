@@ -1,4 +1,5 @@
 import type { TxType } from "@/lib/types";
+import { extractForeign, type ForeignAmount } from "./currency";
 import { extractDate } from "./date-parser";
 import { normalizeThaiDigits, parseAmountToSatang } from "./thai-number";
 
@@ -13,6 +14,13 @@ export interface ParsedEntry {
   tags: string[];
   /** The word after "@" ("@บัตร"), already removed from the title; resolved to a wallet later. */
   walletHint: string | null;
+  /**
+   * Set only when parsing with `currencies: true` found "1500 JPY": then `amountSatang` still holds
+   * the amount in that currency (×100) and must be converted to baht before saving.
+   */
+  foreign: ForeignAmount | null;
+  /** Filled in by the bot once `foreign` has been converted: what the rate was, and from which day. */
+  fx?: { currency: string; minor: number; rate: number; sourceDay: string; stale: boolean };
   /** True when the text named a past day (เมื่อวาน, 12/10 …); "วันนี้" or no date is false. */
   backdated: boolean;
   /** 0..1. Below CONFIRM_THRESHOLD the bot should ask before saving as confirmed. */
@@ -202,15 +210,27 @@ export function extractWalletHint(line: string): { text: string; hint: string | 
   return { text: text.replace(/\s+/g, " ").trim(), hint };
 }
 
-function parseLine(segment: string, now: Date): ParsedEntry | null {
+function parseLine(segment: string, now: Date, currencies: boolean): ParsedEntry | null {
   const normalized = normalizeThaiDigits(segment).trim();
   if (!normalized) return null;
   if (URL_RE.test(normalized)) return null;
 
   const { text: unwalleted, hint: walletHint } = extractWalletHint(normalized);
   const { text: untagged, tags } = extractTags(unwalleted);
-  const { text, date } = extractDate(untagged, now);
-  const amount = findAmount(text);
+  const dated = extractDate(untagged, now);
+  const date = dated.date;
+  // "1500 JPY": the amount of the line is in a foreign currency (only when the caller can convert it)
+  const foreignHit = currencies ? extractForeign(dated.text) : null;
+  const text = foreignHit ? foreignHit.text : dated.text;
+  const amount: AmountCandidate | null = foreignHit
+    ? {
+        index: 0,
+        length: 0,
+        sign: foreignHit.sign,
+        explicit: true,
+        satang: foreignHit.foreign.minor,
+      }
+    : findAmount(text);
   if (!amount) return null;
 
   const title = cleanTitle(
@@ -234,7 +254,7 @@ function parseLine(segment: string, now: Date): ParsedEntry | null {
     type = "expense";
     confidence = title ? 0.9 : 0.5;
   }
-  if (amount.satang >= LARGE_AMOUNT_SATANG) confidence = Math.min(confidence, 0.6);
+  if (!foreignHit && amount.satang >= LARGE_AMOUNT_SATANG) confidence = Math.min(confidence, 0.6);
 
   const defaultTitle =
     !title && confidence >= CONFIRM_THRESHOLD
@@ -249,6 +269,7 @@ function parseLine(segment: string, now: Date): ParsedEntry | null {
     title: title || defaultTitle,
     tags,
     walletHint,
+    foreign: foreignHit?.foreign ?? null,
     amountSatang: amount.satang,
     occurredAt: date ?? now,
     backdated: date !== null && date !== now,
@@ -257,12 +278,16 @@ function parseLine(segment: string, now: Date): ParsedEntry | null {
 }
 
 /** Parse a chat message into zero or more transaction entries. */
-export function parseMessage(input: string, now: Date = new Date()): ParseResult {
+export function parseMessage(
+  input: string,
+  now: Date = new Date(),
+  options: { currencies?: boolean } = {},
+): ParseResult {
   const entries: ParsedEntry[] = [];
   const unparsed: string[] = [];
   for (const segment of input.split(SPLIT_RE)) {
     if (!segment.trim()) continue;
-    const entry = parseLine(segment, now);
+    const entry = parseLine(segment, now, options.currencies === true);
     if (entry) entries.push(entry);
     else unparsed.push(segment.trim());
   }

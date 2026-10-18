@@ -70,6 +70,10 @@ export function planEdit(input: {
     const satang = toSatang(edit.amount);
     if (satang <= 0) return fail("จำนวนเงินต้องมากกว่า 0");
     patch.amount = satangToString(satang);
+    // a new baht amount no longer matches the foreign amount it was converted from
+    patch.orig_currency = null;
+    patch.orig_amount = null;
+    patch.fx_rate = null;
   }
 
   if (edit.note !== undefined) {

@@ -276,6 +276,8 @@ export async function insertTransaction(
     tags?: string[];
     /** Wallet to record in (omitted = the main wallet). */
     accountId?: string | null;
+    /** Entered in a foreign currency: the original amount (×100), its currency and the rate used. */
+    foreign?: { currency: string; minor: number; rate: number } | null;
   },
 ): Promise<TxRow> {
   const { data, error } = await db
@@ -295,6 +297,14 @@ export async function insertTransaction(
       ...(input.tags && input.tags.length > 0 ? { tags: input.tags } : {}),
       // likewise only sent when a wallet was picked (works before migration 0019)
       ...(input.accountId ? { account_id: input.accountId } : {}),
+      // likewise only for foreign-currency entries (works before migration 0023)
+      ...(input.foreign
+        ? {
+            orig_currency: input.foreign.currency,
+            orig_amount: satangToString(input.foreign.minor),
+            fx_rate: input.foreign.rate,
+          }
+        : {}),
     })
     .select(TX_COLUMNS)
     .single();

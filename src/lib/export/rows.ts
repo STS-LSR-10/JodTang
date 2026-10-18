@@ -12,6 +12,10 @@ export interface ExportRow {
   source: string;
   /** The wallet's name (the main wallet's for entries that never had one). */
   walletName?: string | null;
+  /** Foreign-currency entries: the code, the original amount (×100) and the rate used. */
+  origCurrency?: string | null;
+  origAmountMinor?: number | null;
+  fxRate?: number | null;
 }
 
 export const TYPE_LABEL: Record<TxType, string> = { expense: "รายจ่าย", income: "รายรับ" };
@@ -48,6 +52,9 @@ export const HEADERS = [
   "จำนวนเงิน (บาท)",
   "ที่มา",
   "กระเป๋า",
+  "สกุลเงินเดิม",
+  "ยอดเดิม",
+  "อัตราแลกเปลี่ยน",
 ] as const;
 
 /** One row as display strings, in HEADERS order. */
@@ -61,5 +68,8 @@ export function rowCells(row: ExportRow): string[] {
     satangToString(row.amountSatang),
     sourceLabel(row.source),
     row.walletName ?? "",
+    row.origCurrency ?? "",
+    row.origAmountMinor ? satangToString(row.origAmountMinor) : "",
+    row.fxRate ? String(row.fxRate) : "",
   ];
 }

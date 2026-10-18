@@ -30,6 +30,8 @@ export interface ConfirmCardInput {
   cycleLabel?: string;
   /** Wallet the entry went to, e.g. "💳 บัตร KTC" (shown only when there is more than one wallet). */
   walletName?: string | null;
+  /** Foreign-currency entry: "1,500 JPY @ 0.2335" (shown under the date). */
+  fxNote?: string | null;
   /** Offer the "ย้ายกระเป๋า" button (the user has two or more wallets). */
   canMoveWallet?: boolean;
   /** Public PNG of the logo for the card header (omitted when the app URL is unknown). */
@@ -99,7 +101,7 @@ export function buildConfirmMessage(input: ConfirmCardInput): LineMessage {
   if (input.style === "short") {
     return {
       type: "text",
-      text: `จดแล้ว: ${input.title} ${amountText} · ${category}${tagsText}${walletText}`,
+      text: `จดแล้ว: ${input.title} ${amountText} · ${category}${tagsText}${walletText}${input.fxNote ? ` · ${input.fxNote}` : ""}`,
       quickReply: {
         items: [
           ...moveItem,
@@ -232,6 +234,18 @@ export function buildConfirmMessage(input: ConfirmCardInput): LineMessage {
       color: COLOR.muted,
       margin: "md",
     },
+    ...(input.fxNote
+      ? [
+          {
+            type: "text",
+            text: input.fxNote,
+            size: "sm",
+            color: COLOR.muted,
+            margin: "sm",
+            wrap: true,
+          },
+        ]
+      : []),
     ...(input.walletName
       ? [{ type: "text", text: input.walletName, size: "sm", color: COLOR.muted, margin: "sm" }]
       : []),

@@ -63,6 +63,9 @@ export async function GET(request: Request): Promise<Response> {
         source: tx.source,
         // an entry with no wallet is in the main wallet
         walletName: tx.accountName ?? defaultWallet?.name ?? DEFAULT_WALLET_NAME,
+        origCurrency: tx.origCurrency,
+        origAmountMinor: tx.origAmountMinor,
+        fxRate: tx.fxRate,
       };
     });
 

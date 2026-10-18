@@ -25,6 +25,9 @@ const item = (title: string, amountSatang: number, type: "expense" | "income" = 
   note: null,
   tags: [],
   accountId: null,
+  origCurrency: null,
+  origAmountMinor: null,
+  fxRate: null,
   accountName: null,
 });
 

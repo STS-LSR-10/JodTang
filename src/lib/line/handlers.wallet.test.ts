@@ -5,6 +5,8 @@ import { handleEvent, type HandlerDeps, type LineEvent } from "./handlers";
 
 let wallets: Wallet[] = [];
 let plan = "plus";
+let fxAnswer: { rate: number; sourceDay: string; stale: boolean } | null = null;
+const fxAsked: string[] = [];
 let debtList: import("@/lib/debt").DebtDto[] = [];
 const newDebts: Record<string, unknown>[] = [];
 const payments: Record<string, unknown>[] = [];
@@ -74,6 +76,12 @@ vi.mock("@/lib/debt-repo", async () => {
     },
   };
 });
+vi.mock("@/lib/fx-repo", () => ({
+  getRate: async (_db: unknown, currency: string, day: string) => {
+    fxAsked.push(`${currency}:${day}`);
+    return fxAnswer;
+  },
+}));
 vi.mock("@/lib/transfer-repo", () => ({
   createTransfer: async (_db: unknown, _u: string, input: Record<string, unknown>) => {
     transfers.push(input);
@@ -172,6 +180,8 @@ beforeEach(() => {
   moved.length = 0;
   transfers.length = 0;
   cancelled.length = 0;
+  fxAnswer = { rate: 0.2335, sourceDay: "2026-10-16", stale: false };
+  fxAsked.length = 0;
   debtList = [];
   newDebts.length = 0;
   payments.length = 0;
@@ -562,5 +572,91 @@ describe("debts by chat (Ultimate)", () => {
     await handleEvent(postback("a=dpx&id=p1,p2"), deps);
     expect(removedPayments).toEqual(["p1", "p2"]);
     expect(sent(reply)).toContain("ยกเลิกแล้ว");
+  });
+});
+
+describe("foreign currency by chat (Ultimate)", () => {
+  beforeEach(() => {
+    plan = "ultimate";
+  });
+
+  it("converts to baht at the rate and keeps the original on the entry", async () => {
+    const { deps, reply } = setup();
+    await handleEvent(text("ราเมน 1500 JPY"), deps);
+    expect(inserted[0]).toMatchObject({
+      title: "ราเมน",
+      amountSatang: 35025,
+      foreign: { currency: "JPY", minor: 150000, rate: 0.2335 },
+    });
+    expect(sent(reply)).toContain("1,500 JPY @ 0.2335");
+  });
+
+  it("asks for the rate of the entry's own day", async () => {
+    const { deps } = setup();
+    await handleEvent(text("เมื่อวาน ราเมน 1500 JPY"), deps);
+    expect(fxAsked).toEqual(["JPY:2026-10-16"]);
+  });
+
+  it("two entries in the same currency and day ask once", async () => {
+    const { deps } = setup();
+    await handleEvent(text("ราเมน 1500 JPY, ชา 300 เยน"), deps);
+    expect(fxAsked).toEqual(["JPY:2026-10-17"]);
+    expect(inserted).toHaveLength(2);
+  });
+
+  it("goes into the chosen wallet like any entry", async () => {
+    const { deps } = setup();
+    await handleEvent(text("ราเมน 1500 JPY @ktc"), deps);
+    expect(inserted[0]).toMatchObject({ accountId: "w-ktc" });
+  });
+
+  it("says when an older rate had to be used", async () => {
+    fxAnswer = { rate: 0.23, sourceDay: "2026-10-14", stale: true };
+    const { deps, reply } = setup();
+    await handleEvent(text("ราเมน 1500 JPY"), deps);
+    expect(sent(reply)).toContain("อัตราของวันที่ 14/10");
+  });
+
+  it("no rate at all: nothing is saved", async () => {
+    fxAnswer = null;
+    const { deps, reply } = setup();
+    await handleEvent(text("ราเมน 1500 JPY"), deps);
+    expect(inserted).toHaveLength(0);
+    expect(sent(reply)).toContain("ดึงอัตราแลกเปลี่ยนไม่ได้");
+  });
+
+  it("VND and TWD are not supported and nothing is saved", async () => {
+    const { deps, reply } = setup();
+    await handleEvent(text("ข้าว 50000 VND"), deps);
+    expect(inserted).toHaveLength(0);
+    expect(fxAsked).toHaveLength(0);
+    expect(sent(reply)).toContain("ยังไม่รองรับสกุล VND");
+  });
+
+  it("an amount that rounds to nothing is refused", async () => {
+    fxAnswer = { rate: 0.00001, sourceDay: "2026-10-16", stale: false };
+    const { deps, reply } = setup();
+    await handleEvent(text("ลูกอม 1 KRW"), deps);
+    expect(inserted).toHaveLength(0);
+    expect(sent(reply)).toContain("น้อยกว่า 1 สตางค์");
+  });
+
+  it.each(["free", "plus"])(
+    "%s is told it is an Ultimate feature and nothing is saved",
+    async (p) => {
+      plan = p;
+      const { deps, reply } = setup();
+      await handleEvent(text("ราเมน 1500 JPY"), deps);
+      expect(inserted).toHaveLength(0);
+      expect(fxAsked).toHaveLength(0);
+      expect(sent(reply)).toContain("Ultimate");
+    },
+  );
+
+  it("baht entries never touch the rate source", async () => {
+    const { deps } = setup();
+    await handleEvent(text("กาแฟ 45"), deps);
+    expect(fxAsked).toHaveLength(0);
+    expect(inserted[0]?.foreign).toBeNull();
   });
 });

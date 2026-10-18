@@ -39,6 +39,9 @@ export async function buildXlsx(
     { header: HEADERS[5], key: "amount", width: 16, style: { numFmt: MONEY_FORMAT } },
     { header: HEADERS[6], key: "source", width: 14 },
     { header: HEADERS[7], key: "wallet", width: 16 },
+    { header: HEADERS[8], key: "currency", width: 12 },
+    { header: HEADERS[9], key: "orig", width: 14, style: { numFmt: MONEY_FORMAT } },
+    { header: HEADERS[10], key: "rate", width: 14 },
   ];
   for (const r of rows) {
     list.addRow({
@@ -50,6 +53,9 @@ export async function buildXlsx(
       amount: baht(r.amountSatang),
       source: sourceLabel(r.source),
       wallet: r.walletName ?? "",
+      currency: r.origCurrency ?? "",
+      orig: r.origAmountMinor ? baht(r.origAmountMinor) : null,
+      rate: r.fxRate ?? null,
     });
   }
   styleHeader(list);

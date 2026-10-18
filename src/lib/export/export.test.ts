@@ -46,8 +46,10 @@ describe("toCsv", () => {
     const csv = toCsv([row()]);
     expect(csv.charCodeAt(0)).toBe(0xfeff);
     const lines = csv.slice(1).split("\r\n");
-    expect(lines[0]).toBe("วันที่,เวลา,ประเภท,ชื่อรายการ,หมวด,จำนวนเงิน (บาท),ที่มา,กระเป๋า");
-    expect(lines[1]).toBe("2026-10-15,14:30,รายจ่าย,กาแฟ,อาหาร,30.50,ข้อความ,"); // wallet unknown: empty cell
+    expect(lines[0]).toBe(
+      "วันที่,เวลา,ประเภท,ชื่อรายการ,หมวด,จำนวนเงิน (บาท),ที่มา,กระเป๋า,สกุลเงินเดิม,ยอดเดิม,อัตราแลกเปลี่ยน",
+    );
+    expect(lines[1]).toBe("2026-10-15,14:30,รายจ่าย,กาแฟ,อาหาร,30.50,ข้อความ,,,,"); // wallet and currency unknown: empty cells
     expect(lines[2]).toBe("");
   });
 
@@ -150,7 +152,7 @@ describe("buildXlsx", () => {
 });
 
 describe("the wallet column", () => {
-  it("is the last cell, empty when unknown, and the wallet's name when given", () => {
+  it("is the eighth cell, empty when unknown, and the wallet's name when given", () => {
     const base = {
       date: new Date("2026-10-15T08:00:00Z"),
       type: "expense" as const,
@@ -159,8 +161,26 @@ describe("the wallet column", () => {
       amountSatang: 100,
       source: "text",
     };
-    expect(rowCells(base).at(-1)).toBe("");
-    expect(rowCells({ ...base, walletName: "บัตรกสิกร" }).at(-1)).toBe("บัตรกสิกร");
+    expect(rowCells(base)[7]).toBe("");
+    expect(rowCells({ ...base, walletName: "บัตรกสิกร" })[7]).toBe("บัตรกสิกร");
     expect(rowCells(base)).toHaveLength(HEADERS.length);
+  });
+});
+
+describe("the foreign-currency columns", () => {
+  const base = {
+    date: new Date("2026-10-15T08:00:00Z"),
+    type: "expense" as const,
+    title: "ราเมน",
+    categoryName: null,
+    amountSatang: 35025,
+    source: "text",
+  };
+
+  it("are empty for a baht entry and filled for a converted one", () => {
+    expect(rowCells(base).slice(-3)).toEqual(["", "", ""]);
+    expect(
+      rowCells({ ...base, origCurrency: "JPY", origAmountMinor: 150000, fxRate: 0.2335 }).slice(-3),
+    ).toEqual(["JPY", "1500.00", "0.2335"]);
   });
 });

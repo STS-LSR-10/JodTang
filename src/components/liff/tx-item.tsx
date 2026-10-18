@@ -1,3 +1,4 @@
+import { formatForeign, formatRate } from "@/lib/fx";
 import type { ReactNode } from "react";
 import type { TxDto } from "@/lib/dto";
 import { formatBaht } from "@/lib/money";
@@ -27,6 +28,12 @@ export function TxItem({
           {tx.categoryName ? categoryLabel(tx.categoryName, tx.categoryIcon) : "ไม่ระบุหมวด"} ·{" "}
           {formatThaiDate(new Date(tx.occurredAt))}
         </p>
+        {tx.origCurrency && tx.origAmountMinor ? (
+          <p className="num truncate text-xs text-muted">
+            {formatForeign(tx.origAmountMinor, tx.origCurrency)}
+            {tx.fxRate ? ` @ ${formatRate(tx.fxRate)}` : ""}
+          </p>
+        ) : null}
         {tx.tags && tx.tags.length > 0 ? (
           <p className="truncate text-xs font-medium text-primary">
             {tx.tags.map((t) => `#${t}`).join(" ")}

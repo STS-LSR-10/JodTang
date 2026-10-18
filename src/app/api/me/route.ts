@@ -46,6 +46,7 @@ const FEATURES: Feature[] = [
   "transfer",
   "creditCard",
   "debts",
+  "foreignCurrency",
 ];
 
 export async function GET(request: Request): Promise<Response> {

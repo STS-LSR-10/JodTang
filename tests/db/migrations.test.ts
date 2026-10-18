@@ -310,6 +310,73 @@ describe("wallets (0019)", () => {
   });
 });
 
+describe("foreign currency (0023)", () => {
+  it("keeps the original amount, currency and rate next to the baht amount", async () => {
+    const u = await newUser(db, `fx-${Math.random()}`);
+    const t = await one<{
+      amount: string;
+      orig_currency: string;
+      orig_amount: string;
+      fx_rate: string;
+    }>(
+      db,
+      "insert into transactions (user_id,type,amount,title,orig_currency,orig_amount,fx_rate) values ($1,'expense',350.25,'ราเมน','JPY',1500,0.23350000) returning amount::text, orig_currency, orig_amount::text, fx_rate::text",
+      [u],
+    );
+    expect(t).toEqual({
+      amount: "350.25",
+      orig_currency: "JPY",
+      orig_amount: "1500.00",
+      fx_rate: "0.23350000",
+    });
+    // and the baht amount is what the summaries add up
+    const s = await one<{ expense: string }>(
+      db,
+      "select expense::text from summary_by_period($1, now() - interval '1 day', now() + interval '1 day')",
+      [u],
+    );
+    expect(s.expense).toBe("350.25");
+  });
+
+  it("plain entries have no original currency", async () => {
+    const u = await newUser(db, `fx-plain-${Math.random()}`);
+    const t = await one<{ orig_currency: string | null }>(
+      db,
+      "insert into transactions (user_id,type,amount,title) values ($1,'expense',10,'x') returning orig_currency",
+      [u],
+    );
+    expect(t.orig_currency).toBeNull();
+  });
+
+  it("refuses a lower-case or too long currency code and a zero rate", async () => {
+    const u = await newUser(db, `fx-bad-${Math.random()}`);
+    const ins = (cur: string, rate: number) =>
+      db.query(
+        "insert into transactions (user_id,type,amount,title,orig_currency,orig_amount,fx_rate) values ($1,'expense',1,'x',$2,10,$3)",
+        [u, cur, rate],
+      );
+    await expect(ins("jpy", 1)).rejects.toThrow();
+    await expect(ins("JPYX", 1)).rejects.toThrow();
+    await expect(ins("JPY", 0)).rejects.toThrow();
+  });
+
+  it("caches one rate per day and currency", async () => {
+    await db.query(
+      "insert into fx_rates (day,currency,rate,source_day) values ('2026-10-17','JPY',0.2335,'2026-10-16')",
+    );
+    await expect(
+      db.query(
+        "insert into fx_rates (day,currency,rate,source_day) values ('2026-10-17','JPY',0.24,'2026-10-16')",
+      ),
+    ).rejects.toThrow();
+    const r = await one<{ rate: string }>(
+      db,
+      "select rate::text from fx_rates where day='2026-10-17' and currency='JPY'",
+    );
+    expect(r.rate).toBe("0.23350000");
+  });
+});
+
 describe("debts (0022)", () => {
   async function seed() {
     const u = await newUser(db, `d-${Math.random()}`);

@@ -384,6 +384,9 @@ describe("search result card", () => {
     note: null,
     tags: [],
     accountId: null,
+    origCurrency: null,
+    origAmountMinor: null,
+    fxRate: null,
     accountName: null,
   });
   const totals = { incomeSatang: 10_000, expenseSatang: 10_550, count: 3 };

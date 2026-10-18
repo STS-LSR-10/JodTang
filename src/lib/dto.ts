@@ -23,10 +23,14 @@ export interface TxDto {
   /** The wallet the entry was put in; null = the main wallet. */
   accountId: string | null;
   accountName: string | null;
+  /** Entered in a foreign currency: its code, the original amount (×100) and the rate used. */
+  origCurrency: string | null;
+  origAmountMinor: number | null;
+  fxRate: number | null;
 }
 
 export const TX_SELECT =
-  "id,type,title,amount,occurred_at,source,category_id,slip_id,photo_path,note,tags,account_id,accounts(name),categories(name,icon,color)";
+  "id,type,title,amount,occurred_at,source,category_id,slip_id,photo_path,note,tags,account_id,orig_currency,orig_amount,fx_rate,accounts(name),categories(name,icon,color)";
 
 interface TxJoinRow {
   id: string;
@@ -41,6 +45,9 @@ interface TxJoinRow {
   note?: string | null;
   tags?: string[] | null;
   account_id?: string | null;
+  orig_currency?: string | null;
+  orig_amount?: number | string | null;
+  fx_rate?: number | string | null;
   accounts?: { name: string } | { name: string }[] | null;
   // PostgREST returns a single object for a to-one embed, but be lenient.
   categories: CategoryEmbed | CategoryEmbed[] | null;
@@ -70,6 +77,10 @@ export function toTxDto(row: TxJoinRow): TxDto {
     note: row.note ?? null,
     tags: row.tags ?? [],
     accountId: row.account_id ?? null,
+    origCurrency: row.orig_currency ?? null,
+    origAmountMinor:
+      row.orig_amount === null || row.orig_amount === undefined ? null : toSatang(row.orig_amount),
+    fxRate: row.fx_rate === null || row.fx_rate === undefined ? null : Number(row.fx_rate),
     accountName: (Array.isArray(row.accounts) ? row.accounts[0] : row.accounts)?.name ?? null,
   };
 }

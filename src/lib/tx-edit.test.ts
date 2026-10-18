@@ -41,7 +41,14 @@ describe("planEdit: fields", () => {
 
   it("updates title and amount", () => {
     const r = ok({ title: "  ข้าวมันไก่ ", amount: "50.5" });
-    expect(r.patch).toEqual({ title: "ข้าวมันไก่", amount: "50.50" });
+    expect(r.patch).toEqual({
+      title: "ข้าวมันไก่",
+      amount: "50.50",
+      // the foreign amount it may have been converted from no longer applies
+      orig_currency: null,
+      orig_amount: null,
+      fx_rate: null,
+    });
     expect(r.categoryChanged).toBe(false);
   });
 

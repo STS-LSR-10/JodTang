@@ -75,6 +75,9 @@ import { buildForecastCard } from "./forecast-flex";
 import { buildInsightCard } from "./insight-flex";
 import { buildTransferDone, buildWalletChooser, buildWalletsCard } from "./wallet-flex";
 import { buildCardsCard } from "./card-flex";
+import { convertToSatang, formatForeign, formatRate } from "@/lib/fx";
+import { getRate } from "@/lib/fx-repo";
+import { bangkokDateKey } from "@/lib/points";
 import { buildDebtDone, buildDebtsCard } from "./debt-flex";
 import {
   MAX_OPEN_DEBTS_PER_PERSON,
@@ -174,6 +177,10 @@ import {
   WALLET_NOT_FOUND_TEXT,
   CARD_LOCKED_TEXT,
   DEBT_BAD_DUE_TEXT,
+  FX_FAILED_TEXT,
+  FX_LOCKED_TEXT,
+  FX_TOO_SMALL_TEXT,
+  fxUnsupportedText,
   DEBT_CANCELLED_TEXT,
   DEBT_EMPTY_TEXT,
   DEBT_LOCKED_TEXT,
@@ -351,17 +358,29 @@ async function handleText(input: string, user: UserRow, deps: HandlerDeps): Prom
     return runCommand(command, user, deps);
   }
 
-  const parsed = parseMessage(input, deps.now());
-  const { entries } = parsed;
+  const parsed = parseMessage(input, deps.now(), { currencies: true });
+  let { entries } = parsed;
   const plan = effectivePlan(user.plan, user.plan_expires_at, deps.now());
 
   // Long or unclear sentences (Ultimate): let the AI read them, then ask before saving anything.
-  if (deps.structurer && can(plan, "smartParse") && needsSmartParse(input, parsed)) {
+  if (
+    deps.structurer &&
+    can(plan, "smartParse") &&
+    !entries.some((e) => e.foreign) &&
+    needsSmartParse(input, parsed)
+  ) {
     const smart = await readWithAi(input, user, deps);
     if (smart) return smart;
   }
 
   if (entries.length === 0) return [text(NOT_UNDERSTOOD_TEXT)];
+  // "ราเมน 1500 JPY": convert to baht first (Ultimate); everything after sees plain baht entries
+  if (entries.some((e) => e.foreign)) {
+    if (!can(plan, "foreignCurrency")) return [text(FX_LOCKED_TEXT)];
+    const converted = await convertForeignEntries(entries, deps);
+    if (typeof converted === "string") return [text(converted)];
+    entries = converted;
+  }
   if (entries.some((e) => e.backdated) && !can(plan, "backdate")) {
     return [text(BACKDATE_LOCKED_TEXT)];
   }
@@ -636,6 +655,54 @@ async function runTransfer(
   ];
 }
 
+/**
+ * Turn each foreign-currency entry into baht at the rate of its day. Returns the reason (text for the
+ * user) when one cannot be converted: nothing is saved then.
+ */
+async function convertForeignEntries(
+  entries: ParsedEntry[],
+  deps: HandlerDeps,
+): Promise<ParsedEntry[] | string> {
+  const today = bangkokDateKey(deps.now());
+  const rates = new Map<string, Awaited<ReturnType<typeof getRate>>>();
+  const out: ParsedEntry[] = [];
+  for (const entry of entries) {
+    const f = entry.foreign;
+    if (!f) {
+      out.push(entry);
+      continue;
+    }
+    if (!f.supported) return fxUnsupportedText(f.currency);
+    const day = bangkokDateKey(entry.occurredAt);
+    const key = `${f.currency}:${day}`;
+    if (!rates.has(key)) rates.set(key, await getRate(deps.db, f.currency, day, today));
+    const resolved = rates.get(key);
+    if (!resolved) return FX_FAILED_TEXT;
+    const amountSatang = convertToSatang(f.minor, resolved.rate);
+    if (amountSatang <= 0) return FX_TOO_SMALL_TEXT;
+    out.push({
+      ...entry,
+      amountSatang,
+      fx: {
+        currency: f.currency,
+        minor: f.minor,
+        rate: resolved.rate,
+        sourceDay: resolved.sourceDay,
+        stale: resolved.stale,
+      },
+    });
+  }
+  return out;
+}
+
+/** "1,500 JPY @ 0.2335" (with a note when an older rate had to be used). */
+function fxNoteOf(fx: NonNullable<ParsedEntry["fx"]>): string {
+  const base = `${formatForeign(fx.minor, fx.currency)} @ ${formatRate(fx.rate)}`;
+  if (!fx.stale) return base;
+  const [, month, day] = fx.sourceDay.split("-");
+  return `${base} (อัตราของวันที่ ${Number(day)}/${Number(month)} เพราะแหล่งอัตราไม่ตอบ)`;
+}
+
 /** "🐱 ค่าอาหารแมว" for a category that has an emoji, its plain name otherwise, null for none. */
 function categoryLabelOf(c: { name: string; icon?: string | null } | undefined): string | null {
   return c ? categoryLabel(c.name, c.icon) : null;
@@ -796,6 +863,9 @@ async function saveEntries(
       rawText: entry.raw,
       tags: entry.tags,
       accountId: walletIds.get(parsed) ?? null,
+      foreign: parsed.fx
+        ? { currency: parsed.fx.currency, minor: parsed.fx.minor, rate: parsed.fx.rate }
+        : null,
     });
     if (needsConfirm) pending.push({ tx, entry });
     else confirmed.push({ tx, entry, categoryId, walletId: walletIds.get(parsed) ?? null });
@@ -816,6 +886,7 @@ async function saveEntries(
             deps,
             c.entry.tags,
             c.walletId,
+            c.entry.fx ? fxNoteOf(c.entry.fx) : null,
           ),
         );
       }
@@ -980,6 +1051,7 @@ async function confirmCard(
   deps: HandlerDeps,
   tags: string[] = [],
   walletId: string | null = null,
+  fxNote: string | null = null,
 ): Promise<LineMessage> {
   const style = settings.confirm_style === "short" ? "short" : "full";
   // The wallet only shows up once there is more than one to tell apart.
@@ -1010,6 +1082,7 @@ async function confirmCard(
     tags,
     walletName: wallet ? walletLabel(wallet) : null,
     canMoveWallet: multi,
+    fxNote,
     cycleTotalSatang: cycleTotal,
     cycleLabel:
       settings.budget_cycle === "weekly"
