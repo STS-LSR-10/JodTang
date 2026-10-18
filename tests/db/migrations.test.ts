@@ -2235,3 +2235,29 @@ describe("row level security (supabase/tests/rls_check.sql)", () => {
     }
   }, 60_000);
 });
+
+describe("card theme and bot manner (0032)", () => {
+  it("existing and new users start with the mint theme and the polite manner", async () => {
+    const u = await newUser(db, `per-${Math.random()}`);
+    const r = await one<{ card_theme: string; bot_persona: string }>(
+      db,
+      "select card_theme, bot_persona from user_settings where user_id = $1",
+      [u],
+    );
+    expect(r).toEqual({ card_theme: "mint", bot_persona: "polite" });
+  });
+
+  it("refuses a theme or manner that does not exist, accepts the real ones", async () => {
+    const u = await newUser(db, `per-${Math.random()}`);
+    await expect(
+      db.query("update user_settings set card_theme = 'neon' where user_id = $1", [u]),
+    ).rejects.toThrow();
+    await expect(
+      db.query("update user_settings set bot_persona = 'rude' where user_id = $1", [u]),
+    ).rejects.toThrow();
+    await db.query(
+      "update user_settings set card_theme = 'night', bot_persona = 'strict' where user_id = $1",
+      [u],
+    );
+  });
+});

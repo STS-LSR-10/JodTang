@@ -1,4 +1,5 @@
 import { formatBaht } from "@/lib/money";
+import { dailyOverLines, dailyStillOverLine, type PersonaId } from "@/lib/personalize";
 
 /** The playful scolds sent the first time a day's spending goes over the daily limit. */
 const SCOLDS: ((v: { spent: string; limit: string; over: string }) => string)[] = [
@@ -22,13 +23,17 @@ export function dailyBudgetAlert(input: {
   afterSatang: number;
   limitSatang: number;
   pick?: number;
+  /** The bot's manner; the original playful lines when omitted or polite. */
+  persona?: PersonaId;
 }): string | null {
   const { beforeSatang, afterSatang, limitSatang } = input;
   if (limitSatang <= 0 || afterSatang <= beforeSatang || afterSatang <= limitSatang) return null;
   const over = formatBaht(afterSatang - limitSatang);
-  if (beforeSatang > limitSatang) return `ยังเกินงบวันนี้อยู่ ฿${over}`;
-  const i = Math.min(SCOLDS.length - 1, Math.floor((input.pick ?? Math.random()) * SCOLDS.length));
-  const scold = SCOLDS[i];
+  const persona = input.persona ?? "polite";
+  if (beforeSatang > limitSatang) return dailyStillOverLine(persona, over);
+  const lines = dailyOverLines(persona) ?? SCOLDS;
+  const i = Math.min(lines.length - 1, Math.floor((input.pick ?? Math.random()) * lines.length));
+  const scold = lines[i];
   return scold
     ? scold({ spent: formatBaht(afterSatang), limit: formatBaht(limitSatang), over })
     : null;

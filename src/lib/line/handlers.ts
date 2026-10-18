@@ -32,6 +32,13 @@ import { bangkokParts, formatThaiDate, fromBangkok, isValidYmd } from "@/lib/tha
 import type { LineMessage, TxType } from "@/lib/types";
 import type { SlipImage, SlipOcrProvider } from "@/lib/ocr/provider";
 import { can, effectivePlan } from "@/lib/plan";
+import {
+  applyTheme,
+  DEFAULT_PERSONA,
+  DEFAULT_THEME,
+  effectivePrefs,
+  savedQuip,
+} from "@/lib/personalize";
 import { LIMITS, type LimitRule, type RateLimitResult } from "@/lib/rate-limit";
 import {
   applyReferralCode,
@@ -327,7 +334,8 @@ export async function handleEvent(event: LineEvent, deps: HandlerDeps): Promise<
   const user = await ensureUser(deps.db, lineUserId, () => deps.getProfile(lineUserId));
   const reply = async (messages: LineMessage[]) => {
     if (event.replyToken && messages.length > 0) {
-      await deps.reply(event.replyToken, messages.slice(0, MAX_REPLY_MESSAGES));
+      const { theme } = await prefsOf(deps, user);
+      await deps.reply(event.replyToken, applyTheme(messages.slice(0, MAX_REPLY_MESSAGES), theme));
     }
   };
 
@@ -1198,6 +1206,15 @@ async function saveEntries(
     )),
   );
   for (const a of alerts) messages.push(text(a));
+  // A friendly / cheering manner adds one line after a plain save (never on top of a budget warning).
+  const first = confirmed[0];
+  if (first && alerts.length === 0 && messages.length < MAX_REPLY_MESSAGES) {
+    const quip = savedQuip(
+      (await prefsOf(deps, user)).persona,
+      confirmed.some((c) => c.entry.type === "expense") ? "expense" : "income",
+    );
+    if (quip) messages.push(text(quip));
+  }
   if (confirmed.length > 0) messages.push(...(await awardAndNotify(deps, user.id)));
   return messages;
 }
@@ -1296,6 +1313,19 @@ async function pointsSummaryText(db: SupabaseClient, userId: string, now: Date):
       ? `แลกเป็นวันใช้ Professional ได้ ${days} วัน (แลกที่หน้าตั้งค่า)`
       : "สะสมครบแล้วแลกเป็นวันใช้ Professional ได้ที่หน้าตั้งค่านะ",
   ].join("\n");
+}
+
+/** The card theme and bot manner in force for a user (the defaults on a free or lapsed plan). Best effort. */
+async function prefsOf(deps: HandlerDeps, user: UserRow) {
+  const plan = effectivePlan(user.plan, user.plan_expires_at, deps.now());
+  const fallback = { theme: DEFAULT_THEME, persona: DEFAULT_PERSONA };
+  if (!can(plan, "personalize")) return fallback;
+  try {
+    return effectivePrefs(plan, await getSettings(deps.db, user.id));
+  } catch (error) {
+    log.error("prefs_failed", error);
+    return fallback;
+  }
 }
 
 /** Budget alerts are best effort: a failure here must never block recording the entry. */

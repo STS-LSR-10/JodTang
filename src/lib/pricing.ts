@@ -80,6 +80,7 @@ export const FEATURE_GROUPS: FeatureGroup[] = [
       { label: "สมุดกลุ่ม LINE: ดึงบอทเข้ากลุ่ม ช่วยกันจด แยกคนจ่าย", cells: [false, false, true] },
       { label: "หารค่าใช้จ่ายทริป สรุปว่าใครโอนคืนใครกี่บาท", cells: [false, false, true] },
       { label: "ล็อกหน้าเว็บด้วย PIN 4–6 หลัก", cells: [false, true, true] },
+      { label: "ธีมสีการ์ด 5 แบบ + นิสัยบอท 4 แบบ", cells: [false, true, true] },
       {
         label: "กระเป๋าร่วมกับแฟน/ครอบครัว (จดจากแชทตัวเอง ยอดเดียวกัน)",
         cells: [false, "2 คน", "สูงสุด 10 คน"],

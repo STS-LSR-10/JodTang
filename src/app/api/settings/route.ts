@@ -2,6 +2,7 @@ import { z } from "zod";
 import { apiError, guard, json } from "@/lib/api";
 import { requireUser } from "@/lib/auth/require-user";
 import { requireFeature } from "@/lib/plan-server";
+import { DEFAULT_PERSONA, DEFAULT_THEME, PERSONA_IDS, THEME_IDS } from "@/lib/personalize";
 import { normalizeTime } from "@/lib/reminder";
 import { getSettings } from "@/lib/repo";
 import { getAdminClient } from "@/lib/supabase/admin";
@@ -27,6 +28,8 @@ const patchSchema = z
     daily_reminder_time: z.string(),
     weekly_summary_enabled: z.boolean(),
     monthly_summary_enabled: z.boolean(),
+    card_theme: z.enum(THEME_IDS),
+    bot_persona: z.enum(PERSONA_IDS),
   })
   .partial()
   .refine((v) => Object.keys(v).length > 0, "empty");
@@ -62,6 +65,16 @@ export async function PATCH(request: Request): Promise<Response> {
       parsed.data.monthly_summary_enabled === true
     ) {
       const locked = await requireFeature(db, auth.userId, "autoSummary");
+      if (locked) return locked;
+    }
+
+    // Another look or manner than the default is a Professional feature. Going back to the default is
+    // always allowed, so a lapsed plan can still reset it.
+    if (
+      (parsed.data.card_theme !== undefined && parsed.data.card_theme !== DEFAULT_THEME) ||
+      (parsed.data.bot_persona !== undefined && parsed.data.bot_persona !== DEFAULT_PERSONA)
+    ) {
+      const locked = await requireFeature(db, auth.userId, "personalize");
       if (locked) return locked;
     }
 

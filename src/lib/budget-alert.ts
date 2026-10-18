@@ -2,9 +2,10 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { alertText, crossedThreshold } from "@/lib/budget";
 import { cycleRange, dayRange } from "@/lib/budget-cycle";
 import { dailyBudgetAlert } from "@/lib/daily-budget";
-import { toSatang } from "@/lib/money";
+import { formatBaht, toSatang } from "@/lib/money";
 import { bangkokDateKey } from "@/lib/points";
 import { can } from "@/lib/plan";
+import { budgetAlertLine, effectivePrefs } from "@/lib/personalize";
 import { getPlanInfo } from "@/lib/plan-server";
 import {
   expenseTotalSatang,
@@ -66,7 +67,13 @@ export async function budgetAlertsFor(
     const categories = await loadCategories(db, input.userId);
     scopeName = categories.find((c) => c.id === input.categoryId)?.name ?? null;
   }
-  return [alertText({ level, scopeName, spentSatang: after, limitSatang: limit })];
+  const { persona } = effectivePrefs(plan, settings);
+  const custom = budgetAlertLine(persona, {
+    level,
+    scope: scopeName ? `หมวด${scopeName}` : "รวม",
+    figures: `฿${formatBaht(after)} จาก ฿${formatBaht(limit)}`,
+  });
+  return [custom ?? alertText({ level, scopeName, spentSatang: after, limitSatang: limit })];
 }
 
 /**
@@ -99,6 +106,7 @@ export async function dailyBudgetAlertsFor(
     afterSatang: after,
     limitSatang: limit,
     pick: input.pick,
+    persona: effectivePrefs(plan, settings).persona,
   });
   return alert ? [alert] : [];
 }
