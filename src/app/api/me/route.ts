@@ -34,6 +34,7 @@ const FEATURES: Feature[] = [
   "export",
   "dashboard",
   "forecast",
+  "insight",
 ];
 
 export async function GET(request: Request): Promise<Response> {

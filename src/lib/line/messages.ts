@@ -29,7 +29,7 @@ export const HELP_TEXT = [
   "",
   "คำสั่งสั้น",
   "• สรุปวันนี้ · สรุปเดือนนี้ · สรุปหมวด · ล่าสุด",
-  "• สรุปปี · เทียบเดือน (Professional ขึ้นไป) · พยากรณ์ (Ultimate)",
+  "• สรุปปี · เทียบเดือน (Professional ขึ้นไป) · พยากรณ์ · วิเคราะห์ (Ultimate)",
   "• สรุป 1/10 ถึง 15/10 · ค้นหา กาแฟ (Professional ขึ้นไป)",
   "• ลบล่าสุด · แก้ล่าสุด 45",
   "• ตังสะสม · รหัสชวน · ใช้รหัส ABCD1234",
@@ -105,6 +105,13 @@ export const yearEmptyText = (yearBE: number) => `สรุปรายปี ${
 export const COMPARE_LOCKED_TEXT =
   'การเทียบเดือนต่อเดือนรายหมวดเป็นฟีเจอร์ของแผน Professional ขึ้นไป ลองทดลองใช้ฟรี 7 วันได้ที่เมนู "อัปเกรด" นะ';
 export const COMPARE_EMPTY_TEXT = "ยังไม่มีรายจ่ายทั้งสองช่วงให้เทียบ ลองจดรายการเพิ่มก่อนนะ";
+
+// ───── AI insight ─────
+export const INSIGHT_LOCKED_TEXT =
+  'AI Insight (วิเคราะห์การใช้จ่ายด้วย AI) เป็นฟีเจอร์เฉพาะแผน Ultimate ลองทดลองใช้ฟรี 7 วันได้ที่เมนู "อัปเกรด" นะ ตอนนี้ดูได้ด้วย "เทียบเดือน" หรือ "สรุปหมวด"';
+export const INSIGHT_LIMIT_TEXT = "วันนี้ขอวิเคราะห์ครบจำนวนแล้ว พรุ่งนี้ลองใหม่ได้นะ";
+export const INSIGHT_EMPTY_TEXT =
+  "ยังไม่มีรายจ่ายในรอบนี้ให้วิเคราะห์ ลองจดรายการสักพักแล้วถามใหม่นะ";
 
 // ───── forecast ─────
 export const FORECAST_LOCKED_TEXT =

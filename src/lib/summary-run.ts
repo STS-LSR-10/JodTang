@@ -9,11 +9,15 @@ import {
   isWeeklySummaryDue,
   lastMonthRange,
   lastWeekRange,
+  rangeLabel,
   previousRange,
   summarize,
   type SummaryKind,
 } from "@/lib/summary-report";
-import { loadSummaryTransactions } from "@/lib/summary-load";
+import { generateInsight, type InsightWriter } from "@/lib/ai/insight-writer";
+import { hasSomethingToSay } from "@/lib/insight";
+import { buildInsightCard } from "@/lib/line/insight-flex";
+import { loadInsightFacts, loadSummaryTransactions } from "@/lib/summary-load";
 import type { BudgetCycle, LineMessage } from "@/lib/types";
 
 export interface SummaryRunResult {
@@ -46,6 +50,7 @@ export async function runSummaries(
   push: (lineUserId: string, messages: LineMessage[]) => Promise<void>,
   now: Date,
   liffBaseUrl?: string,
+  options: { insightWriter?: InsightWriter | null } = {},
 ): Promise<SummaryRunResult> {
   const result: SummaryRunResult = { candidates: 0, sent: 0, skippedEmpty: 0, errors: 0 };
   const today = bangkokDay(now);
@@ -125,7 +130,32 @@ export async function runSummaries(
         result.skippedEmpty += 1;
         continue;
       }
-      await push(user.line_user_id, [buildSummaryMessage({ kind, range, data, liffUrl })]);
+      const messages: LineMessage[] = [buildSummaryMessage({ kind, range, data, liffUrl })];
+      // Ultimate gets the AI Insight on the end of the monthly summary; a failure here must
+      // never cost the person the summary itself.
+      if (
+        kind === "monthly" &&
+        can(effectivePlan(user.plan, user.plan_expires_at, now), "insight")
+      ) {
+        try {
+          const facts = await loadInsightFacts(db, user.id, range, previous, {
+            current: rangeLabel(range),
+            previous: "เดือนก่อน",
+          });
+          if (hasSomethingToSay(facts)) {
+            const insight = await generateInsight(options.insightWriter, facts);
+            messages.push(
+              buildInsightCard({
+                insight,
+                subtitle: `${rangeLabel(range)} เทียบ ${rangeLabel(previous)}`,
+              }),
+            );
+          }
+        } catch (error) {
+          log.error("insight_attach_failed", error);
+        }
+      }
+      await push(user.line_user_id, messages);
       result.sent += 1;
     } catch (error) {
       result.errors += 1;

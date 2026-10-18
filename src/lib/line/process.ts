@@ -1,6 +1,7 @@
 import { getServerEnv } from "@/lib/env";
 import { buildSlipReader } from "@/lib/ocr/factory";
 import { rateLimit } from "@/lib/rate-limit";
+import { buildInsightWriter } from "@/lib/ai/insight-writer";
 import { buildTextStructurer } from "@/lib/ai/text-structurer";
 import { buildTranscriber } from "@/lib/voice/transcribe";
 import { claimEvent, releaseEvent } from "@/lib/repo";
@@ -59,6 +60,8 @@ export async function processEvents(rawEvents: unknown[]): Promise<void> {
   // Long typed or spoken sentences (Ultimate) are read by the same AI provider; without a key the rules do it all.
   const structurer = buildTextStructurer(env);
   if (structurer) deps.structurer = structurer;
+  const insightWriter = buildInsightWriter(env);
+  if (insightWriter) deps.insightWriter = insightWriter;
 
   // Voice messages need an AI that can hear (Gemini or OpenAI key); without one they get a polite no.
   const transcriber = buildTranscriber(env);

@@ -75,6 +75,7 @@ export const FEATURE_GROUPS: FeatureGroup[] = [
       { label: "ค้นหาพร้อมยอดรวม", cells: [false, true, true] },
       { label: "สรุปรายปี", cells: [false, true, true] },
       { label: "พยากรณ์เงินปลายเดือน", cells: [false, false, true] },
+      { label: "AI Insight วิเคราะห์การใช้จ่าย", cells: [false, false, true] },
       { label: "เทียบเดือนต่อเดือนรายหมวด", cells: [false, true, true] },
       { label: "หน้าวิเคราะห์ (กราฟแท่ง / โดนัท)", cells: [false, true, true] },
       { label: "ส่งออก CSV", cells: [false, true, true] },

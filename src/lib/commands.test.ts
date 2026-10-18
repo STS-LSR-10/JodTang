@@ -152,3 +152,16 @@ describe("parseCommand: forecast", () => {
     expect(parseCommand("พยากรณ์อากาศ 50")).toBeNull();
   });
 });
+
+describe("parseCommand: insight", () => {
+  it.each(["วิเคราะห์", "วิเคราะห์การใช้จ่าย", "AI Insight", "insight", "  วิเคราะห์  "])(
+    "%s",
+    (input) => {
+      expect(parseCommand(input)).toEqual({ kind: "insight" });
+    },
+  );
+
+  it("is not taken for an entry that merely starts with the word", () => {
+    expect(parseCommand("วิเคราะห์ตลาด 500")).toBeNull();
+  });
+});

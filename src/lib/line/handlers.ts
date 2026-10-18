@@ -47,12 +47,15 @@ import { describeTotals, sameSpanRanges } from "@/lib/period-compare";
 import {
   loadCategoryCompare,
   loadForecastInput,
+  loadInsightFacts,
   loadCategorySpend,
   loadSummaryData,
   loadSummaryTransactions,
   loadYearData,
 } from "@/lib/summary-load";
+import { generateInsight, type InsightWriter } from "@/lib/ai/insight-writer";
 import { forecastCycle } from "@/lib/forecast";
+import { hasSomethingToSay } from "@/lib/insight";
 import { resolveYear } from "@/lib/year-summary";
 import { daySpecFromIso, resolveRange, type DaySpec } from "@/lib/summary-range";
 import {
@@ -68,6 +71,7 @@ import { needsSmartParse, runSmartParse } from "@/lib/ai/smart-parse";
 import type { TextStructurer } from "@/lib/ai/text-structurer";
 import { recordSmartEntries } from "./smart-entries";
 import { buildForecastCard } from "./forecast-flex";
+import { buildInsightCard } from "./insight-flex";
 import { buildSearchCard } from "./search-flex";
 import {
   buildCategorySpendCard,
@@ -107,6 +111,9 @@ import {
   PHOTO_ASK_TEXT,
   COMPARE_EMPTY_TEXT,
   COMPARE_LOCKED_TEXT,
+  INSIGHT_EMPTY_TEXT,
+  INSIGHT_LIMIT_TEXT,
+  INSIGHT_LOCKED_TEXT,
   FORECAST_EMPTY_TEXT,
   FORECAST_LOCKED_TEXT,
   RECENT_EMPTY_TEXT,
@@ -169,6 +176,8 @@ export interface HandlerDeps {
     fetchImage: (messageId: string) => Promise<SlipImage>;
     ocr: SlipOcrProvider;
   };
+  /** AI that writes the AI Insight (Ultimate). Absent -> plain-code observations instead. */
+  insightWriter?: InsightWriter;
   /** AI that reads long sentences (Ultimate). Absent -> the ordinary rules handle everything. */
   structurer?: TextStructurer;
   /** Voice messages. Absent (no AI key that hears audio) -> a polite "not available" reply. */
@@ -795,6 +804,38 @@ async function runCommand(
           today: fromBangkok(today.year, today.month, today.day),
           subtitle: `${formatThaiDate(cycle.from)} – ${formatThaiDate(new Date(cycle.to.getTime() - 1))}`,
           moreUrl: pageUrl("/summary"),
+        }),
+      ];
+    }
+
+    case "insight": {
+      if (!can(effectivePlan(user.plan, user.plan_expires_at, deps.now()), "insight")) {
+        return [text(INSIGHT_LOCKED_TEXT)];
+      }
+      if (deps.limit) {
+        const day = await deps.limit("insight_day", user.line_user_id, LIMITS.insightDay);
+        if (!day.allowed) return [text(INSIGHT_LIMIT_TEXT)];
+      }
+      const now = deps.now();
+      const settings = await getSettings(db, user.id);
+      const cycle =
+        settings.budget_cycle === "monthly"
+          ? cycleRange(now, "monthly", settings.cycle_start_day)
+          : calendarMonthRange(now);
+      const span = sameSpanRanges(cycle, now);
+      const facts = await loadInsightFacts(db, user.id, span.current, span.previous, {
+        current: rangeLabel(span.current),
+        previous: "เดือนก่อน",
+      });
+      if (!hasSomethingToSay(facts)) return [text(INSIGHT_EMPTY_TEXT)];
+      const insight = await generateInsight(deps.insightWriter, facts);
+      return [
+        buildInsightCard({
+          insight,
+          subtitle: `รอบนี้ ${rangeLabel(span.current)} เทียบ ${rangeLabel(span.previous)}`,
+          moreUrl: can(effectivePlan(user.plan, user.plan_expires_at, now), "dashboard")
+            ? pageUrl("/analytics")
+            : undefined,
         }),
       ];
     }

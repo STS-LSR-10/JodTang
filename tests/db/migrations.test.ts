@@ -161,6 +161,68 @@ describe("entry photos (0015)", () => {
   });
 });
 
+describe("top_titles (0018)", () => {
+  async function seed() {
+    const u = await newUser(db, `tt-${Math.random()}`);
+    const other = await newUser(db, `tt-other-${Math.random()}`);
+    const ins = (
+      user: string,
+      type: string,
+      amount: number,
+      title: string,
+      status = "confirmed",
+      at = "2026-10-10T05:00:00Z",
+    ) =>
+      db.query(
+        "insert into transactions (user_id,type,amount,title,status,occurred_at) values ($1,$2,$3,$4,$5,$6)",
+        [user, type, amount, title, status, at],
+      );
+    await ins(u, "expense", 70, "ชานม");
+    await ins(u, "expense", 70, " ชานม ");
+    await ins(u, "expense", 80, "ชา  นม"); // a different name once the inner spaces are tidied
+    await ins(u, "expense", 100, "Grab");
+    await ins(u, "expense", 50, "grab");
+    await ins(u, "expense", 500, "ข้าว", "deleted");
+    await ins(u, "expense", 400, "ข้าว", "pending_confirm");
+    await ins(u, "expense", 999, "นอกช่วง", "confirmed", "2026-09-01T05:00:00Z");
+    await ins(u, "income", 300, "ขายของ");
+    await ins(other, "expense", 5000, "ของคนอื่น");
+    return u;
+  }
+  const titles = (u: string, type = "expense", limit = 10) =>
+    rows<{ title: string; total: string; tx_count: number }>(
+      db,
+      "select title, total::text, tx_count::int from top_titles($1,'2026-10-01T00:00:00Z','2026-11-01T00:00:00Z',$2::tx_type,$3)",
+      [u, type, limit],
+    );
+
+  it("adds up entries with the same name, biggest first, only this user's confirmed ones", async () => {
+    const u = await seed();
+    expect(await titles(u)).toEqual([
+      { title: "grab", total: "150.00", tx_count: 2 },
+      { title: "ชานม", total: "140.00", tx_count: 2 },
+      { title: "ชา นม", total: "80.00", tx_count: 1 },
+    ]);
+  });
+
+  it("follows the type", async () => {
+    const u = await seed();
+    expect(await titles(u, "income")).toEqual([{ title: "ขายของ", total: "300.00", tx_count: 1 }]);
+  });
+
+  it("honours the limit, and never returns more than fifty", async () => {
+    const u = await seed();
+    expect(await titles(u, "expense", 1)).toHaveLength(1);
+    expect(await titles(u, "expense", 0)).toHaveLength(1); // at least one
+    expect(await titles(u, "expense", 9999)).toHaveLength(3);
+  });
+
+  it("is empty for a period with nothing", async () => {
+    const u = await newUser(db, `tt-empty-${Math.random()}`);
+    expect(await titles(u)).toEqual([]);
+  });
+});
+
 describe("period_totals_by_source (0017)", () => {
   it("splits a period into recurring and other, counting confirmed entries of that user only", async () => {
     const u = await newUser(db, `pt-${Math.random()}`);

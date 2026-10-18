@@ -5,6 +5,12 @@ import type { YearResult } from "@/lib/year-summary";
 import type { DateRange } from "@/lib/budget-cycle";
 import type { ForecastInput, RuleLite } from "@/lib/forecast";
 import { upcomingOccurrences } from "@/lib/forecast";
+import {
+  buildInsightFacts,
+  buildTitleRows,
+  type InsightFacts,
+  type TitleSpend,
+} from "@/lib/insight";
 import { buildCompareRows, type CompareRow } from "@/lib/period-compare";
 import { getBudgetMode, loadBudgets, periodSummary } from "@/lib/repo";
 import { listRules } from "@/lib/recurring-repo";
@@ -247,4 +253,59 @@ export async function loadForecastInput(
     upcoming: upcomingOccurrences(lite, now, cycle.to),
     budgetSatang: overall ? toSatang(overall.amount) : null,
   };
+}
+
+interface TitleRowDb {
+  title: string;
+  total: number | string;
+  tx_count: number | string;
+}
+
+async function loadTopTitles(
+  db: SupabaseClient,
+  userId: string,
+  range: DateRange,
+): Promise<TitleSpend[]> {
+  const { data, error } = await db.rpc("top_titles", {
+    p_user: userId,
+    p_from: range.from.toISOString(),
+    p_to: range.to.toISOString(),
+    p_type: "expense",
+    p_limit: 10,
+  });
+  if (error) throw new Error(`load top titles: ${error.message}`);
+  return ((data ?? []) as TitleRowDb[]).map((r) => ({
+    name: r.title,
+    amountSatang: toSatang(r.total),
+    count: Number(r.tx_count),
+  }));
+}
+
+/**
+ * Everything the AI Insight is told about a period: totals against the one before, the categories
+ * and the most-used entry names with their change. All added up by the database.
+ */
+export async function loadInsightFacts(
+  db: SupabaseClient,
+  userId: string,
+  current: DateRange,
+  previous: DateRange,
+  labels: { current: string; previous: string },
+): Promise<InsightFacts> {
+  const [cur, prev, compare, curTitles, prevTitles] = await Promise.all([
+    periodSummary(db, { userId, from: current.from, to: current.to }),
+    periodSummary(db, { userId, from: previous.from, to: previous.to }),
+    loadCategoryCompare(db, userId, current, previous),
+    loadTopTitles(db, userId, current),
+    loadTopTitles(db, userId, previous),
+  ]);
+  return buildInsightFacts({
+    periodLabel: labels.current,
+    previousLabel: labels.previous,
+    expenseSatang: cur.expenseSatang,
+    previousExpenseSatang: prev.expenseSatang,
+    incomeSatang: cur.incomeSatang,
+    categories: compare.rows,
+    titles: buildTitleRows(curTitles, prevTitles),
+  });
 }

@@ -1,3 +1,4 @@
+import { buildInsightWriter } from "@/lib/ai/insight-writer";
 import { json } from "@/lib/api";
 import { isCronAuthorized } from "@/lib/cron-auth";
 import { getServerEnv } from "@/lib/env";
@@ -34,12 +35,12 @@ export async function GET(request: Request): Promise<Response> {
     const now = new Date();
     const summary = await runReminders(db, line.push, now);
     // A failing summary run must not hide the reminder result (and vice versa).
-    const summaries = await runSummaries(db, line.push, now, process.env.APP_BASE_URL).catch(
-      (error: unknown) => {
-        log.error("cron_summaries_failed", error);
-        return null;
-      },
-    );
+    const summaries = await runSummaries(db, line.push, now, process.env.APP_BASE_URL, {
+      insightWriter: buildInsightWriter(env),
+    }).catch((error: unknown) => {
+      log.error("cron_summaries_failed", error);
+      return null;
+    });
     return json({ ok: true, ...summary, summaries });
   } catch (error) {
     log.error("cron_reminders_failed", error);

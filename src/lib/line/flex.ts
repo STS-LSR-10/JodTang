@@ -656,6 +656,7 @@ export function withSummaryShortcuts(message: LineMessage): LineMessage {
         { type: "action", action: { type: "message", label: "📈 เทียบเดือน", text: "เทียบเดือน" } },
         { type: "action", action: { type: "message", label: "🗓️ ทั้งปี", text: "สรุปปี" } },
         { type: "action", action: { type: "message", label: "🔮 พยากรณ์", text: "พยากรณ์" } },
+        { type: "action", action: { type: "message", label: "🧠 วิเคราะห์", text: "วิเคราะห์" } },
       ],
     },
   };

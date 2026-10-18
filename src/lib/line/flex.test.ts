@@ -339,7 +339,8 @@ describe("custom range pickers", () => {
     expect(items[3]).toMatchObject({ type: "message", text: "เทียบเดือน" });
     expect(items[4]).toMatchObject({ type: "message", text: "สรุปปี" });
     expect(items[5]).toMatchObject({ type: "message", text: "พยากรณ์" });
-    expect(items).toHaveLength(6);
+    expect(items[6]).toMatchObject({ type: "message", text: "วิเคราะห์" });
+    expect(items).toHaveLength(7);
     expect(items.every((a) => (a.label ?? "").length <= 20)).toBe(true);
   });
 

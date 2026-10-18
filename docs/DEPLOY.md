@@ -121,6 +121,7 @@ GitHub Actions (รายชั่วโมง) ──► /api/cron/reminders �
 | `line_setup_failed` | เชื่อม Supabase ไม่ได้ | ตรวจ `NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` |
 | `line_event_failed` | ประมวลผลข้อความไม่สำเร็จ | ดู `message` (เช่น ตาราง/bucket ไม่พบ → ยังไม่รัน migration) |
 | `slip_reader_skipped` | ผู้อ่านสลิปเจ้าหนึ่งล้ม → ไปเจ้าถัดไป | ถ้าเกิดบ่อย ตรวจ key/โควตาของเจ้านั้น |
+| `insight_failed` / `insight_attach_failed` | AI Insight ล้ม → ระบบใช้ข้อสังเกตที่โค้ดสร้างเองแทน / โหลดข้อมูลวิเคราะห์ท้ายสรุปรายเดือนไม่ได้ (สรุปยังถูกส่ง) | ถ้าเกิดบ่อย ตรวจ key/โควตาของ AI_PROVIDER และ migration 0018 |
 | `smart_parse_failed` | AI อ่านประโยคยาว (Ultimate) ล้ม → ระบบถอยไปใช้กติกาเดิมให้เอง ผู้ใช้ไม่เห็นข้อผิดพลาด | ถ้าเกิดบ่อย ตรวจ key/โควตาของ AI_PROVIDER |
 | `rate_limit_unavailable` | ตัวจำกัดอัตราพัง (ระบบปล่อยผ่าน ไม่ปิดกั้น) | รัน migration `0007` |
 | `budget_alert_failed` / `award_failed` | ส่วนเสริมล้ม (การจดไม่ถูกขัดขวาง) | ตรวจ migration `0004`/`0006` |
