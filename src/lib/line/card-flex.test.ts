@@ -13,6 +13,8 @@ const wallet: Wallet = {
   expenseSatang: 4_500_000,
   transferInSatang: 0,
   transferOutSatang: 0,
+  debtInSatang: 0,
+  debtOutSatang: 0,
   entryCount: 3,
   creditLimitSatang: 5_000_000,
   statementDay: 25,

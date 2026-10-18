@@ -34,6 +34,9 @@ export interface Wallet {
   /** Moved in / out by transfers between wallets (not income or expense). */
   transferInSatang: number;
   transferOutSatang: number;
+  /** Money gained / lost through debts (borrowed, lent, repayments). Not income or expense. */
+  debtInSatang: number;
+  debtOutSatang: number;
   entryCount: number;
   /** Credit-card wallets: the limit and the two days of the month (all optional). */
   creditLimitSatang: number | null;
@@ -45,11 +48,23 @@ export interface Wallet {
 export function balanceOf(
   w: Pick<
     Wallet,
-    "openingSatang" | "incomeSatang" | "expenseSatang" | "transferInSatang" | "transferOutSatang"
+    | "openingSatang"
+    | "incomeSatang"
+    | "expenseSatang"
+    | "transferInSatang"
+    | "transferOutSatang"
+    | "debtInSatang"
+    | "debtOutSatang"
   >,
 ): number {
   return (
-    w.openingSatang + w.incomeSatang - w.expenseSatang + w.transferInSatang - w.transferOutSatang
+    w.openingSatang +
+    w.incomeSatang -
+    w.expenseSatang +
+    w.transferInSatang -
+    w.transferOutSatang +
+    w.debtInSatang -
+    w.debtOutSatang
   );
 }
 
@@ -69,6 +84,8 @@ export function walletToDto(w: Wallet) {
     expenseSatang: w.expenseSatang,
     transferInSatang: w.transferInSatang,
     transferOutSatang: w.transferOutSatang,
+    debtInSatang: w.debtInSatang,
+    debtOutSatang: w.debtOutSatang,
     balanceSatang: balanceOf(w),
     entryCount: w.entryCount,
     creditLimitSatang: w.creditLimitSatang,

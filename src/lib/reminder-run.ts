@@ -1,4 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { dueDebtsText } from "@/lib/debt";
+import { listDebts } from "@/lib/debt-repo";
 import { can, effectivePlan, type Plan } from "@/lib/plan";
 import { bangkokDateKey, currentStreak, recentDailyKeys } from "@/lib/points";
 import { isReminderDue, reminderText } from "@/lib/reminder";
@@ -103,7 +105,18 @@ export async function runReminders(
         .eq("user_id", user.id);
       if (mark.error) throw new Error(`mark reminded: ${mark.error.message}`);
 
-      await push(user.line_user_id, [{ type: "text", text: reminderText(now, streak) }]);
+      const messages: LineMessage[] = [{ type: "text", text: reminderText(now, streak) }];
+      // Ultimate: debts that are overdue or due soon ride along (a failure here must not stop the nudge)
+      if (can(effectivePlan(user.plan, user.plan_expires_at, now), "debts")) {
+        const note = await listDebts(db, user.id)
+          .then((debts) => dueDebtsText(debts, now))
+          .catch((error: unknown) => {
+            log.error("reminder_debts_failed", error);
+            return null;
+          });
+        if (note) messages.push({ type: "text", text: note });
+      }
+      await push(user.line_user_id, messages);
       summary.sent += 1;
     } catch (error) {
       summary.errors += 1;

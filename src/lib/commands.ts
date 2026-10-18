@@ -1,4 +1,5 @@
 import type { DaySpec } from "@/lib/summary-range";
+import { parseDebtText, type DebtCommand } from "@/lib/debt";
 import { parseTransferText } from "@/lib/transfer";
 import { normalizeThaiDigits, parseAmountToSatang } from "@/lib/parse/thai-number";
 
@@ -16,6 +17,8 @@ export type Command =
   | { kind: "insight" }
   | { kind: "wallets" }
   | { kind: "cards"; name: string | null }
+  | { kind: "debts" }
+  | DebtCommand
   | { kind: "transfer"; amountSatang: number; from: string; to: string }
   | { kind: "summary"; scope: "today" | "month" }
   | { kind: "delete-latest" }
@@ -57,8 +60,12 @@ export function parseCommand(input: string): Command | null {
   // "บัตร" / "บัตรเครดิต" / "บัตร ktc" (a name has no digits: "บัตร 500" is an ordinary entry)
   const cards = /^(?:บัตรเครดิต|บัตร)(?:\s+([^\d]+))?$/.exec(text);
   if (cards) return { kind: "cards", name: cards[1]?.trim() || null };
+  if (["หนี้", "หนี้สิน", "ลูกหนี้", "เจ้าหนี้", "debts"].includes(text)) return { kind: "debts" };
   const transfer = parseTransferText(text);
   if (transfer) return { kind: "transfer", ...transfer };
+  // names keep their case, so the debt phrases read the original text
+  const debt = parseDebtText(normalizeThaiDigits(input).trim().replace(/\s+/g, " "));
+  if (debt) return debt;
   if (["พยากรณ์", "พยากรณ์เงิน", "พยากรณ์ปลายเดือน", "พยากรณ์ปลายรอบ"].includes(text)) {
     return { kind: "forecast" };
   }

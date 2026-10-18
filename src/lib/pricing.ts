@@ -59,6 +59,7 @@ export const FEATURE_GROUPS: FeatureGroup[] = [
       },
       { label: "โอนระหว่างกระเป๋า", cells: [false, true, true] },
       { label: "วงเงินและยอดตามรอบบิลบัตรเครดิต", cells: [false, true, true] },
+      { label: "จดหนี้ ให้ยืม/ยืม (ตัดยอดกระเป๋า)", cells: [false, false, true] },
       { label: "แยกรายการจากใบเสร็จ", cells: [false, false, true] },
       { label: "พิมพ์ประโยคยาวๆ ให้ AI ช่วยอ่าน", cells: [false, false, true] },
       { label: "จดด้วยเสียง", cells: [false, false, true] },

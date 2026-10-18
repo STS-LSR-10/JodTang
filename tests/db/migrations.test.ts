@@ -310,6 +310,123 @@ describe("wallets (0019)", () => {
   });
 });
 
+describe("debts (0022)", () => {
+  async function seed() {
+    const u = await newUser(db, `d-${Math.random()}`);
+    const other = await newUser(db, `d-other-${Math.random()}`);
+    const wallet = async (user: string, name: string, isDefault: boolean, opening: number) =>
+      (
+        await one<{ id: string }>(
+          db,
+          "insert into accounts (user_id,name,kind,is_default,opening_balance) values ($1,$2,'cash'::account_kind,$3,$4) returning id",
+          [user, name, isDefault, opening],
+        )
+      ).id;
+    const main = await wallet(u, "เงินสด", true, 10_000);
+    const bank = await wallet(u, "กสิกร", false, 0);
+    return { u, other, main, bank };
+  }
+  const debt = async (
+    u: string,
+    direction: string,
+    person: string,
+    amount: number,
+    account: string | null,
+  ) =>
+    (
+      await one<{ id: string }>(
+        db,
+        "insert into debts (user_id,direction,person,amount,account_id) values ($1,$2,$3,$4,$5) returning id",
+        [u, direction, person, amount, account],
+      )
+    ).id;
+  const pay = (u: string, debtId: string, amount: number, account: string | null) =>
+    db.query("insert into debt_payments (user_id,debt_id,amount,account_id) values ($1,$2,$3,$4)", [
+      u,
+      debtId,
+      amount,
+      account,
+    ]);
+  const balances = (u: string) =>
+    rows<{ name: string; income: string; expense: string; debt_in: string; debt_out: string }>(
+      db,
+      "select name, income::text, expense::text, debt_in::text, debt_out::text from wallet_balances($1)",
+      [u],
+    );
+
+  it("lending takes money out of the wallet and a repayment puts it back, in any wallet", async () => {
+    const { u, main, bank } = await seed();
+    const d = await debt(u, "lent", "สมชาย", 500, main);
+    await pay(u, d, 200, main);
+    await pay(u, d, 100, bank); // paid back into another wallet
+    expect(await balances(u)).toEqual([
+      { name: "เงินสด", income: "0", expense: "0", debt_in: "200.00", debt_out: "500.00" },
+      { name: "กสิกร", income: "0", expense: "0", debt_in: "100.00", debt_out: "0" },
+    ]);
+  });
+
+  it("borrowing brings money in and paying it back sends it out", async () => {
+    const { u, bank } = await seed();
+    const d = await debt(u, "borrowed", "แม่", 2000, bank);
+    await pay(u, d, 800, bank);
+    const b = (await balances(u)).find((x) => x.name === "กสิกร");
+    expect(b).toMatchObject({ debt_in: "2000.00", debt_out: "800.00" });
+  });
+
+  it("a debt with no wallet belongs to the main wallet and is never income or expense", async () => {
+    const { u } = await seed();
+    await debt(u, "lent", "ก", 300, null);
+    const main = (await balances(u))[0];
+    expect(main).toMatchObject({ name: "เงินสด", income: "0", expense: "0", debt_out: "300.00" });
+  });
+
+  it("debt_balances shows what is paid and left, open debts first", async () => {
+    const { u, main } = await seed();
+    const a = await debt(u, "lent", "เก่า", 100, main);
+    await pay(u, a, 100, main); // settled
+    const b = await debt(u, "lent", "ใหม่", 400, main);
+    await pay(u, b, 150, main);
+    const list = await rows<{ person: string; paid: string; remaining: string }>(
+      db,
+      "select person, paid::text, remaining::text from debt_balances($1)",
+      [u],
+    );
+    expect(list).toEqual([
+      { person: "ใหม่", paid: "150.00", remaining: "250.00" },
+      { person: "เก่า", paid: "100.00", remaining: "0.00" },
+    ]);
+  });
+
+  it("deleting a debt takes its payments with it and restores the wallet", async () => {
+    const { u, main } = await seed();
+    const d = await debt(u, "lent", "ก", 500, main);
+    await pay(u, d, 100, main);
+    await db.query("delete from debts where id = $1", [d]);
+    expect((await balances(u))[0]).toMatchObject({ debt_in: "0", debt_out: "0" });
+  });
+
+  it("a deleted wallet's debts fall back to the main wallet", async () => {
+    const { u, bank } = await seed();
+    await debt(u, "lent", "ก", 500, bank);
+    await db.query("delete from accounts where id = $1", [bank]);
+    expect((await balances(u))[0]).toMatchObject({ name: "เงินสด", debt_out: "500.00" });
+  });
+
+  it("refuses a zero amount, a bad direction and an empty name", async () => {
+    const { u } = await seed();
+    await expect(debt(u, "lent", "ก", 0, null)).rejects.toThrow();
+    await expect(debt(u, "gift", "ก", 10, null)).rejects.toThrow();
+    await expect(debt(u, "lent", "", 10, null)).rejects.toThrow();
+  });
+
+  it("another person's debts never show up", async () => {
+    const { u, other } = await seed();
+    await debt(other, "lent", "คนอื่น", 999, null);
+    const list = await rows(db, "select * from debt_balances($1)", [u]);
+    expect(list).toHaveLength(0);
+  });
+});
+
 describe("credit cards (0021)", () => {
   async function seed() {
     const u = await newUser(db, `cc-${Math.random()}`);

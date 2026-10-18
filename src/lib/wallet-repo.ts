@@ -20,6 +20,8 @@ interface BalanceRow {
   credit_limit: number | string | null;
   statement_day: number | null;
   due_day: number | null;
+  debt_in: number | string;
+  debt_out: number | string;
 }
 
 /** Every wallet of the person with its totals (the main wallet first). Empty if none was made yet. */
@@ -36,6 +38,8 @@ export async function listWallets(db: SupabaseClient, userId: string): Promise<W
     expenseSatang: toSatang(r.expense),
     transferInSatang: toSatang(r.transfer_in ?? 0),
     transferOutSatang: toSatang(r.transfer_out ?? 0),
+    debtInSatang: toSatang(r.debt_in ?? 0),
+    debtOutSatang: toSatang(r.debt_out ?? 0),
     entryCount: Number(r.tx_count),
     creditLimitSatang:
       r.credit_limit === null || r.credit_limit === undefined ? null : toSatang(r.credit_limit),
@@ -119,6 +123,17 @@ async function clearDefault(db: SupabaseClient, userId: string): Promise<void> {
       .is("account_id", null);
     if (pinned.error) fail("pin entries to the old main wallet", pinned.error);
     // transfers left pointing at "no wallet" (a deleted wallet) follow the main wallet the same way
+    for (const [table, column] of [
+      ["debts", "account_id"],
+      ["debt_payments", "account_id"],
+    ] as const) {
+      const moved = await db
+        .from(table)
+        .update({ [column]: oldId })
+        .eq("user_id", userId)
+        .is(column, null);
+      if (moved.error) fail(`pin ${table} to the old main wallet`, moved.error);
+    }
     for (const column of ["from_account", "to_account"]) {
       const moved = await db
         .from("transfers")

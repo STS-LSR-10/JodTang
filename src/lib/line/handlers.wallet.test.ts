@@ -5,6 +5,11 @@ import { handleEvent, type HandlerDeps, type LineEvent } from "./handlers";
 
 let wallets: Wallet[] = [];
 let plan = "plus";
+let debtList: import("@/lib/debt").DebtDto[] = [];
+const newDebts: Record<string, unknown>[] = [];
+const payments: Record<string, unknown>[] = [];
+const removedDebts: string[] = [];
+const removedPayments: string[] = [];
 const transfers: Record<string, unknown>[] = [];
 const cancelled: string[] = [];
 const inserted: Record<string, unknown>[] = [];
@@ -20,6 +25,8 @@ const wallet = (over: Partial<Wallet>): Wallet => ({
   expenseSatang: 0,
   transferInSatang: 0,
   transferOutSatang: 0,
+  debtInSatang: 0,
+  debtOutSatang: 0,
   creditLimitSatang: null,
   statementDay: null,
   dueDay: null,
@@ -36,6 +43,35 @@ vi.mock("@/lib/card-repo", async () => {
           .filter((w) => w.kind === "card" && (w.creditLimitSatang !== null || w.statementDay))
           .map((w) => [w.id, cardStatus(w, { cycle: 12_000, previous: 8_000 }, now)]),
       ),
+  };
+});
+vi.mock("@/lib/debt-repo", async () => {
+  const { openDebtsOf } =
+    await vi.importActual<typeof import("@/lib/debt-repo")>("@/lib/debt-repo");
+  return {
+    openDebtsOf,
+    listDebts: async () => debtList,
+    createDebt: async (_db: unknown, _u: string, input: Record<string, unknown>) => {
+      newDebts.push(input);
+      return "d-new";
+    },
+    addPayments: async (
+      _db: unknown,
+      _u: string,
+      parts: unknown[],
+      input: Record<string, unknown>,
+    ) => {
+      payments.push({ parts, ...input });
+      return ["p1", "p2"].slice(0, parts.length);
+    },
+    deleteDebt: async (_db: unknown, _u: string, id: string) => {
+      removedDebts.push(id);
+      return id === "d-new";
+    },
+    deletePayments: async (_db: unknown, _u: string, ids: string[]) => {
+      removedPayments.push(...ids);
+      return ids.length;
+    },
   };
 });
 vi.mock("@/lib/transfer-repo", () => ({
@@ -136,6 +172,11 @@ beforeEach(() => {
   moved.length = 0;
   transfers.length = 0;
   cancelled.length = 0;
+  debtList = [];
+  newDebts.length = 0;
+  payments.length = 0;
+  removedDebts.length = 0;
+  removedPayments.length = 0;
   plan = "plus";
 });
 
@@ -382,5 +423,144 @@ describe("card limit alerts after recording", () => {
     ({ deps, reply } = setup());
     await handleEvent(text("ช้อปปิ้ง 1000 @ktc"), deps);
     expect(allSent(reply)).not.toContain("วงเงิน");
+  });
+});
+
+describe("debts by chat (Ultimate)", () => {
+  const owed = (over: Partial<import("@/lib/debt").DebtDto>): import("@/lib/debt").DebtDto => ({
+    id: "d1",
+    direction: "lent",
+    person: "สมชาย",
+    amountSatang: 50000,
+    paidSatang: 0,
+    remainingSatang: 50000,
+    accountId: "w-cash",
+    accountName: "เงินสด",
+    occurredAt: "2026-10-01T05:00:00Z",
+    dueAt: null,
+    note: null,
+    ...over,
+  });
+
+  beforeEach(() => {
+    plan = "ultimate";
+  });
+
+  it("lending is saved against the chosen wallet and says what is left in it", async () => {
+    const { deps, reply } = setup();
+    await handleEvent(text("ให้ยืม สมชาย 500 @ktc"), deps);
+    expect(newDebts[0]).toMatchObject({
+      direction: "lent",
+      person: "สมชาย",
+      amountSatang: 50000,
+      accountId: "w-ktc",
+    });
+    expect(inserted).toHaveLength(0); // not an expense
+    const json = sent(reply);
+    expect(json).toContain("ให้ สมชาย ยืม ฿500");
+    expect(json).toContain("KTC คงเหลือ");
+    expect(json).toContain("a=dx&id=d-new");
+  });
+
+  it("no @ means the main wallet; a due date is kept", async () => {
+    const { deps, reply } = setup();
+    await handleEvent(text("ยืม แม่ 2000 คืน 25/10"), deps);
+    expect(newDebts[0]).toMatchObject({ direction: "borrowed", accountId: "w-cash" });
+    expect(newDebts[0]?.dueAt).toBeInstanceOf(Date);
+    expect(sent(reply)).toContain("กำหนดคืน");
+  });
+
+  it("not Ultimate: told it is an Ultimate feature, nothing saved", async () => {
+    plan = "plus";
+    const { deps, reply } = setup();
+    await handleEvent(text("ให้ยืม สมชาย 500"), deps);
+    expect(newDebts).toHaveLength(0);
+    expect(sent(reply)).toContain("Ultimate");
+  });
+
+  it("an unknown wallet saves nothing", async () => {
+    const { deps, reply } = setup();
+    await handleEvent(text("ให้ยืม สมชาย 500 @xyz"), deps);
+    expect(newDebts).toHaveLength(0);
+    expect(sent(reply)).toContain("ไม่พบกระเป๋า");
+  });
+
+  it("a repayment goes against the person's open debt and closes it when paid in full", async () => {
+    debtList = [owed({})];
+    const { deps, reply } = setup();
+    await handleEvent(text("สมชายคืน 500"), deps);
+    expect(payments[0]).toMatchObject({
+      accountId: "w-cash",
+      parts: [{ debtId: "d1", amountSatang: 50000 }],
+    });
+    const json = sent(reply);
+    expect(json).toContain("รับคืนจาก สมชาย ฿500");
+    expect(json).toContain("ปิดหนี้ครบแล้ว");
+    expect(json).toContain("a=dpx&id=p1");
+  });
+
+  it("a part payment says what is still owed", async () => {
+    debtList = [owed({})];
+    const { deps, reply } = setup();
+    await handleEvent(text("สมชายคืน 200"), deps);
+    expect(sent(reply)).toContain("ยังเหลือ ฿300");
+  });
+
+  it("paying back more than is owed is refused", async () => {
+    debtList = [owed({})];
+    const { deps, reply } = setup();
+    await handleEvent(text("สมชายคืน 900"), deps);
+    expect(payments).toHaveLength(0);
+    expect(sent(reply)).toContain("ชำระเกิน");
+  });
+
+  it("I pay back what I borrowed, out of the wallet I name", async () => {
+    debtList = [owed({ direction: "borrowed", person: "แม่", id: "d2" })];
+    const { deps, reply } = setup();
+    await handleEvent(text("คืนแม่ 100 @ktc"), deps);
+    expect(payments[0]).toMatchObject({ accountId: "w-ktc" });
+    expect(sent(reply)).toContain("คืนเงิน แม่ ฿100");
+  });
+
+  it("a repayment for someone with no debt is just an ordinary message", async () => {
+    const { deps } = setup();
+    await handleEvent(text("คนแปลกหน้าคืน 100"), deps);
+    expect(payments).toHaveLength(0);
+  });
+
+  it("the หนี้ command lists who owes whom", async () => {
+    debtList = [
+      owed({}),
+      owed({ id: "d2", direction: "borrowed", person: "แม่", remainingSatang: 100000 }),
+    ];
+    const { deps, reply } = setup();
+    await handleEvent(text("หนี้"), deps);
+    const json = sent(reply);
+    expect(json).toContain("คนที่ติดเรา");
+    expect(json).toContain("เราติดใคร");
+  });
+
+  it("the หนี้ command is for Ultimate, and says so when there is nothing", async () => {
+    plan = "plus";
+    let { deps, reply } = setup();
+    await handleEvent(text("หนี้"), deps);
+    expect(sent(reply)).toContain("Ultimate");
+
+    plan = "ultimate";
+    ({ deps, reply } = setup());
+    await handleEvent(text("หนี้"), deps);
+    expect(sent(reply)).toContain("ยังไม่มีหนี้ค้าง");
+  });
+
+  it("the undo buttons remove the debt / the payments", async () => {
+    let { deps, reply } = setup();
+    await handleEvent(postback("a=dx&id=d-new"), deps);
+    expect(removedDebts).toEqual(["d-new"]);
+    expect(sent(reply)).toContain("ยกเลิกแล้ว");
+
+    ({ deps, reply } = setup());
+    await handleEvent(postback("a=dpx&id=p1,p2"), deps);
+    expect(removedPayments).toEqual(["p1", "p2"]);
+    expect(sent(reply)).toContain("ยกเลิกแล้ว");
   });
 });

@@ -75,6 +75,22 @@ import { buildForecastCard } from "./forecast-flex";
 import { buildInsightCard } from "./insight-flex";
 import { buildTransferDone, buildWalletChooser, buildWalletsCard } from "./wallet-flex";
 import { buildCardsCard } from "./card-flex";
+import { buildDebtDone, buildDebtsCard } from "./debt-flex";
+import {
+  MAX_OPEN_DEBTS_PER_PERSON,
+  cleanPerson,
+  planPayment,
+  resolveDue,
+  totalsByPerson,
+} from "@/lib/debt";
+import {
+  addPayments,
+  createDebt,
+  deleteDebt,
+  deletePayments,
+  listDebts,
+  openDebtsOf,
+} from "@/lib/debt-repo";
 import { limitAlert } from "@/lib/card";
 import { loadCardStatuses } from "@/lib/card-repo";
 import { createTransfer, deleteTransfer } from "@/lib/transfer-repo";
@@ -157,6 +173,12 @@ import {
   WALLET_MOVED_TEXT,
   WALLET_NOT_FOUND_TEXT,
   CARD_LOCKED_TEXT,
+  DEBT_BAD_DUE_TEXT,
+  DEBT_CANCELLED_TEXT,
+  DEBT_EMPTY_TEXT,
+  DEBT_LOCKED_TEXT,
+  DEBT_TOO_MANY_TEXT,
+  debtOverpayText,
   CARD_NONE_TEXT,
   CARD_NO_DETAIL_TEXT,
   TRANSFER_CANCELLED_TEXT,
@@ -317,6 +339,10 @@ async function handleText(input: string, user: UserRow, deps: HandlerDeps): Prom
     // "โอนค่าเช่า 5000 ไป ..." that names no wallet is an ordinary entry, so it falls through
     const done = await runTransfer(command, user, deps);
     if (done) return done;
+  } else if (command?.kind === "debt-new" || command?.kind === "debt-pay") {
+    // "สมชายคืน 200" with no such debt (or "ยืม..." that is not one) is an ordinary message
+    const done = await runDebt(command, user, deps);
+    if (done) return done;
   } else if (command?.kind === "cards") {
     // "บัตร จอดรถ" that names no card of theirs is not a command
     const done = await runCards(command, user, deps);
@@ -369,6 +395,132 @@ async function handleText(input: string, user: UserRow, deps: HandlerDeps): Prom
     }
   }
   return saveEntries(entries, user, deps, walletIds);
+}
+
+/** Wallet balance as text, e.g. "เงินสด คงเหลือ ฿9,500". */
+async function balanceLine(deps: HandlerDeps, userId: string, walletId: string): Promise<string> {
+  const wallets = await listWallets(deps.db, userId);
+  const w = wallets.find((x) => x.id === walletId);
+  return w ? `${w.name} คงเหลือ ฿${formatBaht(balanceOf(w))}` : "";
+}
+
+/** Lend / borrow / repay by chat. null when it is not about a debt of theirs (then it is an ordinary message). */
+async function runDebt(
+  command: Extract<Command, { kind: "debt-new" | "debt-pay" }>,
+  user: UserRow,
+  deps: HandlerDeps,
+): Promise<LineMessage[] | null> {
+  const { db } = deps;
+  const ultimate = can(effectivePlan(user.plan, user.plan_expires_at, deps.now()), "debts");
+
+  if (command.kind === "debt-pay") {
+    if (!ultimate) return null;
+    const debts = await listDebts(db, user.id);
+    const open = openDebtsOf(debts, command.person, command.direction);
+    if (open.length === 0) return null;
+    const plan = planPayment(
+      open.map((d) => ({ id: d.id, remainingSatang: d.remainingSatang })),
+      command.amountSatang,
+    );
+    const person = cleanPerson(open[0]?.person ?? command.person);
+    if (!plan.ok) return [text(debtOverpayText(person, formatBaht(plan.owedSatang)))];
+
+    const wallets = await ensureWallets(db, user.id);
+    let wallet =
+      wallets.find((w) => w.id === open[0]?.accountId) ?? wallets.find((w) => w.isDefault);
+    if (command.walletHint) {
+      const found = resolveWallet(command.walletHint, wallets);
+      if (!found.ok) {
+        const names = wallets.map((w) => w.name);
+        return [
+          text(
+            found.reason === "ambiguous"
+              ? WALLET_AMBIGUOUS_TEXT(command.walletHint, names)
+              : WALLET_NOT_FOUND_TEXT(command.walletHint, names),
+          ),
+        ];
+      }
+      wallet = found.wallet;
+    }
+    if (!wallet) return null;
+
+    const ids = await addPayments(db, user.id, plan.parts, {
+      accountId: wallet.id,
+      paidAt: deps.now(),
+    });
+    const left = open.reduce((s, d) => s + d.remainingSatang, 0) - command.amountSatang;
+    return [
+      buildDebtDone({
+        undoData: `a=dpx&id=${ids.join(",")}`,
+        text: [
+          command.direction === "lent"
+            ? `รับคืนจาก ${person} ฿${formatBaht(command.amountSatang)}`
+            : `คืนเงิน ${person} ฿${formatBaht(command.amountSatang)}`,
+          left > 0 ? `ยังเหลือ ฿${formatBaht(left)}` : "ปิดหนี้ครบแล้ว 🎉",
+          await balanceLine(deps, user.id, wallet.id),
+          "(ไม่นับเป็นรายรับ/รายจ่าย)",
+        ]
+          .filter(Boolean)
+          .join("\n"),
+      }),
+    ];
+  }
+
+  if (!ultimate) return [text(DEBT_LOCKED_TEXT)];
+  const wallets = await ensureWallets(db, user.id);
+  let wallet = wallets.find((w) => w.isDefault);
+  if (command.walletHint) {
+    const found = resolveWallet(command.walletHint, wallets);
+    if (!found.ok) {
+      const names = wallets.map((w) => w.name);
+      return [
+        text(
+          found.reason === "ambiguous"
+            ? WALLET_AMBIGUOUS_TEXT(command.walletHint, names)
+            : WALLET_NOT_FOUND_TEXT(command.walletHint, names),
+        ),
+      ];
+    }
+    wallet = found.wallet;
+  }
+  if (!wallet) return null;
+
+  let dueAt: Date | null = null;
+  if (command.due) {
+    dueAt = resolveDue(command.due, deps.now());
+    if (!dueAt) return [text(DEBT_BAD_DUE_TEXT)];
+  }
+  const existing = await listDebts(db, user.id);
+  if (
+    openDebtsOf(existing, command.person, command.direction).length >= MAX_OPEN_DEBTS_PER_PERSON
+  ) {
+    return [text(DEBT_TOO_MANY_TEXT)];
+  }
+
+  const id = await createDebt(db, user.id, {
+    direction: command.direction,
+    person: command.person,
+    amountSatang: command.amountSatang,
+    accountId: wallet.id,
+    occurredAt: deps.now(),
+    dueAt,
+  });
+  const person = cleanPerson(command.person);
+  return [
+    buildDebtDone({
+      undoData: `a=dx&id=${id}`,
+      text: [
+        command.direction === "lent"
+          ? `จดแล้ว: ให้ ${person} ยืม ฿${formatBaht(command.amountSatang)}`
+          : `จดแล้ว: ยืม ${person} ฿${formatBaht(command.amountSatang)}`,
+        dueAt ? `กำหนดคืน ${formatThaiDate(dueAt)}` : "",
+        await balanceLine(deps, user.id, wallet.id),
+        "(ไม่นับเป็นรายรับ/รายจ่าย)",
+      ]
+        .filter(Boolean)
+        .join("\n"),
+    }),
+  ];
 }
 
 /** "บัตร": the card summary. null when a typed name matches none of their cards. */
@@ -1015,6 +1167,19 @@ async function runCommand(
       ];
     }
 
+    case "debts": {
+      if (!can(effectivePlan(user.plan, user.plan_expires_at, deps.now()), "debts")) {
+        return [text(DEBT_LOCKED_TEXT)];
+      }
+      const people = totalsByPerson(await listDebts(db, user.id));
+      if (people.length === 0) return [text(DEBT_EMPTY_TEXT)];
+      return [buildDebtsCard({ people, now: deps.now(), manageUrl: pageUrl("/debts") })];
+    }
+
+    case "debt-new":
+    case "debt-pay": // handled in handleText; only reached by a direct call
+      return [text(DEBT_EMPTY_TEXT)];
+
     case "cards": // handled in handleText; only reached by a direct call
       return [text(CARD_NONE_TEXT)];
 
@@ -1217,6 +1382,16 @@ async function handlePostback(
     if (!transferId) return [];
     const removed = await deleteTransfer(deps.db, user.id, transferId);
     return [text(removed ? TRANSFER_CANCELLED_TEXT : NOT_FOUND_TEXT)];
+  }
+
+  // "↩ ยกเลิก" under a debt or a repayment
+  if (action === "dx" || action === "dpx") {
+    const target = params.get("id") ?? "";
+    const removed =
+      action === "dx"
+        ? await deleteDebt(deps.db, user.id, target)
+        : (await deletePayments(deps.db, user.id, target.split(",").filter(Boolean))) > 0;
+    return [text(removed ? DEBT_CANCELLED_TEXT : NOT_FOUND_TEXT)];
   }
 
   const id = params.get("id");

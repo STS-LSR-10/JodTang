@@ -18,6 +18,8 @@ const card = (over: Partial<Wallet> = {}): Wallet => ({
   expenseSatang: 0,
   transferInSatang: 0,
   transferOutSatang: 0,
+  debtInSatang: 0,
+  debtOutSatang: 0,
   entryCount: 0,
   creditLimitSatang: 5_000_000,
   statementDay: 25,

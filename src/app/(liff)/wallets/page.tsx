@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, ArrowRightLeft, Pencil, Plus, Star, Trash2 } from "lucide-react";
+import { ArrowLeft, ArrowRightLeft, Banknote, Pencil, Plus, Star, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useState, type FormEvent } from "react";
 import { useApi, useLiff } from "@/components/liff/liff-provider";
@@ -257,6 +257,20 @@ export default function WalletsPage() {
                 )}
               </section>
             ) : null}
+
+            <Link
+              href="/debts"
+              className={`${cardClass} flex items-center gap-3 !space-y-0`}
+              aria-label="หนี้สิน"
+            >
+              <Banknote className="h-5 w-5 text-primary" aria-hidden />
+              <span className="flex-1">
+                <span className="block font-semibold">หนี้สิน</span>
+                <span className="block text-xs text-muted">
+                  จดให้ยืม/ยืม ตัดยอดกระเป๋าให้ · แผน Ultimate
+                </span>
+              </span>
+            </Link>
 
             {notice ? (
               <p

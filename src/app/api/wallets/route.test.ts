@@ -37,6 +37,8 @@ const wallet = (n: number): Wallet => ({
   expenseSatang: 0,
   transferInSatang: 0,
   transferOutSatang: 0,
+  debtInSatang: 0,
+  debtOutSatang: 0,
   creditLimitSatang: null,
   statementDay: null,
   dueDay: null,
