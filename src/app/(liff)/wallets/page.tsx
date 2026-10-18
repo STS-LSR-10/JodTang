@@ -1,13 +1,16 @@
 "use client";
 
-import { ArrowLeft, Pencil, Plus, Star, Trash2 } from "lucide-react";
+import { ArrowLeft, ArrowRightLeft, Pencil, Plus, Star, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useState, type FormEvent } from "react";
 import { useApi, useLiff } from "@/components/liff/liff-provider";
 import { Sheet } from "@/components/liff/sheet";
-import { cardClass, fieldClass } from "@/components/liff/settings/types";
+import { PlusLock } from "@/components/liff/settings/plus-lock";
+import { cardClass, fieldClass, type Me } from "@/components/liff/settings/types";
 import { ErrorState, LoadingBlock, PageHeader } from "@/components/liff/states";
 import { formatBaht } from "@/lib/money";
+import { formatThaiDate } from "@/lib/thai-date";
+import { MAX_TRANSFER_NOTE, type TransferDto } from "@/lib/transfer";
 import { normalizeThaiDigits } from "@/lib/parse/thai-number";
 import {
   MAX_WALLET_NAME,
@@ -41,6 +44,9 @@ const BALANCE_PATTERN = /^-?\d{1,10}(\.\d{1,2})?$/;
 export default function WalletsPage() {
   const { api } = useLiff();
   const wallets = useApi<WalletsResponse>("/api/wallets");
+  const me = useApi<Me>("/api/me");
+  const transfers = useApi<{ items: TransferDto[] }>("/api/transfers");
+  const [transferring, setTransferring] = useState(false);
   const [editing, setEditing] = useState<WalletItem | "new" | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const items = wallets.data?.items ?? [];
@@ -51,6 +57,7 @@ export default function WalletsPage() {
       await run();
       setNotice(done);
       wallets.reload();
+      transfers.reload();
     } catch (e) {
       setNotice(e instanceof Error ? e.message : "ทำรายการไม่สำเร็จ");
     }
@@ -172,6 +179,69 @@ export default function WalletsPage() {
               ))}
             </ul>
 
+            {items.length > 1 ? (
+              <section className={cardClass} aria-label="โอนระหว่างกระเป๋า">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <h2 className="font-semibold">โอนระหว่างกระเป๋า</h2>
+                    <p className="text-xs text-muted">ไม่นับเป็นรายรับหรือรายจ่าย</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setTransferring(true)}
+                    disabled={!me.data?.features.transfer}
+                    className="flex h-11 items-center gap-1 rounded-2xl bg-primary px-3 text-sm font-semibold text-surface disabled:opacity-40"
+                  >
+                    <ArrowRightLeft className="h-4 w-4" aria-hidden /> โอน
+                  </button>
+                </div>
+                {me.data && !me.data.features.transfer ? (
+                  <PlusLock>โอนเงินระหว่างกระเป๋าของคุณได้โดยไม่กระทบสรุปรายรับ-รายจ่าย</PlusLock>
+                ) : null}
+                {(transfers.data?.items.length ?? 0) === 0 ? (
+                  <p className="text-sm text-muted">ยังไม่มีรายการโอน</p>
+                ) : (
+                  <ul className="divide-y divide-border">
+                    {transfers.data?.items.map((t) => (
+                      <li key={t.id} className="flex items-center gap-2 py-3">
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-semibold">
+                            {t.fromName} → {t.toName}
+                          </p>
+                          <p className="truncate text-xs text-muted">
+                            {formatThaiDate(new Date(t.occurredAt))}
+                            {t.note ? ` · ${t.note}` : ""}
+                          </p>
+                        </div>
+                        <p className="num shrink-0 text-sm font-bold">
+                          ฿{formatBaht(t.amountSatang)}
+                        </p>
+                        <button
+                          type="button"
+                          aria-label={`ยกเลิกการโอน ${t.fromName} ไป ${t.toName}`}
+                          onClick={() => {
+                            if (
+                              window.confirm(
+                                "ยกเลิกการโอนนี้ใช่ไหม? ยอดสองกระเป๋าจะกลับเป็นเหมือนเดิม",
+                              )
+                            ) {
+                              void act(
+                                () => api(`/api/transfers/${t.id}`, { method: "DELETE" }),
+                                "ยกเลิกการโอนแล้ว",
+                              );
+                            }
+                          }}
+                          className="flex h-11 w-9 shrink-0 items-center justify-center text-muted"
+                        >
+                          <Trash2 className="h-4 w-4" aria-hidden />
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </section>
+            ) : null}
+
             {notice ? (
               <p
                 role="status"
@@ -201,6 +271,19 @@ export default function WalletsPage() {
           </>
         )}
       </div>
+
+      {transferring ? (
+        <TransferSheet
+          wallets={items}
+          onClose={() => setTransferring(false)}
+          onSaved={() => {
+            setTransferring(false);
+            setNotice("โอนแล้ว");
+            wallets.reload();
+            transfers.reload();
+          }}
+        />
+      ) : null}
 
       {editing ? (
         <WalletSheet
@@ -305,6 +388,102 @@ function WalletSheet({
           className="h-12 w-full rounded-2xl bg-primary text-base font-semibold text-surface disabled:opacity-60"
         >
           {saving ? "กำลังบันทึก..." : "บันทึก"}
+        </button>
+      </form>
+    </Sheet>
+  );
+}
+
+function TransferSheet({
+  wallets,
+  onClose,
+  onSaved,
+}: {
+  wallets: WalletItem[];
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const { api } = useLiff();
+  const [fromId, setFromId] = useState(wallets[0]?.id ?? "");
+  const [toId, setToId] = useState(wallets[1]?.id ?? "");
+  const [amount, setAmount] = useState("");
+  const [note, setNote] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    const normalized = normalizeThaiDigits(amount).replace(/,/g, "").trim();
+    if (fromId === toId) return setError("เลือกสองกระเป๋าที่ต่างกันนะ");
+    if (!/^\d{1,10}(\.\d{1,2})?$/.test(normalized) || Number(normalized) <= 0) {
+      return setError("จำนวนเงินไม่ถูกต้อง (เช่น 500 หรือ 500.50)");
+    }
+    setSaving(true);
+    setError(null);
+    try {
+      await api("/api/transfers", {
+        method: "POST",
+        body: JSON.stringify({ fromId, toId, amount: normalized, note: note.trim() || null }),
+      });
+      onSaved();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "โอนไม่สำเร็จ");
+      setSaving(false);
+    }
+  }
+
+  const options = wallets.map((w) => (
+    <option key={w.id} value={w.id}>
+      {WALLET_KIND_EMOJI[w.kind]} {w.name}
+    </option>
+  ));
+
+  return (
+    <Sheet title="โอนระหว่างกระเป๋า" onClose={onClose}>
+      <form onSubmit={submit} className="space-y-3">
+        <select
+          value={fromId}
+          onChange={(e) => setFromId(e.target.value)}
+          aria-label="จากกระเป๋า"
+          className={fieldClass}
+        >
+          {options}
+        </select>
+        <select
+          value={toId}
+          onChange={(e) => setToId(e.target.value)}
+          aria-label="ไปกระเป๋า"
+          className={fieldClass}
+        >
+          {options}
+        </select>
+        <input
+          value={amount}
+          onChange={(e) => setAmount(e.target.value)}
+          inputMode="decimal"
+          placeholder="จำนวนเงิน (บาท)"
+          aria-label="จำนวนเงินที่โอน"
+          className={cn(fieldClass, "num")}
+        />
+        <input
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          maxLength={MAX_TRANSFER_NOTE}
+          placeholder="โน้ต (ไม่บังคับ)"
+          aria-label="โน้ตการโอน"
+          className={fieldClass}
+        />
+        {error ? (
+          <p role="alert" className="text-sm text-expense">
+            {error}
+          </p>
+        ) : null}
+        <button
+          type="submit"
+          disabled={saving}
+          className="h-12 w-full rounded-2xl bg-primary text-base font-semibold text-surface disabled:opacity-60"
+        >
+          {saving ? "กำลังโอน..." : "โอน"}
         </button>
       </form>
     </Sheet>

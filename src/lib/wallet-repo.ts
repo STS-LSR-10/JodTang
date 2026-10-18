@@ -15,6 +15,8 @@ interface BalanceRow {
   income: number | string;
   expense: number | string;
   tx_count: number | string;
+  transfer_in: number | string;
+  transfer_out: number | string;
 }
 
 /** Every wallet of the person with its totals (the main wallet first). Empty if none was made yet. */
@@ -29,6 +31,8 @@ export async function listWallets(db: SupabaseClient, userId: string): Promise<W
     openingSatang: toSatang(r.opening_balance),
     incomeSatang: toSatang(r.income),
     expenseSatang: toSatang(r.expense),
+    transferInSatang: toSatang(r.transfer_in ?? 0),
+    transferOutSatang: toSatang(r.transfer_out ?? 0),
     entryCount: Number(r.tx_count),
   }));
 }
@@ -91,6 +95,15 @@ async function clearDefault(db: SupabaseClient, userId: string): Promise<void> {
       .eq("user_id", userId)
       .is("account_id", null);
     if (pinned.error) fail("pin entries to the old main wallet", pinned.error);
+    // transfers left pointing at "no wallet" (a deleted wallet) follow the main wallet the same way
+    for (const column of ["from_account", "to_account"]) {
+      const moved = await db
+        .from("transfers")
+        .update({ [column]: oldId })
+        .eq("user_id", userId)
+        .is(column, null);
+      if (moved.error) fail("pin transfers to the old main wallet", moved.error);
+    }
   }
   const { error } = await db
     .from("accounts")

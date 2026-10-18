@@ -35,6 +35,8 @@ const wallet = (n: number): Wallet => ({
   openingSatang: 0,
   incomeSatang: 0,
   expenseSatang: 0,
+  transferInSatang: 0,
+  transferOutSatang: 0,
   entryCount: 0,
 });
 const wallets = (n: number) => Array.from({ length: n }, (_, i) => wallet(i + 1));

@@ -4,6 +4,9 @@ import type { Wallet } from "@/lib/wallet";
 import { handleEvent, type HandlerDeps, type LineEvent } from "./handlers";
 
 let wallets: Wallet[] = [];
+let plan = "plus";
+const transfers: Record<string, unknown>[] = [];
+const cancelled: string[] = [];
 const inserted: Record<string, unknown>[] = [];
 const moved: { txId: string; walletId: string | null }[] = [];
 
@@ -15,10 +18,22 @@ const wallet = (over: Partial<Wallet>): Wallet => ({
   openingSatang: 0,
   incomeSatang: 0,
   expenseSatang: 0,
+  transferInSatang: 0,
+  transferOutSatang: 0,
   entryCount: 0,
   ...over,
 });
 
+vi.mock("@/lib/transfer-repo", () => ({
+  createTransfer: async (_db: unknown, _u: string, input: Record<string, unknown>) => {
+    transfers.push(input);
+    return "tr1";
+  },
+  deleteTransfer: async (_db: unknown, _u: string, id: string) => {
+    cancelled.push(id);
+    return id === "tr1";
+  },
+}));
 vi.mock("@/lib/wallet-repo", () => ({
   listWallets: async () => wallets,
   ensureWallets: async () => wallets,
@@ -33,7 +48,7 @@ vi.mock("@/lib/repo", async (original) => ({
     id: "u1",
     line_user_id: "U1",
     display_name: null,
-    plan: "plus",
+    plan,
     plan_expires_at: null,
   }),
   getSettings: async () => ({
@@ -105,6 +120,9 @@ beforeEach(() => {
   ];
   inserted.length = 0;
   moved.length = 0;
+  transfers.length = 0;
+  cancelled.length = 0;
+  plan = "plus";
 });
 
 describe("recording with @wallet", () => {
@@ -183,5 +201,59 @@ describe("the กระเป๋า command", () => {
     const json = sent(reply);
     expect(json).toContain("กระเป๋าเงิน");
     expect(json).toContain("💳 KTC");
+  });
+});
+
+describe("transfers between wallets", () => {
+  it("moves money, says both balances and that it is not income or expense", async () => {
+    const { deps, reply } = setup();
+    await handleEvent(text("โอน 500 เงินสด>ktc"), deps);
+    expect(transfers[0]).toMatchObject({ fromId: "w-cash", toId: "w-ktc", amountSatang: 50000 });
+    expect(inserted).toHaveLength(0);
+    const json = sent(reply);
+    expect(json).toContain("โอนแล้ว ฿500");
+    expect(json).toContain("ไม่นับเป็นรายรับ/รายจ่าย");
+    expect(json).toContain("a=tc&id=tr1");
+  });
+
+  it("Free is told it needs Professional and nothing is moved", async () => {
+    plan = "free";
+    const { deps, reply } = setup();
+    await handleEvent(text("โอน 500 เงินสด>ktc"), deps);
+    expect(transfers).toHaveLength(0);
+    expect(sent(reply)).toContain("Professional");
+  });
+
+  it("the same wallet on both sides is refused", async () => {
+    const { deps, reply } = setup();
+    await handleEvent(text("โอน 500 เงินสด>เงินสด"), deps);
+    expect(transfers).toHaveLength(0);
+    expect(sent(reply)).toContain("เดียวกัน");
+  });
+
+  it("one unknown wallet name moves nothing and lists the wallets", async () => {
+    const { deps, reply } = setup();
+    await handleEvent(text("โอน 500 เงินสด>xyz"), deps);
+    expect(transfers).toHaveLength(0);
+    expect(sent(reply)).toContain("ไม่พบกระเป๋า");
+  });
+
+  it("names no wallet at all: it is an ordinary entry, not a transfer", async () => {
+    const { deps } = setup();
+    await handleEvent(text("โอนให้แม่ 500 ค่าขนม > ต่างจังหวัด"), deps);
+    expect(transfers).toHaveLength(0);
+  });
+
+  it("the undo button removes the transfer", async () => {
+    const { deps, reply } = setup();
+    await handleEvent(postback("a=tc&id=tr1"), deps);
+    expect(cancelled).toEqual(["tr1"]);
+    expect(sent(reply)).toContain("ยกเลิกการโอนแล้ว");
+  });
+
+  it("an unknown transfer id says not found", async () => {
+    const { deps, reply } = setup();
+    await handleEvent(postback("a=tc&id=nope"), deps);
+    expect(sent(reply)).toContain("ไม่พบ");
   });
 });

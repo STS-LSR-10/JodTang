@@ -31,14 +31,22 @@ export interface Wallet {
   openingSatang: number;
   incomeSatang: number;
   expenseSatang: number;
+  /** Moved in / out by transfers between wallets (not income or expense). */
+  transferInSatang: number;
+  transferOutSatang: number;
   entryCount: number;
 }
 
-/** Opening balance + income - expense, in satang. */
+/** Opening balance + income - expense + transfers in - transfers out, in satang. */
 export function balanceOf(
-  w: Pick<Wallet, "openingSatang" | "incomeSatang" | "expenseSatang">,
+  w: Pick<
+    Wallet,
+    "openingSatang" | "incomeSatang" | "expenseSatang" | "transferInSatang" | "transferOutSatang"
+  >,
 ): number {
-  return w.openingSatang + w.incomeSatang - w.expenseSatang;
+  return (
+    w.openingSatang + w.incomeSatang - w.expenseSatang + w.transferInSatang - w.transferOutSatang
+  );
 }
 
 export function totalBalance(wallets: Wallet[]): number {
@@ -55,6 +63,8 @@ export function walletToDto(w: Wallet) {
     openingSatang: w.openingSatang,
     incomeSatang: w.incomeSatang,
     expenseSatang: w.expenseSatang,
+    transferInSatang: w.transferInSatang,
+    transferOutSatang: w.transferOutSatang,
     balanceSatang: balanceOf(w),
     entryCount: w.entryCount,
   };

@@ -4,6 +4,7 @@ import {
   expectNoSeriousA11yViolations,
   mockApi,
   ME_FREE,
+  ME_PLUS,
 } from "./helpers";
 
 const wallet = (over: Record<string, unknown>) => ({
@@ -114,5 +115,69 @@ test.describe("wallets page (360px)", () => {
     await page.goto("/wallets");
 
     await expect(page.getByRole("button", { name: "ลองอีกครั้ง" })).toBeVisible();
+  });
+
+  test("Professional: transfer between wallets sends both ids and the amount", async ({ page }) => {
+    let body: unknown = null;
+    await mockApi(page, {
+      "GET /api/me": ME_PLUS,
+      "GET /api/wallets": TWO,
+      "GET /api/transfers": {
+        items: [
+          {
+            id: "t1",
+            fromId: "w1",
+            fromName: "เงินสด",
+            toId: "w2",
+            toName: "KTC",
+            amountSatang: 50_000,
+            occurredAt: "2026-10-10T05:00:00Z",
+            note: null,
+          },
+        ],
+      },
+      "POST /api/transfers": async (route: Route) => {
+        body = route.request().postDataJSON();
+        return { id: "new" };
+      },
+    });
+    await page.goto("/wallets");
+
+    await expect(page.getByText("เงินสด → KTC")).toBeVisible();
+    await page.getByRole("button", { name: "โอน", exact: true }).click();
+    await page.getByLabel("จำนวนเงินที่โอน").fill("250");
+    await page.getByRole("button", { name: "โอน", exact: true }).last().click();
+
+    await expect(page.getByRole("status")).toContainText("โอนแล้ว");
+    expect(body).toEqual({ fromId: "w1", toId: "w2", amount: "250", note: null });
+    await expectNoHorizontalScroll(page);
+  });
+
+  test("Free: the transfer button is off and says why", async ({ page }) => {
+    await mockApi(page, {
+      "GET /api/me": ME_FREE,
+      "GET /api/wallets": TWO,
+      "GET /api/transfers": { items: [] },
+    });
+    await page.goto("/wallets");
+
+    await expect(page.getByRole("button", { name: "โอน", exact: true })).toBeDisabled();
+    await expect(page.getByText("สำหรับแผน Professional")).toBeVisible();
+  });
+
+  test("the same wallet on both sides is refused before sending", async ({ page }) => {
+    await mockApi(page, {
+      "GET /api/me": ME_PLUS,
+      "GET /api/wallets": TWO,
+      "GET /api/transfers": { items: [] },
+    });
+    await page.goto("/wallets");
+
+    await page.getByRole("button", { name: "โอน", exact: true }).click();
+    await page.getByLabel("ไปกระเป๋า").selectOption("w1");
+    await page.getByLabel("จำนวนเงินที่โอน").fill("10");
+    await page.getByRole("button", { name: "โอน", exact: true }).last().click();
+
+    await expect(page.getByText("เลือกสองกระเป๋าที่ต่างกันนะ")).toBeVisible();
   });
 });

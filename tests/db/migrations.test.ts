@@ -310,6 +310,88 @@ describe("wallets (0019)", () => {
   });
 });
 
+describe("transfers (0020)", () => {
+  async function seed() {
+    const u = await newUser(db, `tr-${Math.random()}`);
+    const other = await newUser(db, `tr-other-${Math.random()}`);
+    const wallet = async (user: string, name: string, isDefault: boolean, opening: number) =>
+      (
+        await one<{ id: string }>(
+          db,
+          "insert into accounts (user_id,name,kind,is_default,opening_balance) values ($1,$2,'cash'::account_kind,$3,$4) returning id",
+          [user, name, isDefault, opening],
+        )
+      ).id;
+    const main = await wallet(u, "เงินสด", true, 1000);
+    const bank = await wallet(u, "กสิกร", false, 0);
+    const theirs = await wallet(other, "ของคนอื่น", true, 0);
+    return { u, other, main, bank, theirs };
+  }
+  const transfer = (user: string, from: string | null, to: string | null, amount: number) =>
+    db.query(
+      "insert into transfers (user_id,from_account,to_account,amount) values ($1,$2,$3,$4)",
+      [user, from, to, amount],
+    );
+  const balances = (u: string) =>
+    rows<{
+      name: string;
+      income: string;
+      expense: string;
+      transfer_in: string;
+      transfer_out: string;
+    }>(
+      db,
+      "select name, income::text, expense::text, transfer_in::text, transfer_out::text from wallet_balances($1)",
+      [u],
+    );
+
+  it("moves money between wallets and is not income or expense", async () => {
+    const { u, main, bank } = await seed();
+    await transfer(u, main, bank, 400);
+    await transfer(u, bank, main, 50);
+    expect(await balances(u)).toEqual([
+      { name: "เงินสด", income: "0", expense: "0", transfer_in: "50.00", transfer_out: "400.00" },
+      { name: "กสิกร", income: "0", expense: "0", transfer_in: "400.00", transfer_out: "50.00" },
+    ]);
+    const totals = await one<{ income: string; expense: string }>(
+      db,
+      "select coalesce(sum(amount) filter (where type='income'),0)::text as income, coalesce(sum(amount) filter (where type='expense'),0)::text as expense from transactions where user_id=$1",
+      [u],
+    );
+    expect(totals).toEqual({ income: "0", expense: "0" });
+  });
+
+  it("refuses a zero amount and a transfer to the same wallet", async () => {
+    const { u, main, bank } = await seed();
+    await expect(transfer(u, main, bank, 0)).rejects.toThrow();
+    await expect(transfer(u, main, main, 10)).rejects.toThrow();
+  });
+
+  it("a deleted wallet's transfers fall back to the main wallet", async () => {
+    const { u, main, bank } = await seed();
+    await transfer(u, main, bank, 400);
+    await db.query("delete from accounts where id = $1", [bank]);
+    // the money left the main wallet and went to "no wallet" = the main wallet: net zero
+    expect(await balances(u)).toEqual([
+      { name: "เงินสด", income: "0", expense: "0", transfer_in: "400.00", transfer_out: "400.00" },
+    ]);
+  });
+
+  it("another person's transfers never show up", async () => {
+    const { u, other, main, bank, theirs } = await seed();
+    await transfer(u, main, bank, 10);
+    const second = await one<{ id: string }>(
+      db,
+      "insert into accounts (user_id,name,kind) values ($1,'อีกใบ','bank'::account_kind) returning id",
+      [other],
+    );
+    await transfer(other, theirs, second.id, 999);
+    const mine = await balances(u);
+    expect(mine.map((b) => b.name)).toEqual(["เงินสด", "กสิกร"]);
+    expect(mine[0]?.transfer_out).toBe("10.00");
+  });
+});
+
 describe("top_titles (0018)", () => {
   async function seed() {
     const u = await newUser(db, `tt-${Math.random()}`);

@@ -16,6 +16,8 @@ const w = (over: Partial<Wallet>): Wallet => ({
   openingSatang: 0,
   incomeSatang: 0,
   expenseSatang: 0,
+  transferInSatang: 0,
+  transferOutSatang: 0,
   entryCount: 0,
   ...over,
 });
@@ -26,6 +28,12 @@ describe("balances", () => {
       130000,
     );
     expect(balanceOf(w({ expenseSatang: 350000 }))).toBe(-350000);
+  });
+
+  it("transfers move money in and out", () => {
+    expect(
+      balanceOf(w({ openingSatang: 1000, transferInSatang: 500, transferOutSatang: 200 })),
+    ).toBe(1300);
   });
 
   it("the total adds every wallet", () => {

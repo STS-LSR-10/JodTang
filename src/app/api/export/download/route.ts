@@ -11,6 +11,7 @@ import { getAdminClient } from "@/lib/supabase/admin";
 import { applyTxFilters } from "@/lib/tx-query";
 import { DEFAULT_WALLET_NAME } from "@/lib/wallet";
 import { listWallets } from "@/lib/wallet-repo";
+import { listTransfers } from "@/lib/transfer-repo";
 import { log } from "@/lib/log";
 
 export const runtime = "nodejs";
@@ -80,7 +81,17 @@ export async function GET(request: Request): Promise<Response> {
 
     // The plan is checked now (not trusted from the token): Plus adds the summary sheets.
     const { plan } = await getPlanInfo(db, claims.userId);
-    const file = await buildXlsx(rows, { advanced: can(plan, "advancedExport") });
+    // transfers have no type/category/tag/text/wallet, so those filters leave them out
+    const f = claims.filters;
+    const transfers =
+      f.type || f.categoryId || f.q || f.tag || f.accountId
+        ? []
+        : (await listTransfers(db, claims.userId, MAX_EXPORT_ROWS)).filter(
+            (t) =>
+              (!f.from || new Date(t.occurredAt) >= new Date(f.from)) &&
+              (!f.to || new Date(t.occurredAt) < new Date(f.to)),
+          );
+    const file = await buildXlsx(rows, { advanced: can(plan, "advancedExport"), transfers });
     return new Response(new Uint8Array(file), {
       headers: {
         ...headers,

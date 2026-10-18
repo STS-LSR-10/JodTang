@@ -14,7 +14,9 @@ create index if not exists transactions_account_idx on transactions (account_id)
 -- Balance of every wallet of a person: opening balance + income - expense. Entries with no wallet
 -- (everything recorded before wallets existed) belong to the main wallet. security invoker, like
 -- summary_by_period; the server passes p_user explicitly.
-create or replace function wallet_balances(p_user uuid)
+-- (dropped first so the migrations can run again after 0020 changed the return type)
+drop function if exists wallet_balances(uuid);
+create function wallet_balances(p_user uuid)
 returns table (
   id uuid, name text, kind text, is_default boolean, opening_balance numeric,
   income numeric, expense numeric, tx_count bigint

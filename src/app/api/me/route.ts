@@ -43,6 +43,7 @@ const FEATURES: Feature[] = [
   "forecast",
   "insight",
   "customCategory",
+  "transfer",
 ];
 
 export async function GET(request: Request): Promise<Response> {

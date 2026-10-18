@@ -32,6 +32,7 @@ export const HELP_TEXT = [
   "• สรุปปี · เทียบเดือน (Professional ขึ้นไป) · พยากรณ์ · วิเคราะห์ (Ultimate)",
   "• สรุป 1/10 ถึง 15/10 · ค้นหา กาแฟ (Professional ขึ้นไป)",
   "• กระเป๋า (ดูยอดแต่ละกระเป๋า) · จดลงกระเป๋า: กาแฟ 45 @บัตร",
+  "• โอนระหว่างกระเป๋า (Professional ขึ้นไป): โอน 500 เงินสด>KTC",
   "• ลบล่าสุด · แก้ล่าสุด 45",
   "• ตังสะสม · รหัสชวน · ใช้รหัส ABCD1234",
 ].join("\n");
@@ -206,3 +207,9 @@ export const WALLET_AMBIGUOUS_TEXT = (hint: string, names: string[]) =>
 export const WALLET_MOVED_TEXT = (title: string, wallet: string) =>
   `ย้าย "${title}" ไปที่ ${wallet} แล้ว`;
 export const WALLET_MOVE_ASK_TEXT = "ย้ายรายการนี้ไปกระเป๋าไหนดี?";
+export const TRANSFER_LOCKED_TEXT =
+  'การโอนระหว่างกระเป๋าเป็นฟีเจอร์ของแผน Professional ขึ้นไป (มีกระเป๋าได้ถึง 5 ใบ) ลองทดลองใช้ฟรี 7 วันได้ที่เมนู "อัปเกรด" นะ';
+export const TRANSFER_SAME_TEXT = "โอนไปกระเป๋าเดียวกันไม่ได้ ลองระบุสองกระเป๋าที่ต่างกันนะ";
+export const TRANSFER_USAGE_TEXT =
+  'โอนระหว่างกระเป๋าพิมพ์ เช่น "โอน 500 เงินสด>KTC" หรือ "โอน 500 จาก เงินสด ไป KTC" การโอนไม่นับเป็นรายรับหรือรายจ่ายนะ';
+export const TRANSFER_CANCELLED_TEXT = "ยกเลิกการโอนแล้ว ยอดสองกระเป๋ากลับเป็นเหมือนเดิม";

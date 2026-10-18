@@ -1,4 +1,5 @@
 import type { DaySpec } from "@/lib/summary-range";
+import { parseTransferText } from "@/lib/transfer";
 import { normalizeThaiDigits, parseAmountToSatang } from "@/lib/parse/thai-number";
 
 export type Command =
@@ -14,6 +15,7 @@ export type Command =
   | { kind: "forecast" }
   | { kind: "insight" }
   | { kind: "wallets" }
+  | { kind: "transfer"; amountSatang: number; from: string; to: string }
   | { kind: "summary"; scope: "today" | "month" }
   | { kind: "delete-latest" }
   | { kind: "edit-latest"; amountSatang: number }
@@ -51,6 +53,8 @@ export function parseCommand(input: string): Command | null {
   if (["กระเป๋า", "กระเป๋าเงิน", "ยอดเงิน", "ยอดคงเหลือ", "wallet", "wallets"].includes(text)) {
     return { kind: "wallets" };
   }
+  const transfer = parseTransferText(text);
+  if (transfer) return { kind: "transfer", ...transfer };
   if (["พยากรณ์", "พยากรณ์เงิน", "พยากรณ์ปลายเดือน", "พยากรณ์ปลายรอบ"].includes(text)) {
     return { kind: "forecast" };
   }

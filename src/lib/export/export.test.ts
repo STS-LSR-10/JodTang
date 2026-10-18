@@ -93,13 +93,39 @@ describe("summaries", () => {
   });
 });
 
-describe("buildXlsx", () => {
-  async function read(buf: Buffer) {
-    const wb = new ExcelJS.Workbook();
-    await wb.xlsx.load(buf as unknown as ArrayBuffer);
-    return wb;
-  }
+async function read(buf: Buffer) {
+  const wb = new ExcelJS.Workbook();
+  await wb.xlsx.load(buf as unknown as ArrayBuffer);
+  return wb;
+}
 
+describe("buildXlsx: transfers", () => {
+  const transfer = {
+    id: "t1",
+    fromId: "a",
+    fromName: "เงินสด",
+    toId: "b",
+    toName: "KTC",
+    amountSatang: 50000,
+    occurredAt: "2026-10-10T05:00:00Z",
+    note: null,
+  };
+
+  it("get their own sheet and are not in the list of entries", async () => {
+    const wb = await read(await buildXlsx([row()], { advanced: false, transfers: [transfer] }));
+    const sheet = wb.getWorksheet("โอนระหว่างกระเป๋า");
+    expect(sheet?.getRow(2).getCell(3).value).toBe("เงินสด");
+    expect(sheet?.getRow(2).getCell(5).value).toBe(500);
+    expect(wb.getWorksheet("รายการ")?.rowCount).toBe(2);
+  });
+
+  it("no transfers, no sheet", async () => {
+    const wb = await read(await buildXlsx([row()], { advanced: false, transfers: [] }));
+    expect(wb.getWorksheet("โอนระหว่างกระเป๋า")).toBeUndefined();
+  });
+});
+
+describe("buildXlsx", () => {
   it("free: one sheet with typed amounts", async () => {
     const wb = await read(await buildXlsx([row()], { advanced: false }));
     expect(wb.worksheets.map((s) => s.name)).toEqual(["รายการ"]);

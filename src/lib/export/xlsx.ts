@@ -1,5 +1,6 @@
 import ExcelJS from "exceljs";
 import { HEADERS, TYPE_LABEL, exportDate, exportTime, sourceLabel, type ExportRow } from "./rows";
+import type { TransferDto } from "@/lib/transfer";
 import { summarizeByCategory, summarizeByMonth } from "./summary";
 
 const HEADER_FILL = "FFCCFBF1"; // brand primary-soft
@@ -22,7 +23,7 @@ const baht = (satang: number) => satang / 100; // display value only; sums are d
  */
 export async function buildXlsx(
   rows: ExportRow[],
-  options: { advanced: boolean },
+  options: { advanced: boolean; transfers?: TransferDto[] },
 ): Promise<Buffer> {
   const wb = new ExcelJS.Workbook();
   wb.creator = "JodTang";
@@ -87,6 +88,31 @@ export async function buildXlsx(
       });
     }
     styleHeader(byMonth);
+  }
+
+  // moves between wallets: their own sheet, never mixed into the list of income and expenses
+  if (options.transfers && options.transfers.length > 0) {
+    const sheet = wb.addWorksheet("โอนระหว่างกระเป๋า");
+    sheet.columns = [
+      { header: "วันที่", key: "date", width: 12 },
+      { header: "เวลา", key: "time", width: 8 },
+      { header: "จากกระเป๋า", key: "from", width: 18 },
+      { header: "ไปกระเป๋า", key: "to", width: 18 },
+      { header: "จำนวนเงิน (บาท)", key: "amount", width: 16, style: { numFmt: MONEY_FORMAT } },
+      { header: "โน้ต", key: "note", width: 24 },
+    ];
+    for (const t of options.transfers) {
+      const at = new Date(t.occurredAt);
+      sheet.addRow({
+        date: exportDate(at),
+        time: exportTime(at),
+        from: t.fromName,
+        to: t.toName,
+        amount: baht(t.amountSatang),
+        note: t.note ?? "",
+      });
+    }
+    styleHeader(sheet);
   }
 
   return Buffer.from(await wb.xlsx.writeBuffer());

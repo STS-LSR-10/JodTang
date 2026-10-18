@@ -138,3 +138,24 @@ export function buildWalletChooser(input: {
     },
   };
 }
+
+/** "โอนแล้ว" with the two balances now, and a Quick Reply to undo it. */
+export function buildTransferDone(input: { transferId: string; text: string }): LineMessage {
+  return {
+    type: "text",
+    text: input.text,
+    quickReply: {
+      items: [
+        {
+          type: "action",
+          action: {
+            type: "postback",
+            label: "↩ ยกเลิกการโอน",
+            data: `a=tc&id=${input.transferId}`,
+            displayText: "ยกเลิกการโอน",
+          },
+        },
+      ],
+    },
+  };
+}

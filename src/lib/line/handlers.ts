@@ -73,9 +73,10 @@ import type { TextStructurer } from "@/lib/ai/text-structurer";
 import { recordSmartEntries } from "./smart-entries";
 import { buildForecastCard } from "./forecast-flex";
 import { buildInsightCard } from "./insight-flex";
-import { buildWalletChooser, buildWalletsCard } from "./wallet-flex";
+import { buildTransferDone, buildWalletChooser, buildWalletsCard } from "./wallet-flex";
+import { createTransfer, deleteTransfer } from "@/lib/transfer-repo";
 import { ensureWallets, listWallets, setEntryWallet } from "@/lib/wallet-repo";
-import { resolveWallet, walletLabel } from "@/lib/wallet";
+import { balanceOf, resolveWallet, walletLabel } from "@/lib/wallet";
 import { walletCapacity } from "@/lib/plan";
 import { buildSearchCard } from "./search-flex";
 import {
@@ -152,6 +153,10 @@ import {
   WALLET_MOVE_ASK_TEXT,
   WALLET_MOVED_TEXT,
   WALLET_NOT_FOUND_TEXT,
+  TRANSFER_CANCELLED_TEXT,
+  TRANSFER_LOCKED_TEXT,
+  TRANSFER_SAME_TEXT,
+  TRANSFER_USAGE_TEXT,
   VOICE_UNAVAILABLE_TEXT,
   WELCOME_TEXT,
   text,
@@ -302,7 +307,13 @@ export async function handleEvent(event: LineEvent, deps: HandlerDeps): Promise<
 
 async function handleText(input: string, user: UserRow, deps: HandlerDeps): Promise<LineMessage[]> {
   const command = parseCommand(input);
-  if (command) return runCommand(command, user, deps);
+  if (command?.kind === "transfer") {
+    // "โอนค่าเช่า 5000 ไป ..." that names no wallet is an ordinary entry, so it falls through
+    const done = await runTransfer(command, user, deps);
+    if (done) return done;
+  } else if (command) {
+    return runCommand(command, user, deps);
+  }
 
   const parsed = parseMessage(input, deps.now());
   const { entries } = parsed;
@@ -348,6 +359,62 @@ async function handleText(input: string, user: UserRow, deps: HandlerDeps): Prom
     }
   }
   return saveEntries(entries, user, deps, walletIds);
+}
+
+/** "โอน 500 เงินสด>KTC": null when neither name is a wallet of theirs (then it is not a transfer). */
+async function runTransfer(
+  command: Extract<Command, { kind: "transfer" }>,
+  user: UserRow,
+  deps: HandlerDeps,
+): Promise<LineMessage[] | null> {
+  const wallets = await ensureWallets(deps.db, user.id);
+  const from = resolveWallet(command.from, wallets);
+  const to = resolveWallet(command.to, wallets);
+  if (!from.ok && !to.ok && from.reason === "none" && to.reason === "none") return null;
+
+  if (!can(effectivePlan(user.plan, user.plan_expires_at, deps.now()), "transfer")) {
+    return [text(TRANSFER_LOCKED_TEXT)];
+  }
+  for (const [side, hint] of [
+    [from, command.from],
+    [to, command.to],
+  ] as const) {
+    if (!side.ok) {
+      const names = wallets.map((w) => w.name);
+      return [
+        text(
+          side.reason === "ambiguous"
+            ? WALLET_AMBIGUOUS_TEXT(hint, names)
+            : WALLET_NOT_FOUND_TEXT(hint, names),
+        ),
+      ];
+    }
+  }
+  if (!from.ok || !to.ok) return null;
+  if (from.wallet.id === to.wallet.id) return [text(TRANSFER_SAME_TEXT)];
+
+  const id = await createTransfer(deps.db, user.id, {
+    fromId: from.wallet.id,
+    toId: to.wallet.id,
+    amountSatang: command.amountSatang,
+    occurredAt: deps.now(),
+  });
+  const after = await listWallets(deps.db, user.id);
+  const balance = (walletId: string) => {
+    const w = after.find((x) => x.id === walletId);
+    return w ? `฿${formatBaht(balanceOf(w))}` : "";
+  };
+  return [
+    buildTransferDone({
+      transferId: id,
+      text: [
+        `โอนแล้ว ฿${formatBaht(command.amountSatang)}`,
+        `${walletLabel(from.wallet)} → ${walletLabel(to.wallet)}`,
+        `คงเหลือ: ${from.wallet.name} ${balance(from.wallet.id)} · ${to.wallet.name} ${balance(to.wallet.id)}`,
+        "(ไม่นับเป็นรายรับ/รายจ่าย)",
+      ].join("\n"),
+    }),
+  ];
 }
 
 /** "🐱 ค่าอาหารแมว" for a category that has an emoji, its plain name otherwise, null for none. */
@@ -872,6 +939,9 @@ async function runCommand(
       ];
     }
 
+    case "transfer": // handled in handleText; only reached by a direct call
+      return [text(TRANSFER_USAGE_TEXT)];
+
     case "wallets": {
       const wallets = await ensureWallets(db, user.id);
       const plan = effectivePlan(user.plan, user.plan_expires_at, deps.now());
@@ -1060,6 +1130,14 @@ async function handlePostback(
   if (action === "cp") {
     const type = params.get("t") === "income" ? "income" : "expense";
     return [buildCategoryKeyboardList(type, await loadCategories(deps.db, user.id))];
+  }
+
+  // "↩ ยกเลิกการโอน" under a transfer: the id is a transfer, not an entry
+  if (action === "tc") {
+    const transferId = params.get("id");
+    if (!transferId) return [];
+    const removed = await deleteTransfer(deps.db, user.id, transferId);
+    return [text(removed ? TRANSFER_CANCELLED_TEXT : NOT_FOUND_TEXT)];
   }
 
   const id = params.get("id");
