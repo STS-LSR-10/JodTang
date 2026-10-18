@@ -46,11 +46,13 @@ import { loadSearchItems, loadSearchTotals, parseSearchTerm } from "@/lib/search
 import { describeTotals, sameSpanRanges } from "@/lib/period-compare";
 import {
   loadCategoryCompare,
+  loadForecastInput,
   loadCategorySpend,
   loadSummaryData,
   loadSummaryTransactions,
   loadYearData,
 } from "@/lib/summary-load";
+import { forecastCycle } from "@/lib/forecast";
 import { resolveYear } from "@/lib/year-summary";
 import { daySpecFromIso, resolveRange, type DaySpec } from "@/lib/summary-range";
 import {
@@ -65,6 +67,7 @@ import { handlePhotoImage, photoBlockedReply } from "@/lib/photos";
 import { needsSmartParse, runSmartParse } from "@/lib/ai/smart-parse";
 import type { TextStructurer } from "@/lib/ai/text-structurer";
 import { recordSmartEntries } from "./smart-entries";
+import { buildForecastCard } from "./forecast-flex";
 import { buildSearchCard } from "./search-flex";
 import {
   buildCategorySpendCard,
@@ -104,6 +107,8 @@ import {
   PHOTO_ASK_TEXT,
   COMPARE_EMPTY_TEXT,
   COMPARE_LOCKED_TEXT,
+  FORECAST_EMPTY_TEXT,
+  FORECAST_LOCKED_TEXT,
   RECENT_EMPTY_TEXT,
   SEARCH_LOCKED_TEXT,
   SEARCH_USAGE_TEXT,
@@ -765,6 +770,31 @@ async function runCommand(
           previousSatang: result.previousSatang,
           totalChange: describeTotals(result.currentSatang, result.previousSatang),
           moreUrl: pageUrl("/analytics"),
+        }),
+      ];
+    }
+
+    case "forecast": {
+      if (!can(effectivePlan(user.plan, user.plan_expires_at, deps.now()), "forecast")) {
+        return [text(FORECAST_LOCKED_TEXT)];
+      }
+      const now = deps.now();
+      const settings = await getSettings(db, user.id);
+      const cycle =
+        settings.budget_cycle === "monthly"
+          ? cycleRange(now, "monthly", settings.cycle_start_day)
+          : calendarMonthRange(now);
+      const forecastInput = await loadForecastInput(db, user.id, now, cycle);
+      if (forecastInput.entryCount === 0 && forecastInput.upcoming.length === 0) {
+        return [text(FORECAST_EMPTY_TEXT)];
+      }
+      const today = bangkokParts(now);
+      return [
+        buildForecastCard({
+          forecast: forecastCycle(forecastInput),
+          today: fromBangkok(today.year, today.month, today.day),
+          subtitle: `${formatThaiDate(cycle.from)} – ${formatThaiDate(new Date(cycle.to.getTime() - 1))}`,
+          moreUrl: pageUrl("/summary"),
         }),
       ];
     }

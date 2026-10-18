@@ -1,10 +1,13 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { toSatang } from "@/lib/money";
-import { bangkokParts } from "@/lib/thai-date";
+import { bangkokParts, fromBangkok } from "@/lib/thai-date";
 import type { YearResult } from "@/lib/year-summary";
 import type { DateRange } from "@/lib/budget-cycle";
+import type { ForecastInput, RuleLite } from "@/lib/forecast";
+import { upcomingOccurrences } from "@/lib/forecast";
 import { buildCompareRows, type CompareRow } from "@/lib/period-compare";
-import { periodSummary } from "@/lib/repo";
+import { getBudgetMode, loadBudgets, periodSummary } from "@/lib/repo";
+import { listRules } from "@/lib/recurring-repo";
 import type { CategoryShare, SummaryData, SummaryTx } from "@/lib/summary-report";
 
 const MAX_ROWS = 10_000;
@@ -167,5 +170,81 @@ export async function loadCategoryCompare(
     rows: buildCompareRows(cur, prev),
     currentSatang: cur.reduce((s, c) => s + c.amountSatang, 0),
     previousSatang: prev.reduce((s, c) => s + c.amountSatang, 0),
+  };
+}
+
+interface SourceTotalsRow {
+  income: number | string;
+  expense: number | string;
+  recurring_income: number | string;
+  recurring_expense: number | string;
+  tx_count: number | string;
+}
+
+async function totalsBySource(db: SupabaseClient, userId: string, range: DateRange) {
+  const { data, error } = await db.rpc("period_totals_by_source", {
+    p_user: userId,
+    p_from: range.from.toISOString(),
+    p_to: range.to.toISOString(),
+  });
+  if (error) throw new Error(`load totals by source: ${error.message}`);
+  const row = (Array.isArray(data) ? data[0] : data) as SourceTotalsRow | undefined;
+  return {
+    income: row ? toSatang(row.income) : 0,
+    expense: row ? toSatang(row.expense) : 0,
+    recurringExpense: row ? toSatang(row.recurring_expense) : 0,
+    count: row ? Number(row.tx_count) : 0,
+  };
+}
+
+/**
+ * Everything `forecastCycle` needs about the cycle that contains `now`: what came in and went out
+ * so far (and how much of it a recurring rule booked), the pace of the last seven days, the runs
+ * of the recurring rules still to come, and the overall budget when the person budgets overall.
+ */
+export async function loadForecastInput(
+  db: SupabaseClient,
+  userId: string,
+  now: Date,
+  cycle: DateRange,
+): Promise<ForecastInput> {
+  const p = bangkokParts(now);
+  const tomorrow = fromBangkok(p.year, p.month, p.day + 1);
+  const weekAgo = fromBangkok(p.year, p.month, p.day - 6);
+  const sevenFrom = new Date(Math.max(weekAgo.getTime(), cycle.from.getTime()));
+
+  const [soFar, lastWeek, rules, mode, budgets] = await Promise.all([
+    totalsBySource(db, userId, { from: cycle.from, to: tomorrow }),
+    totalsBySource(db, userId, { from: sevenFrom, to: tomorrow }),
+    listRules(db, userId),
+    getBudgetMode(db, userId),
+    loadBudgets(db, userId),
+  ]);
+
+  const lite: RuleLite[] = rules.map((r) => ({
+    type: r.type,
+    amountSatang: toSatang(r.amount),
+    title: r.title,
+    cadence: r.cadence,
+    dayOfPeriod: r.day_of_period,
+    nextRunAt: new Date(r.next_run_at),
+    isActive: r.is_active,
+  }));
+  const overall = mode === "overall" ? budgets.find((b) => b.category_id === null) : undefined;
+
+  return {
+    now,
+    cycle,
+    incomeSatang: soFar.income,
+    expenseSatang: soFar.expense,
+    recurringExpenseSatang: soFar.recurringExpense,
+    entryCount: soFar.count,
+    // the window is shorter than seven days early in a cycle: scale it up so the pace is per week
+    last7VariableSatang: Math.round(
+      ((lastWeek.expense - lastWeek.recurringExpense) * 7) /
+        Math.max(1, Math.round((tomorrow.getTime() - sevenFrom.getTime()) / 86_400_000)),
+    ),
+    upcoming: upcomingOccurrences(lite, now, cycle.to),
+    budgetSatang: overall ? toSatang(overall.amount) : null,
   };
 }

@@ -139,3 +139,16 @@ describe("parseCommand: yearly summary and month comparison", () => {
     expect(parseCommand("สรุปเดือนนี้")).toEqual({ kind: "summary", scope: "month" });
   });
 });
+
+describe("parseCommand: forecast", () => {
+  it.each(["พยากรณ์", "พยากรณ์เงิน", "พยากรณ์ปลายเดือน", "พยากรณ์ปลายรอบ", "  พยากรณ์  "])(
+    "%s",
+    (input) => {
+      expect(parseCommand(input)).toEqual({ kind: "forecast" });
+    },
+  );
+
+  it("an entry that merely mentions the word is not the command", () => {
+    expect(parseCommand("พยากรณ์อากาศ 50")).toBeNull();
+  });
+});

@@ -161,6 +161,61 @@ describe("entry photos (0015)", () => {
   });
 });
 
+describe("period_totals_by_source (0017)", () => {
+  it("splits a period into recurring and other, counting confirmed entries of that user only", async () => {
+    const u = await newUser(db, `pt-${Math.random()}`);
+    const other = await newUser(db, `pt-other-${Math.random()}`);
+    const ins = (
+      user: string,
+      type: string,
+      amount: number,
+      source: string,
+      status = "confirmed",
+      at = "2026-10-10T05:00:00Z",
+    ) =>
+      db.query(
+        "insert into transactions (user_id,type,amount,title,source,status,occurred_at) values ($1,$2,$3,'x',$4,$5,$6)",
+        [user, type, amount, source, status, at],
+      );
+    await ins(u, "expense", 100, "text");
+    await ins(u, "expense", 5000, "recurring"); // rent
+    await ins(u, "income", 25_000, "recurring"); // salary
+    await ins(u, "income", 300, "manual");
+    await ins(u, "expense", 999, "text", "deleted");
+    await ins(u, "expense", 888, "text", "pending_confirm");
+    await ins(u, "expense", 777, "text", "confirmed", "2026-09-01T05:00:00Z"); // another period
+    await ins(other, "expense", 1000, "text");
+    const r = await one<{
+      income: string;
+      expense: string;
+      recurring_income: string;
+      recurring_expense: string;
+      tx_count: number;
+    }>(
+      db,
+      "select income::text, expense::text, recurring_income::text, recurring_expense::text, tx_count::int from period_totals_by_source($1,'2026-10-01T00:00:00Z','2026-11-01T00:00:00Z')",
+      [u],
+    );
+    expect(r).toEqual({
+      income: "25300.00",
+      expense: "5100.00",
+      recurring_income: "25000.00",
+      recurring_expense: "5000.00",
+      tx_count: 4,
+    });
+  });
+
+  it("is all zero for an empty period", async () => {
+    const u = await newUser(db, `pt-empty-${Math.random()}`);
+    const r = await one<{ tx_count: number; expense: string }>(
+      db,
+      "select expense::text, tx_count::int from period_totals_by_source($1,'2026-10-01T00:00:00Z','2026-11-01T00:00:00Z')",
+      [u],
+    );
+    expect(r).toEqual({ expense: "0", tx_count: 0 });
+  });
+});
+
 describe("search_totals (0016)", () => {
   async function seed() {
     const u = await newUser(db, `search-${Math.random()}`);

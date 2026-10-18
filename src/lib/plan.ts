@@ -42,7 +42,8 @@ export type Feature =
   | "yearSummary"
   | "categoryCompare"
   | "export"
-  | "dashboard";
+  | "dashboard"
+  | "forecast";
 
 /** The lowest tier that has each feature (Ultimate always includes everything Professional has). */
 const MIN_PLAN: Record<Feature, "plus" | "ultimate"> = {
@@ -65,6 +66,7 @@ const MIN_PLAN: Record<Feature, "plus" | "ultimate"> = {
   categoryCompare: "plus",
   export: "plus",
   dashboard: "plus",
+  forecast: "ultimate",
 };
 
 export function isPaidPlan(plan: Plan): boolean {

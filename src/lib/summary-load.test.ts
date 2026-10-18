@@ -1,12 +1,23 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   loadCategoryCompare,
   loadCategorySpend,
+  loadForecastInput,
   loadSummaryData,
   loadYearData,
 } from "./summary-load";
 import { resolveYear } from "./year-summary";
+
+let rules: Record<string, unknown>[] = [];
+let budgetMode: "overall" | "category" = "overall";
+let budgetRows: { id: string; category_id: string | null; amount: string }[] = [];
+vi.mock("@/lib/recurring-repo", () => ({ listRules: async () => rules }));
+vi.mock("@/lib/repo", async (original) => ({
+  ...(await original<typeof import("@/lib/repo")>()),
+  getBudgetMode: async () => budgetMode,
+  loadBudgets: async () => budgetRows,
+}));
 
 const range = {
   from: new Date("2026-10-01T00:00:00+07:00"),
@@ -168,5 +179,109 @@ describe("loadCategoryCompare", () => {
       ["อาหาร", "up"],
       ["เดินทาง", "gone"],
     ]);
+  });
+});
+
+describe("loadForecastInput", () => {
+  const NOW = new Date("2026-10-17T08:00:00Z"); // 17 Oct 2026 in Bangkok
+  const cycle = { from: new Date("2026-09-30T17:00:00Z"), to: new Date("2026-10-31T17:00:00Z") };
+  const calls: { from: string; to: string }[] = [];
+
+  function db() {
+    const rpc = vi.fn(async (name: string, args: { p_from: string; p_to: string }) => {
+      if (name !== "period_totals_by_source")
+        return { data: null, error: { message: "unexpected" } };
+      calls.push({ from: args.p_from, to: args.p_to });
+      // the cycle so far is asked first, the last seven days second (the windows can coincide)
+      const week = calls.length === 2;
+      return {
+        data: [
+          week
+            ? {
+                income: "0",
+                expense: "700.00",
+                recurring_income: "0",
+                recurring_expense: "0",
+                tx_count: 7,
+              }
+            : {
+                income: "30000.00",
+                expense: "16000.00",
+                recurring_income: "30000.00",
+                recurring_expense: "5000.00",
+                tx_count: 21,
+              },
+        ],
+        error: null,
+      };
+    });
+    return { db: { rpc } as unknown as SupabaseClient, rpc };
+  }
+
+  beforeEach(() => {
+    calls.length = 0;
+    rules = [];
+    budgetMode = "overall";
+    budgetRows = [];
+  });
+
+  it("reads the cycle so far (to the end of today) and the last seven days", async () => {
+    const out = await loadForecastInput(db().db, "u1", NOW, cycle);
+    expect(out.incomeSatang).toBe(3_000_000);
+    expect(out.expenseSatang).toBe(1_600_000);
+    expect(out.recurringExpenseSatang).toBe(500_000);
+    expect(out.entryCount).toBe(21);
+    expect(out.last7VariableSatang).toBe(70_000);
+    // the cycle so far ends at the start of tomorrow, the week starts six days before today
+    expect(calls[0]).toEqual({ from: cycle.from.toISOString(), to: "2026-10-17T17:00:00.000Z" });
+    expect(calls[1]).toEqual({ from: "2026-10-10T17:00:00.000Z", to: "2026-10-17T17:00:00.000Z" });
+  });
+
+  it("early in a cycle the short window is scaled up to a week", async () => {
+    const out = await loadForecastInput(db().db, "u1", new Date("2026-10-02T05:00:00Z"), cycle);
+    // 2 days of data (1 and 2 Oct) -> 700 over 2 days = 2,450 over 7
+    expect(out.last7VariableSatang).toBe(245_000);
+  });
+
+  it("brings in the recurring rules that are still to come", async () => {
+    rules = [
+      {
+        type: "income",
+        amount: "30000.00",
+        title: "เงินเดือน",
+        cadence: "monthly",
+        day_of_period: 25,
+        next_run_at: "2026-10-24T17:00:00Z",
+        is_active: true,
+      },
+      {
+        type: "expense",
+        amount: "999.00",
+        title: "ปิดอยู่",
+        cadence: "monthly",
+        day_of_period: 28,
+        next_run_at: "2026-10-27T17:00:00Z",
+        is_active: false,
+      },
+    ];
+    const out = await loadForecastInput(db().db, "u1", NOW, cycle);
+    expect(out.upcoming.map((o) => [o.title, o.amountSatang])).toEqual([["เงินเดือน", 3_000_000]]);
+  });
+
+  it("uses the overall budget only when the person budgets overall", async () => {
+    budgetRows = [
+      { id: "b1", category_id: null, amount: "20000.00" },
+      { id: "b2", category_id: "c1", amount: "3000.00" },
+    ];
+    expect((await loadForecastInput(db().db, "u1", NOW, cycle)).budgetSatang).toBe(2_000_000);
+    budgetMode = "category";
+    expect((await loadForecastInput(db().db, "u1", NOW, cycle)).budgetSatang).toBeNull();
+  });
+
+  it("throws when the database says no", async () => {
+    const rpc = async () => ({ data: null, error: { message: "boom" } });
+    await expect(
+      loadForecastInput({ rpc } as unknown as SupabaseClient, "u1", NOW, cycle),
+    ).rejects.toThrow("load totals by source: boom");
   });
 });

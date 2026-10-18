@@ -11,6 +11,7 @@ export type Command =
   | { kind: "category-spend" }
   | { kind: "year-summary"; year: number | "last" | null }
   | { kind: "compare-months" }
+  | { kind: "forecast" }
   | { kind: "summary"; scope: "today" | "month" }
   | { kind: "delete-latest" }
   | { kind: "edit-latest"; amountSatang: number }
@@ -41,6 +42,9 @@ export function parseCommand(input: string): Command | null {
   if (["สรุปหมวด", "สรุปตามหมวด", "สรุปหมวดหมู่"].includes(text)) return { kind: "category-spend" };
   if (["เทียบเดือน", "เทียบเดือนก่อน", "เปรียบเทียบเดือน"].includes(text)) {
     return { kind: "compare-months" };
+  }
+  if (["พยากรณ์", "พยากรณ์เงิน", "พยากรณ์ปลายเดือน", "พยากรณ์ปลายรอบ"].includes(text)) {
+    return { kind: "forecast" };
   }
   if (["สรุปปี", "สรุปรายปี", "สรุปปีนี้"].includes(text))
     return { kind: "year-summary", year: null };

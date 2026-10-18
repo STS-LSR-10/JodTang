@@ -33,6 +33,7 @@ const FEATURES: Feature[] = [
   "categoryCompare",
   "export",
   "dashboard",
+  "forecast",
 ];
 
 export async function GET(request: Request): Promise<Response> {
