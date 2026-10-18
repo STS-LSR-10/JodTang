@@ -5,6 +5,8 @@ export type Command =
   | { kind: "help" }
   | { kind: "summary-range"; start: DaySpec; end: DaySpec | "today" }
   | { kind: "summary-range-usage" }
+  | { kind: "search"; term: string }
+  | { kind: "search-usage" }
   | { kind: "summary"; scope: "today" | "month" }
   | { kind: "delete-latest" }
   | { kind: "edit-latest"; amountSatang: number }
@@ -41,6 +43,12 @@ export function parseCommand(input: string): Command | null {
   }
   // "สรุป" followed by a date that is not a full range: show how to write one
   if (/^สรุป(?:วันที่)?\s+\d{1,2}\/\d{1,2}/.test(text)) return { kind: "summary-range-usage" };
+  // "ค้นหา กาแฟ" / "ค้นหา #ปาร์ตี้": the term is taken from the original text so it keeps its case
+  if (text === "ค้นหา") return { kind: "search-usage" };
+  if (text.startsWith("ค้นหา ")) {
+    const term = input.trim().replace(/\s+/g, " ").slice("ค้นหา ".length).trim();
+    return term ? { kind: "search", term } : { kind: "search-usage" };
+  }
   if (text === "ลบล่าสุด") return { kind: "delete-latest" };
   if (["ตังสะสม", "แต้ม", "แต้มสะสม", "points"].includes(text)) return { kind: "points" };
   if (["รหัสชวน", "รหัสชวนเพื่อน", "รหัสของฉัน"].includes(text)) return { kind: "my-code" };

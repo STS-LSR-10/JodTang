@@ -13,6 +13,7 @@ import {
   buildTypeQuestion,
 } from "./flex";
 import { buildCategoryChooser, buildSlipCard } from "./slip-flex";
+import { buildSearchCard } from "./search-flex";
 
 const base = {
   txId: "11111111-1111-1111-1111-111111111111",
@@ -354,5 +355,60 @@ describe("custom range pickers", () => {
       max: "2026-10-17",
       initial: "2026-10-17",
     });
+  });
+});
+
+describe("search result card", () => {
+  const item = (title: string, amountSatang: number, type: "expense" | "income" = "expense") => ({
+    id: title,
+    type,
+    title,
+    amountSatang,
+    occurredAt: "2026-10-10T05:00:00Z",
+    source: "text",
+    categoryId: null,
+    categoryName: null,
+    categoryIcon: null,
+    categoryColor: null,
+    hasPhoto: false,
+    hasSlip: false,
+    note: null,
+    tags: [],
+  });
+  const totals = { incomeSatang: 10_000, expenseSatang: 10_550, count: 3 };
+
+  it("shows the term, the totals, the newest matches and the link", () => {
+    const json = JSON.stringify(
+      buildSearchCard({
+        term: "กาแฟ",
+        totals,
+        items: [item("กาแฟเย็น", 6000), item("ขายกาแฟ", 10_000, "income")],
+        moreUrl: "https://liff.line.me/123/transactions?q=%E0%B8%81",
+      }),
+    );
+    expect(json).toContain("ผลการค้นหา");
+    expect(json).toContain("กาแฟ");
+    expect(json).toContain("+฿100");
+    expect(json).toContain("-฿105.50");
+    expect(json).toContain("พบ 3 รายการ");
+    expect(json).toContain("10 ต.ค. กาแฟเย็น");
+    expect(json).toContain("และอีก 1 รายการ");
+    expect(json).toContain("ดูทั้งหมดในแอป");
+  });
+
+  it("has no button without an https link, and shows at most five matches", () => {
+    const many = Array.from({ length: 9 }, (_, i) => item(`รายการ${i}`, 100));
+    const json = JSON.stringify(
+      buildSearchCard({
+        term: "x",
+        totals: { incomeSatang: 0, expenseSatang: 900, count: 9 },
+        items: many,
+        moreUrl: "http://localhost/x",
+      }),
+    );
+    expect(json).not.toContain("ดูทั้งหมดในแอป");
+    expect(json).toContain("รายการ4");
+    expect(json).not.toContain("รายการ5");
+    expect(json).toContain("และอีก 4 รายการ");
   });
 });

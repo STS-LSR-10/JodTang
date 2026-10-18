@@ -88,6 +88,42 @@ test.describe("transactions page (360px)", () => {
     await expect(page.getByText("ลบรูปแนบแล้ว")).toBeVisible();
   });
 
+  test("a search link prefills the box, and Professional sees the totals of everything found", async ({
+    page,
+  }) => {
+    await mockApi(page, {
+      "GET /api/transactions": {
+        items: [TX({ title: "กาแฟเย็น" })],
+        hasMore: false,
+        totals: { incomeSatang: 10_000, expenseSatang: 10_550, count: 3 },
+      },
+      "GET /api/me": ME_FREE,
+    });
+    await page.goto("/transactions?q=กาแฟ");
+
+    await expect(page.getByRole("searchbox", { name: "ค้นหาชื่อรายการหรือแท็ก" })).toHaveValue(
+      "กาแฟ",
+    );
+    const strip = page.getByRole("status", { name: "ยอดรวมของผลค้นหา" });
+    await expect(strip).toBeVisible();
+    await expect(strip).toContainText("+฿100");
+    await expect(strip).toContainText("-฿105.50");
+    await expect(strip).toContainText("3 รายการ");
+    await expectNoHorizontalScroll(page);
+  });
+
+  test("no totals strip when the server sends none (Free) or nothing is searched", async ({
+    page,
+  }) => {
+    await mockApi(page, {
+      "GET /api/transactions": { items: [TX()], hasMore: false, totals: null },
+      "GET /api/me": ME_FREE,
+    });
+    await page.goto("/transactions?q=กาแฟ");
+    await expect(page.getByText("กาแฟ").first()).toBeVisible();
+    await expect(page.getByRole("status", { name: "ยอดรวมของผลค้นหา" })).toHaveCount(0);
+  });
+
   test("empty state", async ({ page }) => {
     await mockApi(page, {
       "GET /api/transactions": { items: [], hasMore: false },

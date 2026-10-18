@@ -99,6 +99,7 @@ export const ME_FREE = {
     entryPhoto: false,
     smartParse: false,
     customRange: false,
+    searchTotals: false,
   },
   slips: { used: 0, limit: 0, remaining: 0 },
   points: 7,

@@ -29,7 +29,7 @@ export const HELP_TEXT = [
   "",
   "คำสั่งสั้น",
   "• สรุปวันนี้ · สรุปเดือนนี้",
-  "• สรุป 1/10 ถึง 15/10 (Professional ขึ้นไป)",
+  "• สรุป 1/10 ถึง 15/10 · ค้นหา กาแฟ (Professional ขึ้นไป)",
   "• ลบล่าสุด · แก้ล่าสุด 45",
   "• ตังสะสม · รหัสชวน · ใช้รหัส ABCD1234",
 ].join("\n");
@@ -94,6 +94,16 @@ export const MULTI_ENTRY_LOCKED_TEXT =
 
 export const TAGS_LOCKED_TEXT =
   'การติดแท็ก (เช่น "หมูกระทะ 500 #ปาร์ตี้") เป็นฟีเจอร์ของแผน Professional ขึ้นไป ยังไม่ได้จดรายการนี้นะ ลองทดลองใช้ฟรี 7 วันได้ที่เมนู "อัปเกรด" หรือพิมพ์จดโดยไม่ใส่แท็กได้เลย';
+
+// ───── search with totals ─────
+export const SEARCH_LOCKED_TEXT =
+  'การค้นหาพร้อมยอดรวมเป็นฟีเจอร์ของแผน Professional ขึ้นไป ลองทดลองใช้ฟรี 7 วันได้ที่เมนู "อัปเกรด" นะ ตอนนี้ค้นหาในหน้ารายการของแอปได้เลย';
+export const SEARCH_USAGE_TEXT = [
+  "พิมพ์คำที่ต้องการค้นหาต่อท้าย เช่น",
+  "• ค้นหา กาแฟ",
+  "• ค้นหา #ปาร์ตี้บริษัท",
+].join("\n");
+export const searchEmptyText = (term: string) => `ค้นหา "${term}"\nไม่พบรายการที่ตรงกันเลย`;
 
 // ───── custom date range summary ─────
 export const SUMMARY_RANGE_LOCKED_TEXT =

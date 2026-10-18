@@ -10,12 +10,14 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useMemo, useState, type FormEvent } from "react";
 import { Sheet } from "@/components/liff/sheet";
 import { EmptyState, ErrorState, LoadingBlock, PageHeader } from "@/components/liff/states";
 import { TxItem } from "@/components/liff/tx-item";
 import { useApi, useLiff } from "@/components/liff/liff-provider";
 import type { TxDto } from "@/lib/dto";
+import { formatBaht } from "@/lib/money";
 import { satangToString } from "@/lib/money";
 import { normalizeThaiDigits } from "@/lib/parse/thai-number";
 import { fromBangkokInputValue, toBangkokInputValue } from "@/lib/thai-date";
@@ -27,6 +29,8 @@ type TypeFilter = "all" | "expense" | "income";
 interface ListResponse {
   items: TxDto[];
   hasMore: boolean;
+  /** Totals of everything a search finds (Professional and above, first page only). */
+  totals?: { incomeSatang: number; expenseSatang: number; count: number } | null;
 }
 
 interface CategoriesResponse {
@@ -56,10 +60,20 @@ function useDebounced<T>(value: T, ms: number): T {
   return debounced;
 }
 
+/** The page reads `?q=` (the chat search card links here), which needs a Suspense boundary. */
 export default function TransactionsPage() {
+  return (
+    <Suspense fallback={<LoadingBlock rows={5} />}>
+      <TransactionsView />
+    </Suspense>
+  );
+}
+
+function TransactionsView() {
   const { api } = useLiff();
   const [type, setType] = useState<TypeFilter>("all");
-  const [search, setSearch] = useState("");
+  const initialSearch = useSearchParams().get("q") ?? "";
+  const [search, setSearch] = useState(initialSearch);
   const q = useDebounced(search.trim(), 300);
   const [extra, setExtra] = useState<TxDto[]>([]);
   const [extraMore, setExtraMore] = useState<boolean | null>(null);
@@ -248,6 +262,31 @@ export default function TransactionsPage() {
           aria-label="ค้นหาชื่อรายการหรือแท็ก"
           className="h-11 w-full rounded-2xl border border-border bg-surface px-4 text-sm outline-none focus:border-primary"
         />
+
+        {q && list.data?.totals ? (
+          <div
+            role="status"
+            aria-label="ยอดรวมของผลค้นหา"
+            className="grid grid-cols-3 gap-2 rounded-2xl bg-primary-soft px-3 py-2 text-center text-xs"
+          >
+            <div>
+              <p className="text-muted">รายรับ</p>
+              <p className="num font-bold text-income">
+                +฿{formatBaht(list.data.totals.incomeSatang)}
+              </p>
+            </div>
+            <div>
+              <p className="text-muted">รายจ่าย</p>
+              <p className="num font-bold text-expense">
+                -฿{formatBaht(list.data.totals.expenseSatang)}
+              </p>
+            </div>
+            <div>
+              <p className="text-muted">พบ</p>
+              <p className="num font-bold">{list.data.totals.count} รายการ</p>
+            </div>
+          </div>
+        ) : null}
 
         {notice ? (
           <p role="status" className="rounded-2xl bg-primary-soft px-4 py-2 text-sm text-primary">

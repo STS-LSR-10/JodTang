@@ -7,7 +7,10 @@ import { getServerEnv } from "@/lib/env";
 import { createLineClient } from "@/lib/line/client";
 import { TX_SELECT, toTxDto } from "@/lib/dto";
 import { toSatang } from "@/lib/money";
+import { can, effectivePlan } from "@/lib/plan";
 import { loadMemoryIfAllowed } from "@/lib/plan-server";
+import { loadSearchTotals, parseSearchTerm, type SearchTarget } from "@/lib/search";
+import { getUserPlanRow } from "@/lib/slip-repo";
 import { awardActivity } from "@/lib/points";
 import { insertTransaction, loadCategories } from "@/lib/repo";
 import { LIMITS, limitOr429 } from "@/lib/rate-limit";
@@ -51,10 +54,27 @@ export async function GET(request: Request): Promise<Response> {
     const { data, error } = await query;
     if (error) throw new Error(`list transactions: ${error.message}`);
     const rows = data ?? [];
+
+    // While searching, the first page also carries the totals of everything found (Professional and
+    // above). They are added up by the database, so they cover more than the page that is shown.
+    let totals: Awaited<ReturnType<typeof loadSearchTotals>> | null = null;
+    const target: SearchTarget | null = f.q
+      ? parseSearchTerm(f.q)
+      : f.tag
+        ? { q: null, tag: f.tag.replace(/^#/, "").toLowerCase() }
+        : null;
+    if (target && f.offset === 0) {
+      const db = getAdminClient();
+      const row = await getUserPlanRow(db, auth.userId);
+      if (can(effectivePlan(row.plan, row.plan_expires_at, new Date()), "searchTotals")) {
+        totals = await loadSearchTotals(db, auth.userId, target);
+      }
+    }
     return json({
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       items: rows.slice(0, f.limit).map((r: any) => toTxDto(r)),
       hasMore: rows.length > f.limit,
+      totals,
     });
   });
 }

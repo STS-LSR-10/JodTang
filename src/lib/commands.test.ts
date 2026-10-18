@@ -75,3 +75,20 @@ describe("parseCommand: summary of a custom range", () => {
     expect(parseCommand("12/10 ค่าไฟ 1200")).toBeNull();
   });
 });
+
+describe("parseCommand: search", () => {
+  it.each([
+    ["ค้นหา กาแฟ", { kind: "search", term: "กาแฟ" }],
+    ["ค้นหา #ปาร์ตี้", { kind: "search", term: "#ปาร์ตี้" }],
+    ["ค้นหา   ชานม   ไข่มุก ", { kind: "search", term: "ชานม ไข่มุก" }],
+    ["ค้นหา Grab", { kind: "search", term: "Grab" }], // keeps the case it was typed in
+    ["ค้นหา", { kind: "search-usage" }],
+    ["ค้นหา   ", { kind: "search-usage" }],
+  ])("%s", (input, expected) => {
+    expect(parseCommand(input)).toEqual(expected);
+  });
+
+  it("an entry that merely starts with the word is not a search", () => {
+    expect(parseCommand("ค้นหาของ 50")).toBeNull();
+  });
+});

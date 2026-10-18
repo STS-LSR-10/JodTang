@@ -41,6 +41,7 @@ import {
 } from "@/lib/points";
 import { getSlip, getSlipItems, learnMerchant } from "@/lib/slip-repo";
 import { planReceiptSplit } from "@/lib/receipt-split";
+import { loadSearchItems, loadSearchTotals, parseSearchTerm } from "@/lib/search";
 import { loadSummaryData, loadSummaryTransactions } from "@/lib/summary-load";
 import { daySpecFromIso, resolveRange, type DaySpec } from "@/lib/summary-range";
 import { buildSummaryCard, previousRange, summarize } from "@/lib/summary-report";
@@ -49,6 +50,7 @@ import { handlePhotoImage, photoBlockedReply } from "@/lib/photos";
 import { needsSmartParse, runSmartParse } from "@/lib/ai/smart-parse";
 import type { TextStructurer } from "@/lib/ai/text-structurer";
 import { recordSmartEntries } from "./smart-entries";
+import { buildSearchCard } from "./search-flex";
 import { getLivePhotoWait, getPhotoTx, startPhotoWait } from "@/lib/photo-repo";
 import {
   BACKDATE_MAX_DAYS,
@@ -79,6 +81,9 @@ import {
   NOT_UNDERSTOOD_TEXT,
   PHOTO_ASK_REPLACE_TEXT,
   PHOTO_ASK_TEXT,
+  SEARCH_LOCKED_TEXT,
+  SEARCH_USAGE_TEXT,
+  searchEmptyText,
   SMART_CANCELLED_TEXT,
   SMART_PREFACE_TEXT,
   SPLIT_LOCKED_TEXT,
@@ -268,6 +273,18 @@ async function handleText(input: string, user: UserRow, deps: HandlerDeps): Prom
     return [text(TAGS_LOCKED_TEXT)];
   }
   return saveEntries(entries, user, deps);
+}
+
+/**
+ * Link that opens the entries list with a search already typed: inside LINE it goes through the
+ * LIFF link (which keeps the path and query), otherwise the plain app URL.
+ */
+function listUrl(term: string): string | undefined {
+  const query = `?q=${encodeURIComponent(term)}`;
+  const liffId = process.env.NEXT_PUBLIC_LIFF_ID;
+  if (liffId) return `https://liff.line.me/${liffId}/transactions${query}`;
+  const base = process.env.APP_BASE_URL?.replace(/\/$/, "");
+  return base ? `${base}/transactions${query}` : undefined;
 }
 
 /** The card for a custom range (typed or picked), or the text that says what is wrong with it. */
@@ -657,6 +674,24 @@ async function runCommand(
 
     case "summary-range-usage":
       return [text(SUMMARY_RANGE_USAGE_TEXT)];
+
+    case "search-usage":
+      return [text(SEARCH_USAGE_TEXT)];
+
+    case "search": {
+      if (!can(effectivePlan(user.plan, user.plan_expires_at, deps.now()), "searchTotals")) {
+        return [text(SEARCH_LOCKED_TEXT)];
+      }
+      const target = parseSearchTerm(command.term);
+      if (!target) return [text(SEARCH_USAGE_TEXT)];
+      const term = target.tag ? `#${target.tag}` : (target.q ?? "");
+      const [totals, items] = await Promise.all([
+        loadSearchTotals(db, user.id, target),
+        loadSearchItems(db, user.id, target, 5),
+      ]);
+      if (totals.count === 0) return [text(searchEmptyText(term))];
+      return [buildSearchCard({ term, totals, items, moreUrl: listUrl(term) })];
+    }
 
     case "summary-range": {
       if (!can(effectivePlan(user.plan, user.plan_expires_at, deps.now()), "customRange")) {

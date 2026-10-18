@@ -161,6 +161,89 @@ describe("entry photos (0015)", () => {
   });
 });
 
+describe("search_totals (0016)", () => {
+  async function seed() {
+    const u = await newUser(db, `search-${Math.random()}`);
+    const other = await newUser(db, `search-other-${Math.random()}`);
+    const ins = (
+      user: string,
+      type: string,
+      amount: number,
+      title: string,
+      tags = "{}",
+      status = "confirmed",
+      at = "2026-10-10T05:00:00Z",
+    ) =>
+      db.query(
+        "insert into transactions (user_id,type,amount,title,tags,status,occurred_at) values ($1,$2,$3,$4,$5,$6,$7)",
+        [user, type, amount, title, tags, status, at],
+      );
+    await ins(u, "expense", 60, "กาแฟเย็น");
+    await ins(u, "expense", 45.5, "กาแฟร้อน", "{ปาร์ตี้}");
+    await ins(u, "income", 100, "ขายกาแฟ", "{ปาร์ตี้,trip}", "confirmed", "2026-09-01T05:00:00Z");
+    await ins(u, "expense", 500, "ข้าวมันไก่", "{trip}");
+    await ins(u, "expense", 999, "กาแฟลบแล้ว", "{}", "deleted");
+    await ins(u, "expense", 888, "กาแฟรอยืนยัน", "{}", "pending_confirm");
+    await ins(u, "expense", 77, "50% off_sale");
+    await ins(other, "expense", 1000, "กาแฟของคนอื่น");
+    return u;
+  }
+  const totals = async (
+    u: string,
+    q: string | null,
+    tag: string | null = null,
+    from: string | null = null,
+    to: string | null = null,
+  ) =>
+    one<{ income: string; expense: string; tx_count: number }>(
+      db,
+      "select income::text, expense::text, tx_count::int from search_totals($1,$2,$3,$4,$5)",
+      [u, q, tag, from, to],
+    );
+
+  it("adds up what a word finds, only for that user and only confirmed entries", async () => {
+    const u = await seed();
+    expect(await totals(u, "กาแฟ")).toEqual({ income: "100.00", expense: "105.50", tx_count: 3 });
+  });
+
+  it("finds by tag, lower-case, and by tag and word together", async () => {
+    const u = await seed();
+    expect(await totals(u, null, "trip")).toEqual({
+      income: "100.00",
+      expense: "500.00",
+      tx_count: 2,
+    });
+    expect(await totals(u, null, "TRIP")).toMatchObject({ tx_count: 2 });
+    expect(await totals(u, "กาแฟ", "ปาร์ตี้")).toEqual({
+      income: "100.00",
+      expense: "45.50",
+      tx_count: 2,
+    });
+  });
+
+  it("can be limited to a period", async () => {
+    const u = await seed();
+    expect(await totals(u, "กาแฟ", null, "2026-10-01T00:00:00Z", "2026-11-01T00:00:00Z")).toEqual({
+      income: "0",
+      expense: "105.50",
+      tx_count: 2,
+    });
+  });
+
+  it("matches text literally: % and _ are not wildcards", async () => {
+    const u = await seed();
+    expect(await totals(u, "50%")).toMatchObject({ tx_count: 1 });
+    expect(await totals(u, "%")).toMatchObject({ tx_count: 1 });
+    expect(await totals(u, "_")).toMatchObject({ tx_count: 1 });
+    expect(await totals(u, "ไม่มีคำนี้")).toEqual({ income: "0", expense: "0", tx_count: 0 });
+  });
+
+  it("with no filter at all it is every confirmed entry of that user", async () => {
+    const u = await seed();
+    expect(await totals(u, null)).toMatchObject({ tx_count: 5 });
+  });
+});
+
 describe("summary and analytics functions", () => {
   it("add up confirmed entries only, in satang-exact numeric", async () => {
     const u = await newUser(db, "sums");
