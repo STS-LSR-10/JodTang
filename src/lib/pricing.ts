@@ -73,6 +73,8 @@ export const FEATURE_GROUPS: FeatureGroup[] = [
       { label: "สรุปวันนี้ / เดือนนี้", cells: [true, true, true] },
       { label: "สรุปช่วงวันเอง", cells: [false, true, true] },
       { label: "ค้นหาพร้อมยอดรวม", cells: [false, true, true] },
+      { label: "สรุปรายปี", cells: [false, true, true] },
+      { label: "เทียบเดือนต่อเดือนรายหมวด", cells: [false, true, true] },
       { label: "ส่งออก CSV", cells: [true, true, true] },
       { label: "Excel พร้อมชีตสรุป", cells: [false, true, true] },
       { label: "กราฟเก็บออม", cells: [false, true, true] },

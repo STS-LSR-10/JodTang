@@ -43,16 +43,35 @@ import { getSlip, getSlipItems, learnMerchant } from "@/lib/slip-repo";
 import { planReceiptSplit } from "@/lib/receipt-split";
 import { buildCategorySlices } from "@/lib/category-spend";
 import { loadSearchItems, loadSearchTotals, parseSearchTerm } from "@/lib/search";
-import { loadCategorySpend, loadSummaryData, loadSummaryTransactions } from "@/lib/summary-load";
+import { describeTotals, sameSpanRanges } from "@/lib/period-compare";
+import {
+  loadCategoryCompare,
+  loadCategorySpend,
+  loadSummaryData,
+  loadSummaryTransactions,
+  loadYearData,
+} from "@/lib/summary-load";
+import { resolveYear } from "@/lib/year-summary";
 import { daySpecFromIso, resolveRange, type DaySpec } from "@/lib/summary-range";
-import { buildSummaryCard, previousRange, summarize } from "@/lib/summary-report";
+import {
+  buildSummaryCard,
+  expenseChangePercent,
+  previousRange,
+  rangeLabel,
+  summarize,
+} from "@/lib/summary-report";
 import { handleSlipImage } from "@/lib/slips";
 import { handlePhotoImage, photoBlockedReply } from "@/lib/photos";
 import { needsSmartParse, runSmartParse } from "@/lib/ai/smart-parse";
 import type { TextStructurer } from "@/lib/ai/text-structurer";
 import { recordSmartEntries } from "./smart-entries";
 import { buildSearchCard } from "./search-flex";
-import { buildCategorySpendCard, buildRecentCard } from "./spend-flex";
+import {
+  buildCategorySpendCard,
+  buildCompareCard,
+  buildRecentCard,
+  buildYearCard,
+} from "./spend-flex";
 import { getLivePhotoWait, getPhotoTx, startPhotoWait } from "@/lib/photo-repo";
 import {
   BACKDATE_MAX_DAYS,
@@ -83,6 +102,8 @@ import {
   NOT_UNDERSTOOD_TEXT,
   PHOTO_ASK_REPLACE_TEXT,
   PHOTO_ASK_TEXT,
+  COMPARE_EMPTY_TEXT,
+  COMPARE_LOCKED_TEXT,
   RECENT_EMPTY_TEXT,
   SEARCH_LOCKED_TEXT,
   SEARCH_USAGE_TEXT,
@@ -95,6 +116,9 @@ import {
   SUMMARY_RANGE_ORDER_TEXT,
   SUMMARY_RANGE_TOO_LONG_TEXT,
   SUMMARY_RANGE_USAGE_TEXT,
+  YEAR_BAD_TEXT,
+  YEAR_LOCKED_TEXT,
+  yearEmptyText,
   SPLIT_UNAVAILABLE_TEXT,
   splitDoneText,
   NOTHING_TO_DELETE_TEXT,
@@ -706,6 +730,57 @@ async function runCommand(
       const totalSatang = slices.reduce((sum, s) => sum + s.amountSatang, 0);
       return [
         buildCategorySpendCard({ subtitle, slices, totalSatang, moreUrl: pageUrl("/analytics") }),
+      ];
+    }
+
+    case "compare-months": {
+      if (!can(effectivePlan(user.plan, user.plan_expires_at, deps.now()), "categoryCompare")) {
+        return [text(COMPARE_LOCKED_TEXT)];
+      }
+      const now = deps.now();
+      const settings = await getSettings(db, user.id);
+      const cycle =
+        settings.budget_cycle === "monthly"
+          ? cycleRange(now, "monthly", settings.cycle_start_day)
+          : calendarMonthRange(now);
+      const span = sameSpanRanges(cycle, now);
+      const result = await loadCategoryCompare(db, user.id, span.current, span.previous);
+      if (result.currentSatang === 0 && result.previousSatang === 0) {
+        return [text(COMPARE_EMPTY_TEXT)];
+      }
+      return [
+        buildCompareCard({
+          currentLabel: rangeLabel(span.current),
+          previousLabel: rangeLabel(span.previous),
+          rows: result.rows,
+          currentSatang: result.currentSatang,
+          previousSatang: result.previousSatang,
+          totalChange: describeTotals(result.currentSatang, result.previousSatang),
+          moreUrl: pageUrl("/analytics"),
+        }),
+      ];
+    }
+
+    case "year-summary": {
+      if (!can(effectivePlan(user.plan, user.plan_expires_at, deps.now()), "yearSummary")) {
+        return [text(YEAR_LOCKED_TEXT)];
+      }
+      const year = resolveYear(command.year, deps.now());
+      if (!year.ok) return [text(YEAR_BAD_TEXT)];
+      const data = await loadYearData(db, user.id, year);
+      const yearBE = year.year + 543;
+      if (data.summary.current.count === 0) return [text(yearEmptyText(yearBE))];
+      return [
+        buildYearCard({
+          yearBE,
+          subtitle: `${formatThaiDate(year.range.from)} – ${formatThaiDate(new Date(year.range.to.getTime() - 1))}`,
+          income: data.summary.current.income,
+          expense: data.summary.current.expense,
+          changePercent: expenseChangePercent(data.summary),
+          topExpenses: data.summary.topExpenses,
+          months: data.months.map((m) => ({ month: m.month, expenseSatang: m.expenseSatang })),
+          moreUrl: pageUrl("/analytics"),
+        }),
       ];
     }
 

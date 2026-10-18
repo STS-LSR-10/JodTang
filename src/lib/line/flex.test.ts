@@ -336,6 +336,9 @@ describe("custom range pickers", () => {
     expect(items[0]).toMatchObject({ type: "postback", data: "a=sr" });
     expect(items[1]).toMatchObject({ type: "message", text: "สรุปหมวด" });
     expect(items[2]).toMatchObject({ type: "message", text: "ล่าสุด" });
+    expect(items[3]).toMatchObject({ type: "message", text: "เทียบเดือน" });
+    expect(items[4]).toMatchObject({ type: "message", text: "สรุปปี" });
+    expect(items).toHaveLength(5);
     expect(items.every((a) => (a.label ?? "").length <= 20)).toBe(true);
   });
 

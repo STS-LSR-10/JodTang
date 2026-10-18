@@ -1,7 +1,8 @@
 import type { CategorySlice } from "@/lib/category-spend";
+import { type ChangeKind, type CompareRow } from "@/lib/period-compare";
 import type { TxDto } from "@/lib/dto";
 import { formatBaht } from "@/lib/money";
-import { formatThaiDate } from "@/lib/thai-date";
+import { formatThaiDate, formatThaiMonthShort } from "@/lib/thai-date";
 import type { LineMessage } from "@/lib/types";
 import { COLOR } from "./flex";
 
@@ -181,6 +182,269 @@ export function buildRecentCard(input: { items: TxDto[]; moreUrl?: string }): Li
   return {
     type: "flex",
     altText: `รายการล่าสุด ${input.items.length} รายการ`,
+    contents: bubble,
+  };
+}
+
+/** "▲ 25%", "▼ 10%", "ใหม่", "−100%", "เท่าเดิม": text and colour of a change in expense. */
+export function changeLabel(
+  kind: ChangeKind,
+  percent: number | null,
+): { text: string; color: string } {
+  switch (kind) {
+    case "up":
+      return { text: `▲ ${percent}%`, color: COLOR.expense };
+    case "down":
+      return { text: `▼ ${Math.abs(percent ?? 0)}%`, color: COLOR.income };
+    case "gone":
+      return { text: "▼ 100%", color: COLOR.income };
+    case "new":
+      return { text: "ใหม่", color: COLOR.expense };
+    default:
+      return { text: "เท่าเดิม", color: COLOR.muted };
+  }
+}
+
+/** "เทียบรายจ่ายรายหมวด": this period against the same days of the one before, category by category. */
+export function buildCompareCard(input: {
+  currentLabel: string;
+  previousLabel: string;
+  rows: CompareRow[];
+  currentSatang: number;
+  previousSatang: number;
+  totalChange: { kind: ChangeKind; changePercent: number | null };
+  moreUrl?: string;
+}): LineMessage {
+  const total = changeLabel(input.totalChange.kind, input.totalChange.changePercent);
+  const body: unknown[] = [
+    {
+      type: "box",
+      layout: "horizontal",
+      contents: [
+        {
+          type: "box",
+          layout: "vertical",
+          flex: 5,
+          contents: [
+            { type: "text", text: "รายจ่ายรวม", size: "sm", weight: "bold", color: COLOR.text },
+            {
+              type: "text",
+              text: `ก่อนหน้า ฿${formatBaht(input.previousSatang)}`,
+              size: "xxs",
+              color: COLOR.muted,
+            },
+          ],
+        },
+        {
+          type: "box",
+          layout: "vertical",
+          flex: 4,
+          contents: [
+            {
+              type: "text",
+              text: `฿${formatBaht(input.currentSatang)}`,
+              size: "md",
+              weight: "bold",
+              color: COLOR.text,
+              align: "end",
+            },
+            { type: "text", text: total.text, size: "xs", color: total.color, align: "end" },
+          ],
+        },
+      ],
+    },
+    { type: "separator", margin: "md" },
+  ];
+  for (const r of input.rows) {
+    const c = changeLabel(r.kind, r.changePercent);
+    body.push({
+      type: "box",
+      layout: "horizontal",
+      margin: "md",
+      contents: [
+        {
+          type: "box",
+          layout: "vertical",
+          flex: 5,
+          contents: [
+            { type: "text", text: r.name, size: "sm", color: COLOR.text, wrap: true },
+            {
+              type: "text",
+              text: `ก่อนหน้า ฿${formatBaht(r.previousSatang)}`,
+              size: "xxs",
+              color: COLOR.muted,
+            },
+          ],
+        },
+        {
+          type: "box",
+          layout: "vertical",
+          flex: 4,
+          contents: [
+            {
+              type: "text",
+              text: `฿${formatBaht(r.currentSatang)}`,
+              size: "sm",
+              color: COLOR.text,
+              align: "end",
+            },
+            { type: "text", text: c.text, size: "xs", color: c.color, align: "end" },
+          ],
+        },
+      ],
+    });
+  }
+  const bubble: Record<string, unknown> = {
+    type: "bubble",
+    size: "mega",
+    header: header(
+      "เทียบรายจ่ายรายหมวด",
+      `รอบนี้ ${input.currentLabel}\nเทียบ ${input.previousLabel}`,
+    ),
+    body: { type: "box", layout: "vertical", paddingAll: "16px", contents: body },
+  };
+  const f = footer("ดูกราฟในแอป", input.moreUrl);
+  if (f) bubble.footer = f;
+  return {
+    type: "flex",
+    altText: `เทียบรายจ่ายรายหมวด: ฿${formatBaht(input.currentSatang)} (${total.text}) จาก ฿${formatBaht(input.previousSatang)}`,
+    contents: bubble,
+  };
+}
+
+/** "สรุปรายปี": the year's totals, top categories and a bar per month. */
+export function buildYearCard(input: {
+  yearBE: number;
+  subtitle: string;
+  income: number;
+  expense: number;
+  /** Change of the expenses against the same days a year earlier; null without a baseline. */
+  changePercent: number | null;
+  topExpenses: { name: string; amountSatang: number; percent: number }[];
+  months: { month: Date; expenseSatang: number }[];
+  moreUrl?: string;
+}): LineMessage {
+  const net = input.income - input.expense;
+  const sumRow = (label: string, value: string, color: string) => ({
+    type: "box",
+    layout: "horizontal",
+    contents: [
+      { type: "text", text: label, size: "sm", color: COLOR.muted, flex: 3 },
+      { type: "text", text: value, size: "md", weight: "bold", color, align: "end", flex: 5 },
+    ],
+  });
+  const body: unknown[] = [
+    sumRow("รายรับ", `+฿${formatBaht(input.income)}`, COLOR.income),
+    sumRow("รายจ่าย", `-฿${formatBaht(input.expense)}`, COLOR.expense),
+    sumRow(
+      "เหลือ",
+      `${net < 0 ? "-" : ""}฿${formatBaht(Math.abs(net))}`,
+      net < 0 ? COLOR.expense : COLOR.income,
+    ),
+  ];
+  if (input.changePercent !== null) {
+    const up = input.changePercent > 0;
+    body.push({
+      type: "text",
+      text:
+        input.changePercent === 0
+          ? "รายจ่ายเท่ากับปีก่อน (ช่วงวันที่เดียวกัน)"
+          : `รายจ่าย${up ? "เพิ่มขึ้น" : "ลดลง"} ${Math.abs(input.changePercent)}% จากปีก่อน (ช่วงวันที่เดียวกัน)`,
+      size: "xs",
+      color: up ? COLOR.expense : COLOR.income,
+      wrap: true,
+      margin: "md",
+    });
+  }
+  if (input.topExpenses.length > 0) {
+    body.push(
+      { type: "separator", margin: "lg" },
+      { type: "text", text: "ใช้จ่ายเยอะสุด", size: "xs", color: COLOR.muted, margin: "lg" },
+    );
+    for (const c of input.topExpenses) {
+      body.push({
+        type: "box",
+        layout: "horizontal",
+        margin: "sm",
+        contents: [
+          { type: "text", text: c.name, size: "sm", color: COLOR.text, flex: 4, wrap: true },
+          {
+            type: "text",
+            text: `฿${formatBaht(c.amountSatang)} · ${c.percent}%`,
+            size: "sm",
+            color: COLOR.muted,
+            align: "end",
+            flex: 5,
+          },
+        ],
+      });
+    }
+  }
+  const maxMonth = Math.max(0, ...input.months.map((m) => m.expenseSatang));
+  body.push(
+    { type: "separator", margin: "lg" },
+    { type: "text", text: "รายจ่ายรายเดือน", size: "xs", color: COLOR.muted, margin: "lg" },
+  );
+  for (const m of input.months) {
+    const pct = maxMonth > 0 ? Math.round((m.expenseSatang * 100) / maxMonth) : 0;
+    body.push({
+      type: "box",
+      layout: "horizontal",
+      margin: "sm",
+      alignItems: "center",
+      spacing: "sm",
+      contents: [
+        {
+          type: "text",
+          text: formatThaiMonthShort(m.month),
+          size: "xs",
+          color: COLOR.muted,
+          flex: 2,
+        },
+        {
+          type: "box",
+          layout: "vertical",
+          flex: 5,
+          height: "6px",
+          cornerRadius: "3px",
+          backgroundColor: "#E5EAEE",
+          contents:
+            m.expenseSatang > 0
+              ? [
+                  {
+                    type: "box",
+                    layout: "vertical",
+                    width: `${Math.max(3, pct)}%`,
+                    height: "6px",
+                    cornerRadius: "3px",
+                    backgroundColor: COLOR.expense,
+                    contents: [],
+                  },
+                ]
+              : [],
+        },
+        {
+          type: "text",
+          text: `฿${formatBaht(m.expenseSatang)}`,
+          size: "xs",
+          color: COLOR.text,
+          align: "end",
+          flex: 4,
+        },
+      ],
+    });
+  }
+  const bubble: Record<string, unknown> = {
+    type: "bubble",
+    size: "mega",
+    header: header(`สรุปรายปี ${input.yearBE}`, input.subtitle),
+    body: { type: "box", layout: "vertical", paddingAll: "16px", contents: body },
+  };
+  const f = footer("ดูกราฟในแอป", input.moreUrl);
+  if (f) bubble.footer = f;
+  return {
+    type: "flex",
+    altText: `สรุปรายปี ${input.yearBE}: รายรับ ฿${formatBaht(input.income)} รายจ่าย ฿${formatBaht(input.expense)}`,
     contents: bubble,
   };
 }

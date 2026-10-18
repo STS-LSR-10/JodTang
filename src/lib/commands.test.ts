@@ -114,3 +114,28 @@ describe("parseCommand: latest entries and spend by category", () => {
     expect(parseCommand("สรุปเดือนนี้")).toEqual({ kind: "summary", scope: "month" });
   });
 });
+
+describe("parseCommand: yearly summary and month comparison", () => {
+  it.each([
+    ["สรุปปี", { kind: "year-summary", year: null }],
+    ["สรุปรายปี", { kind: "year-summary", year: null }],
+    ["สรุปปีนี้", { kind: "year-summary", year: null }],
+    ["สรุปปีที่แล้ว", { kind: "year-summary", year: "last" }],
+    ["สรุปปีก่อน", { kind: "year-summary", year: "last" }],
+    ["สรุปปี 2568", { kind: "year-summary", year: 2568 }],
+    ["สรุปปี 2025", { kind: "year-summary", year: 2025 }],
+    ["สรุปรายปี ๒๕๖๙", { kind: "year-summary", year: 2569 }],
+    ["เทียบเดือน", { kind: "compare-months" }],
+    ["เทียบเดือนก่อน", { kind: "compare-months" }],
+    ["เปรียบเทียบเดือน", { kind: "compare-months" }],
+  ])("%s", (input, expected) => {
+    expect(parseCommand(input)).toEqual(expected);
+  });
+
+  it("is not confused with the other summaries or with entries", () => {
+    expect(parseCommand("สรุปปี 25")).toBeNull();
+    expect(parseCommand("สรุปปีใหม่ 500")).toBeNull();
+    expect(parseCommand("เทียบเดือน 500")).toBeNull();
+    expect(parseCommand("สรุปเดือนนี้")).toEqual({ kind: "summary", scope: "month" });
+  });
+});

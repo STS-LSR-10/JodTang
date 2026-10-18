@@ -100,6 +100,8 @@ export const ME_FREE = {
     smartParse: false,
     customRange: false,
     searchTotals: false,
+    yearSummary: false,
+    categoryCompare: false,
   },
   slips: { used: 0, limit: 0, remaining: 0 },
   points: 7,

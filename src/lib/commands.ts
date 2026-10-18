@@ -9,6 +9,8 @@ export type Command =
   | { kind: "search-usage" }
   | { kind: "recent" }
   | { kind: "category-spend" }
+  | { kind: "year-summary"; year: number | "last" | null }
+  | { kind: "compare-months" }
   | { kind: "summary"; scope: "today" | "month" }
   | { kind: "delete-latest" }
   | { kind: "edit-latest"; amountSatang: number }
@@ -37,6 +39,14 @@ export function parseCommand(input: string): Command | null {
   if (text === "สรุปเดือนนี้") return { kind: "summary", scope: "month" };
   if (["ล่าสุด", "รายการล่าสุด", "5 รายการล่าสุด"].includes(text)) return { kind: "recent" };
   if (["สรุปหมวด", "สรุปตามหมวด", "สรุปหมวดหมู่"].includes(text)) return { kind: "category-spend" };
+  if (["เทียบเดือน", "เทียบเดือนก่อน", "เปรียบเทียบเดือน"].includes(text)) {
+    return { kind: "compare-months" };
+  }
+  if (["สรุปปี", "สรุปรายปี", "สรุปปีนี้"].includes(text))
+    return { kind: "year-summary", year: null };
+  if (["สรุปปีที่แล้ว", "สรุปปีก่อน"].includes(text)) return { kind: "year-summary", year: "last" };
+  const yearMatch = /^(?:สรุปปี|สรุปรายปี)\s+(\d{4})$/.exec(text);
+  if (yearMatch?.[1]) return { kind: "year-summary", year: Number(yearMatch[1]) };
   const range = SUMMARY_RANGE_RE.exec(text);
   if (range) {
     return {

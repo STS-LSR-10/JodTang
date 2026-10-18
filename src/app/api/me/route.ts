@@ -29,6 +29,8 @@ const FEATURES: Feature[] = [
   "smartParse",
   "customRange",
   "searchTotals",
+  "yearSummary",
+  "categoryCompare",
 ];
 
 export async function GET(request: Request): Promise<Response> {
