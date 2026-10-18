@@ -97,6 +97,7 @@ export const ME_FREE = {
     multiEntry: false,
     tags: false,
     entryPhoto: false,
+    smartParse: false,
   },
   slips: { used: 0, limit: 0, remaining: 0 },
   points: 7,
@@ -116,6 +117,7 @@ export const ME_PLUS = {
   features: {
     ...Object.fromEntries(Object.keys(ME_FREE.features).map((k) => [k, true])),
     voiceLog: false,
+    smartParse: false,
   },
   slips: { used: 3, limit: 5, remaining: 2 },
   points: 25,

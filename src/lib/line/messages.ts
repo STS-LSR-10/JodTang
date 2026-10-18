@@ -94,6 +94,10 @@ export const MULTI_ENTRY_LOCKED_TEXT =
 export const TAGS_LOCKED_TEXT =
   'การติดแท็ก (เช่น "หมูกระทะ 500 #ปาร์ตี้") เป็นฟีเจอร์ของแผน Professional ขึ้นไป ยังไม่ได้จดรายการนี้นะ ลองทดลองใช้ฟรี 7 วันได้ที่เมนู "อัปเกรด" หรือพิมพ์จดโดยไม่ใส่แท็กได้เลย';
 
+// ───── AI-assisted reading of long sentences ─────
+export const SMART_PREFACE_TEXT = "ให้ AI ช่วยอ่านข้อความนี้แล้ว ตรวจก่อนจดนะ";
+export const SMART_CANCELLED_TEXT = "ยกเลิกแล้ว ไม่ได้จดรายการนี้ ลองพิมพ์ใหม่ได้เลย";
+
 // ───── receipt split ─────
 export const SPLIT_LOCKED_TEXT =
   'การแยกรายการจากใบเสร็จเป็นฟีเจอร์เฉพาะแผน Ultimate กด "ยืนยัน" เพื่อจดเป็นยอดรวมใบเดียวได้เลยนะ';

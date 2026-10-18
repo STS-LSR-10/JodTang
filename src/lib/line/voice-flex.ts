@@ -10,6 +10,8 @@ export interface VoiceCardInput {
   amountSatang: number;
   categoryName: string | null;
   occurredAt: Date;
+  /** "voice": heard from a voice note. "ai": a long typed sentence the AI helped read. */
+  variant?: "voice" | "ai";
 }
 
 /**
@@ -17,6 +19,7 @@ export interface VoiceCardInput {
  * "จดเลย" (the pending entry is confirmed by the same `sc` step as a checked slip).
  */
 export function buildVoiceCard(input: VoiceCardInput): LineMessage {
+  const ai = input.variant === "ai";
   const income = input.type === "income";
   const amountText = `${income ? "+" : "-"}฿${formatBaht(input.amountSatang)}`;
 
@@ -40,7 +43,7 @@ export function buildVoiceCard(input: VoiceCardInput): LineMessage {
 
   return {
     type: "flex",
-    altText: `ตรวจรายการจากเสียง: ${input.title} ${amountText}`,
+    altText: `${ai ? "ตรวจรายการที่ AI อ่านให้" : "ตรวจรายการจากเสียง"}: ${input.title} ${amountText}`,
     contents: {
       type: "bubble",
       size: "mega",
@@ -52,7 +55,9 @@ export function buildVoiceCard(input: VoiceCardInput): LineMessage {
         contents: [
           {
             type: "text",
-            text: "ตรวจรายการจากเสียง — ยังไม่ได้จด",
+            text: ai
+              ? "ตรวจรายการที่ AI อ่านให้ — ยังไม่ได้จด"
+              : "ตรวจรายการจากเสียง — ยังไม่ได้จด",
             weight: "bold",
             color: COLOR.primary,
           },
@@ -85,7 +90,9 @@ export function buildVoiceCard(input: VoiceCardInput): LineMessage {
           row("วันเวลา", formatThaiDate(input.occurredAt, true)),
           {
             type: "text",
-            text: "ฟังผิด? กดยกเลิกแล้วพูดใหม่ หรือพิมพ์จดเองได้เลย",
+            text: ai
+              ? "AI อ่านผิด? กดยกเลิกแล้วพิมพ์ใหม่ให้สั้นลง หรือแก้หมวดได้เลย"
+              : "ฟังผิด? กดยกเลิกแล้วพูดใหม่ หรือพิมพ์จดเองได้เลย",
             size: "xs",
             color: COLOR.muted,
             wrap: true,
@@ -105,7 +112,7 @@ export function buildVoiceCard(input: VoiceCardInput): LineMessage {
             spacing: "sm",
             contents: [
               button("เปลี่ยนหมวด", "se", "secondary"),
-              button("ยกเลิก", "vx", "secondary"),
+              button("ยกเลิก", ai ? "ax" : "vx", "secondary"),
             ],
           },
         ],

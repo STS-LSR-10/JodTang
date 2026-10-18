@@ -26,6 +26,7 @@ const FEATURES: Feature[] = [
   "multiEntry",
   "tags",
   "entryPhoto",
+  "smartParse",
 ];
 
 export async function GET(request: Request): Promise<Response> {

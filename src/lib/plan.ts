@@ -35,7 +35,8 @@ export type Feature =
   | "backdate"
   | "multiEntry"
   | "tags"
-  | "entryPhoto";
+  | "entryPhoto"
+  | "smartParse";
 
 /** The lowest tier that has each feature (Ultimate always includes everything Professional has). */
 const MIN_PLAN: Record<Feature, "plus" | "ultimate"> = {
@@ -51,6 +52,7 @@ const MIN_PLAN: Record<Feature, "plus" | "ultimate"> = {
   multiEntry: "plus",
   tags: "plus",
   entryPhoto: "plus",
+  smartParse: "ultimate",
 };
 
 export function isPaidPlan(plan: Plan): boolean {

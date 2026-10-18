@@ -101,7 +101,7 @@ const AMOUNT_RE =
   /([+\-−–])?\s*(฿)?\s*(\d(?:[\d,]*\d)?(?:\.\d+)?)\s*(k(?![a-z])|พัน|หมื่น|แสน|ล้าน)?\s*(บาท|฿|บ\.|baht|thb)?/gi;
 
 // Split on newline, ';' and ',' — but keep thousands separators like 20,000.
-const SPLIT_RE = /\r?\n|;|，|,(?!\d{3}(?!\d))/;
+export const SPLIT_RE = /\r?\n|;|，|,(?!\d{3}(?!\d))/;
 
 interface AmountCandidate {
   index: number;

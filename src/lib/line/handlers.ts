@@ -44,6 +44,9 @@ import { getSlip, getSlipItems, learnMerchant } from "@/lib/slip-repo";
 import { planReceiptSplit } from "@/lib/receipt-split";
 import { handleSlipImage } from "@/lib/slips";
 import { handlePhotoImage, photoBlockedReply } from "@/lib/photos";
+import { needsSmartParse, runSmartParse } from "@/lib/ai/smart-parse";
+import type { TextStructurer } from "@/lib/ai/text-structurer";
+import { recordSmartEntries } from "./smart-entries";
 import { getLivePhotoWait, getPhotoTx, startPhotoWait } from "@/lib/photo-repo";
 import {
   buildCategoryKeyboardList,
@@ -66,6 +69,8 @@ import {
   NOT_UNDERSTOOD_TEXT,
   PHOTO_ASK_REPLACE_TEXT,
   PHOTO_ASK_TEXT,
+  SMART_CANCELLED_TEXT,
+  SMART_PREFACE_TEXT,
   SPLIT_LOCKED_TEXT,
   SPLIT_UNAVAILABLE_TEXT,
   splitDoneText,
@@ -108,6 +113,8 @@ export interface HandlerDeps {
     fetchImage: (messageId: string) => Promise<SlipImage>;
     ocr: SlipOcrProvider;
   };
+  /** AI that reads long sentences (Ultimate). Absent -> the ordinary rules handle everything. */
+  structurer?: TextStructurer;
   /** Voice messages. Absent (no AI key that hears audio) -> a polite "not available" reply. */
   voice?: {
     fetchAudio: VoiceDeps["fetchAudio"];
@@ -197,6 +204,7 @@ export async function handleEvent(event: LineEvent, deps: HandlerDeps): Promise<
                 now: deps.now,
                 fetchAudio: voice.fetchAudio,
                 transcriber: voice.transcriber,
+                structurer: deps.structurer,
                 limit: deps.limit,
               },
               user,
@@ -221,9 +229,17 @@ async function handleText(input: string, user: UserRow, deps: HandlerDeps): Prom
   const command = parseCommand(input);
   if (command) return runCommand(command, user, deps);
 
-  const { entries } = parseMessage(input, deps.now());
-  if (entries.length === 0) return [text(NOT_UNDERSTOOD_TEXT)];
+  const parsed = parseMessage(input, deps.now());
+  const { entries } = parsed;
   const plan = effectivePlan(user.plan, user.plan_expires_at, deps.now());
+
+  // Long or unclear sentences (Ultimate): let the AI read them, then ask before saving anything.
+  if (deps.structurer && can(plan, "smartParse") && needsSmartParse(input, parsed)) {
+    const smart = await readWithAi(input, user, deps);
+    if (smart) return smart;
+  }
+
+  if (entries.length === 0) return [text(NOT_UNDERSTOOD_TEXT)];
   if (entries.some((e) => e.backdated) && !can(plan, "backdate")) {
     return [text(BACKDATE_LOCKED_TEXT)];
   }
@@ -232,6 +248,40 @@ async function handleText(input: string, user: UserRow, deps: HandlerDeps): Prom
     return [text(TAGS_LOCKED_TEXT)];
   }
   return saveEntries(entries, user, deps);
+}
+
+/** AI reading of a message: pending entries + check cards, or null to fall back to the rules. */
+async function readWithAi(
+  input: string,
+  user: UserRow,
+  deps: HandlerDeps,
+): Promise<LineMessage[] | null> {
+  const { db } = deps;
+  const [categories, memory] = await Promise.all([
+    loadCategories(db, user.id),
+    loadMemoryFor(db, user, deps.now()),
+  ]);
+  const entries = await runSmartParse(
+    { structurer: deps.structurer, limit: deps.limit, now: deps.now },
+    {
+      text: input,
+      subject: user.line_user_id,
+      categories: categories
+        .filter((c) => !c.is_hidden)
+        .map((c) => ({ name: c.name, type: c.type })),
+    },
+  );
+  if (!entries) return null;
+  const cards = await recordSmartEntries({
+    db,
+    user,
+    entries,
+    categories,
+    memory,
+    rawText: input,
+    source: "text",
+  });
+  return [text(SMART_PREFACE_TEXT), ...cards];
 }
 
 async function saveEntries(
@@ -635,12 +685,27 @@ async function handlePostback(
 
   // ── slip review: confirm / pick category / cancel ──
   // (voice entries reuse the same steps; only "cancel" has its own wording)
-  if (action === "sc" || action === "se" || action === "sk" || action === "sx" || action === "vx") {
+  if (
+    action === "sc" ||
+    action === "se" ||
+    action === "sk" ||
+    action === "sx" ||
+    action === "vx" ||
+    action === "ax"
+  ) {
     if (tx.status !== "pending_confirm") return [text(NOT_FOUND_TEXT)];
 
-    if (action === "sx" || action === "vx") {
+    if (action === "sx" || action === "vx" || action === "ax") {
       await updateTransaction(db, user.id, id, { status: "deleted" });
-      return [text(action === "vx" ? VOICE_CANCELLED_TEXT : SLIP_CANCELLED_TEXT)];
+      return [
+        text(
+          action === "vx"
+            ? VOICE_CANCELLED_TEXT
+            : action === "ax"
+              ? SMART_CANCELLED_TEXT
+              : SLIP_CANCELLED_TEXT,
+        ),
+      ];
     }
 
     const [settings, categories, memory] = await Promise.all([

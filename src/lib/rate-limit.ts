@@ -24,6 +24,8 @@ export const LIMITS = {
   chatVoice: { limit: 5, windowSeconds: 60 },
   /** ... and a daily ceiling so one account cannot run up the AI bill. */
   voiceDay: { limit: 60, windowSeconds: 86_400 },
+  /** AI-assisted reading of long sentences: one paid call each, so a daily ceiling per person. */
+  smartDay: { limit: 60, windowSeconds: 86_400 },
   /** Button taps (postbacks) per user. */
   postback: { limit: 60, windowSeconds: 60 },
   /** LIFF sign-in attempts per IP. */

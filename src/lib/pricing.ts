@@ -54,6 +54,7 @@ export const FEATURE_GROUPS: FeatureGroup[] = [
       { label: "ติดแท็ก #Tag", cells: [false, true, true] },
       { label: "แนบรูปประกอบรายการ", cells: [false, true, true] },
       { label: "แยกรายการจากใบเสร็จ", cells: [false, false, true] },
+      { label: "พิมพ์ประโยคยาวๆ ให้ AI ช่วยอ่าน", cells: [false, false, true] },
       { label: "จดด้วยเสียง", cells: [false, false, true] },
       { label: "ตั้งรายการจดอัตโนมัติ", cells: [false, "20 รายการ", "20 รายการ"] },
       { label: "เตือนจดประจำวัน", cells: [false, true, true] },
@@ -96,7 +97,7 @@ export const PLAN_HIGHLIGHTS: Record<Plan, string[]> = {
   ultimate: [
     "ทุกอย่างใน Professional",
     "อ่านสลิปไม่จำกัด + แยกรายการจากใบเสร็จ",
-    "จดด้วยเสียง",
+    "พิมพ์ประโยคยาวๆ ให้ AI ช่วยอ่าน + จดด้วยเสียง",
     "จดในกลุ่ม / หลายบัญชี (เร็วๆ นี้)",
     "จดด้วย PDF + แนบหลักฐาน (เร็วๆ นี้)",
   ],

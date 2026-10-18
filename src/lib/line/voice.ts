@@ -6,7 +6,10 @@ import { can, effectivePlan } from "@/lib/plan";
 import { parseMessage } from "@/lib/parse/text-parser";
 import { LIMITS, type LimitRule, type RateLimitResult } from "@/lib/rate-limit";
 import { insertTransaction, loadCategories, loadMemoryFor, type UserRow } from "@/lib/repo";
+import { needsSmartParse, runSmartParse } from "@/lib/ai/smart-parse";
+import type { TextStructurer } from "@/lib/ai/text-structurer";
 import type { Transcriber } from "@/lib/voice/transcribe";
+import { recordSmartEntries } from "./smart-entries";
 import type { LineMessage } from "@/lib/types";
 import {
   text,
@@ -25,6 +28,8 @@ export interface VoiceDeps {
   now: () => Date;
   fetchAudio: (messageId: string) => Promise<{ bytes: Uint8Array; mimeType: string }>;
   transcriber: Transcriber;
+  /** Reads long or unclear sentences (voice is Ultimate, so it is allowed here). */
+  structurer?: TextStructurer;
   limit?: (bucket: string, subject: string, rule: LimitRule) => Promise<RateLimitResult>;
 }
 
@@ -85,13 +90,41 @@ export async function handleVoiceMessage(
   if (!heard) return [text(VOICE_EMPTY_TEXT)];
 
   // 6. understand it like typed text, but never save without a tap
-  const { entries } = parseMessage(heard, now);
-  if (entries.length === 0) return [text(voiceNoAmountText(heard))];
+  const parsed = parseMessage(heard, now);
+  const { entries } = parsed;
 
   const [categories, memory] = await Promise.all([
     loadCategories(deps.db, user.id),
     loadMemoryFor(deps.db, user, now),
   ]);
+
+  // a long or unclear sentence: let the AI read it first, the rules stay as the fallback
+  if (deps.structurer && needsSmartParse(heard, parsed)) {
+    const smart = await runSmartParse(
+      { structurer: deps.structurer, limit: deps.limit, now: deps.now },
+      {
+        text: heard,
+        subject: lineUserId,
+        categories: categories
+          .filter((c) => !c.is_hidden)
+          .map((c) => ({ name: c.name, type: c.type })),
+      },
+    );
+    if (smart) {
+      const cards = await recordSmartEntries({
+        db: deps.db,
+        user,
+        entries: smart,
+        categories,
+        memory,
+        rawText: heard,
+        source: "voice",
+      });
+      return [text(voiceHeardText(heard)), ...cards];
+    }
+  }
+
+  if (entries.length === 0) return [text(voiceNoAmountText(heard))];
   const cards: LineMessage[] = [];
   for (const entry of entries.slice(0, MAX_ENTRIES)) {
     const { categoryId } = categorizeByRules({

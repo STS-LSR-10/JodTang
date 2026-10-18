@@ -94,6 +94,7 @@ function deps(over: Partial<VoiceDeps> & { heard?: string | Error } = {}): Voice
       },
     },
     limit: over.limit,
+    structurer: over.structurer,
   } as unknown as VoiceDeps & { fetchAudio: ReturnType<typeof vi.fn> };
 }
 
@@ -204,5 +205,43 @@ describe("handleVoiceMessage", () => {
     });
     expect(textOf((await run(big))[0])).toBe(VOICE_TOO_LONG_TEXT);
     expect(inserted).toHaveLength(0);
+  });
+});
+
+describe("long spoken sentences", () => {
+  const LONG = "วันนี้ไปกินข้าวกับแฟนมา จ่ายไป 850 บาท เอาออกจากกระเป๋าเงินสดนะ";
+  const reply = { entries: [{ type: "expense", title: "กินข้าวกับแฟน", amount: 850 }] };
+  const structure = vi.fn<(r: unknown) => Promise<unknown>>(async () => reply);
+  const structurer = { name: "t", structure };
+
+  it("are read by the AI first and still wait for the person's tap", async () => {
+    structure.mockClear();
+    const out = await run(deps({ heard: LONG, structurer }));
+    expect(structure).toHaveBeenCalledTimes(1);
+    expect(inserted).toHaveLength(1);
+    expect(inserted[0]).toMatchObject({
+      title: "กินข้าวกับแฟน",
+      amountSatang: 85_000,
+      status: "pending_confirm",
+      source: "voice",
+    });
+    expect(JSON.stringify(out)).toContain("ตรวจรายการจากเสียง");
+  });
+
+  it("fall back to the rules when the AI fails", async () => {
+    structure.mockClear();
+    structure.mockImplementationOnce(async () => {
+      throw new Error("down");
+    });
+    await run(deps({ heard: LONG, structurer }));
+    expect(inserted).toHaveLength(1);
+    expect(inserted[0]).toMatchObject({ amountSatang: 85_000, status: "pending_confirm" });
+  });
+
+  it("a short transcript never reaches the AI", async () => {
+    structure.mockClear();
+    await run(deps({ heard: "กาแฟ 30 บาท", structurer }));
+    expect(structure).not.toHaveBeenCalled();
+    expect(inserted[0]).toMatchObject({ amountSatang: 3000 });
   });
 });
