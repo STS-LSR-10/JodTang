@@ -56,3 +56,13 @@ describe("limits", () => {
     expect(can("plus", "savingsChart")).toBe(true);
   });
 });
+
+describe("export and dashboard", () => {
+  it("are Professional and above, never Free", () => {
+    for (const feature of ["export", "dashboard"] as const) {
+      expect(can("free", feature)).toBe(false);
+      expect(can("plus", feature)).toBe(true);
+      expect(can("ultimate", feature)).toBe(true);
+    }
+  });
+});

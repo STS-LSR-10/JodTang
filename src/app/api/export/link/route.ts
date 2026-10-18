@@ -4,6 +4,7 @@ import { signExportToken } from "@/lib/auth/export-token";
 import { requireUser } from "@/lib/auth/require-user";
 import { EXPORT_LINK_TTL_SECONDS } from "@/lib/config";
 import { getServerEnv } from "@/lib/env";
+import { requireFeature } from "@/lib/plan-server";
 import { LIMITS, limitOr429 } from "@/lib/rate-limit";
 import { getAdminClient } from "@/lib/supabase/admin";
 import { txFilterSchema } from "@/lib/tx-query";
@@ -21,6 +22,10 @@ export async function POST(request: Request): Promise<Response> {
   return guard(async () => {
     const auth = await requireUser(request);
     if (auth instanceof Response) return auth;
+
+    // Professional and above (the buttons are hidden for Free, this is the real check)
+    const locked = await requireFeature(getAdminClient(), auth.userId, "export");
+    if (locked) return locked;
 
     const limited = await limitOr429(
       getAdminClient(),

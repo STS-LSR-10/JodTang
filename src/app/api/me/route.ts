@@ -31,6 +31,8 @@ const FEATURES: Feature[] = [
   "searchTotals",
   "yearSummary",
   "categoryCompare",
+  "export",
+  "dashboard",
 ];
 
 export async function GET(request: Request): Promise<Response> {

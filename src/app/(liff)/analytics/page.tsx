@@ -1,6 +1,7 @@
 "use client";
 
 import { Lock } from "lucide-react";
+import Link from "next/link";
 import { useState } from "react";
 import { CategoryDonutChart, FlowBarChart } from "@/components/liff/lazy-charts";
 import { sliceColor } from "@/components/liff/slice-color";
@@ -39,8 +40,10 @@ export default function AnalyticsPage() {
   const [scope, setScope] = useState<Scope>("cycle");
   const me = useApi<{ features: Record<string, boolean> }>("/api/me");
   const savingsUnlocked = me.data?.features.savingsChart === true;
+  const dashboardUnlocked = me.data?.features.dashboard === true;
+  // Free never calls the (Professional) analytics API: it sees the locked page below instead
   const data = useApi<AnalyticsResponse>(
-    tab === "flow" ? `/api/analytics?view=${view}&scope=${scope}` : null,
+    tab === "flow" && dashboardUnlocked ? `/api/analytics?view=${view}&scope=${scope}` : null,
   );
 
   const chartData = (data.data?.series ?? []).map((p) => ({
@@ -60,6 +63,51 @@ export default function AnalyticsPage() {
     color: c.color,
   }));
   const catTotal = data.data?.categoriesTotalSatang ?? 0;
+
+  if (me.loading) {
+    return (
+      <main>
+        <PageHeader title="วิเคราะห์" />
+        <div className="px-4 pb-4">
+          <LoadingBlock rows={4} />
+        </div>
+      </main>
+    );
+  }
+  if (me.error) {
+    return (
+      <main>
+        <PageHeader title="วิเคราะห์" />
+        <ErrorState message={me.error} onRetry={me.reload} />
+      </main>
+    );
+  }
+  if (!dashboardUnlocked) {
+    return (
+      <main>
+        <PageHeader title="วิเคราะห์" />
+        <div className="space-y-3 px-4 pb-4">
+          <div className="rounded-2xl border border-border bg-surface shadow-card">
+            <EmptyState
+              title="กราฟและตารางวิเคราะห์สำหรับแผน Professional"
+              hint="ดูกราฟรายรับรายจ่าย สัดส่วนตามหมวด และกราฟเก็บออม ลองใช้ฟรี 7 วันได้ที่หน้าอัปเกรด"
+              action={
+                <Link
+                  href="/upgrade"
+                  className="mt-3 inline-flex h-11 items-center gap-1 rounded-2xl bg-primary px-5 text-sm font-semibold text-surface"
+                >
+                  <Lock className="h-4 w-4" aria-hidden /> ดูแผน Professional
+                </Link>
+              }
+            />
+          </div>
+          <p className="text-center text-xs text-muted">
+            ตอนนี้ดูสรุปได้ในแชท: สรุปเดือนนี้ · สรุปหมวด · ล่าสุด
+          </p>
+        </div>
+      </main>
+    );
+  }
 
   return (
     <main>

@@ -64,7 +64,7 @@ const CATEGORIES = {
 
 test.describe("analytics page (360px)", () => {
   test("renders both charts and the category legend", async ({ page }) => {
-    await mockApi(page, { "GET /api/analytics": ANALYTICS, "GET /api/me": ME_FREE });
+    await mockApi(page, { "GET /api/analytics": ANALYTICS, "GET /api/me": ME_PLUS });
     await page.goto("/analytics");
 
     await expect(page.getByRole("region", { name: "กราฟรายรับรายจ่าย" })).toBeVisible();
@@ -73,21 +73,36 @@ test.describe("analytics page (360px)", () => {
     await expectNoHorizontalScroll(page);
   });
 
-  test("savings tab: locked for Free, real chart for Plus", async ({ page }) => {
-    await mockApi(page, { "GET /api/analytics": ANALYTICS, "GET /api/me": ME_FREE });
+  test("Free sees a locked page with an upgrade link and never calls the analytics API", async ({
+    page,
+  }) => {
+    const { seen } = await mockApi(page, {
+      "GET /api/analytics": ANALYTICS,
+      "GET /api/me": ME_FREE,
+    });
+    await page.goto("/analytics");
+
+    await expect(page.getByText("กราฟและตารางวิเคราะห์สำหรับแผน Professional")).toBeVisible();
+    await expect(page.getByRole("link", { name: /ดูแผน Professional/ })).toHaveAttribute(
+      "href",
+      "/upgrade",
+    );
+    await expect(page.getByText("สรุปเดือนนี้ · สรุปหมวด · ล่าสุด")).toBeVisible();
+    await expect(page.getByRole("region", { name: "กราฟรายรับรายจ่าย" })).toHaveCount(0);
+    expect(seen.some((s) => s.includes("/api/analytics"))).toBe(false);
+    await expectNoHorizontalScroll(page);
+    await expectNoSeriousA11yViolations(page);
+  });
+
+  test("savings tab shows the real chart for Plus", async ({ page }) => {
+    await mockApi(page, { "GET /api/analytics": ANALYTICS, "GET /api/me": ME_PLUS });
     await page.goto("/analytics");
     await page.getByRole("tab", { name: /เก็บออม/ }).click();
-    await expect(page.getByText("กราฟเก็บออมสำหรับแผน Professional")).toBeVisible();
-
-    const plus = await page.context().newPage();
-    await mockApi(plus, { "GET /api/analytics": ANALYTICS, "GET /api/me": ME_PLUS });
-    await plus.goto("/analytics");
-    await plus.getByRole("tab", { name: /เก็บออม/ }).click();
-    await expect(plus.getByRole("region", { name: "กราฟเงินเก็บออม" })).toBeVisible();
+    await expect(page.getByRole("region", { name: "กราฟเงินเก็บออม" })).toBeVisible();
   });
 
   test("has no serious accessibility violations", async ({ page }) => {
-    await mockApi(page, { "GET /api/analytics": ANALYTICS, "GET /api/me": ME_FREE });
+    await mockApi(page, { "GET /api/analytics": ANALYTICS, "GET /api/me": ME_PLUS });
     await page.goto("/analytics");
     await expect(page.getByRole("region", { name: "กราฟรายรับรายจ่าย" })).toBeVisible();
     await expectNoSeriousA11yViolations(page);

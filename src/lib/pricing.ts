@@ -75,7 +75,8 @@ export const FEATURE_GROUPS: FeatureGroup[] = [
       { label: "ค้นหาพร้อมยอดรวม", cells: [false, true, true] },
       { label: "สรุปรายปี", cells: [false, true, true] },
       { label: "เทียบเดือนต่อเดือนรายหมวด", cells: [false, true, true] },
-      { label: "ส่งออก CSV", cells: [true, true, true] },
+      { label: "หน้าวิเคราะห์ (กราฟแท่ง / โดนัท)", cells: [false, true, true] },
+      { label: "ส่งออก CSV", cells: [false, true, true] },
       { label: "Excel พร้อมชีตสรุป", cells: [false, true, true] },
       { label: "กราฟเก็บออม", cells: [false, true, true] },
     ],
@@ -97,7 +98,8 @@ export const PLAN_HIGHLIGHTS: Record<Plan, string[]> = {
   plus: [
     "อ่านสลิป 5 ใบ/เดือน + จดย้อนหลัง",
     "รายการจดอัตโนมัติ + เตือนประจำวัน",
-    "Excel สรุป กราฟเก็บออม สรุปในแชท",
+    "ส่งออก CSV/Excel + กราฟวิเคราะห์",
+    "กราฟเก็บออม + สรุปในแชท",
   ],
   ultimate: [
     "ทุกอย่างใน Professional",

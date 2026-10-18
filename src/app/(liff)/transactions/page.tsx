@@ -10,6 +10,7 @@ import {
   Trash2,
   X,
 } from "lucide-react";
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useMemo, useState, type FormEvent } from "react";
 import { Sheet } from "@/components/liff/sheet";
@@ -480,7 +481,7 @@ function ExportSheet({
   const me = useApi<{ features: Record<string, boolean> }>("/api/me");
   const [busy, setBusy] = useState<"csv" | "xlsx" | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const advanced = me.data?.features.advancedExport === true;
+  const allowed = me.data?.features.export === true;
 
   async function start(format: "csv" | "xlsx") {
     setBusy(format);
@@ -500,38 +501,56 @@ function ExportSheet({
 
   return (
     <Sheet title="ส่งออกไฟล์" onClose={onClose}>
-      <div className="space-y-3">
-        <p className="text-sm text-muted">
-          ส่งออกตามตัวกรองที่เลือกอยู่ (สูงสุด 5,000 แถว)
-          ไฟล์จะเปิดในเบราว์เซอร์ของเครื่องเพื่อดาวน์โหลด ลิงก์ใช้ได้ 2 นาที
-        </p>
-        <button
-          type="button"
-          disabled={busy !== null}
-          onClick={() => start("csv")}
-          className="h-12 w-full rounded-2xl border border-primary text-base font-semibold text-primary disabled:opacity-60"
-        >
-          {busy === "csv" ? "กำลังเตรียมไฟล์..." : "ดาวน์โหลด CSV"}
-        </button>
-        <button
-          type="button"
-          disabled={busy !== null}
-          onClick={() => start("xlsx")}
-          className="h-12 w-full rounded-2xl bg-primary text-base font-semibold text-surface disabled:opacity-60"
-        >
-          {busy === "xlsx" ? "กำลังเตรียมไฟล์..." : "ดาวน์โหลด Excel (.xlsx)"}
-        </button>
-        <p className="text-xs text-muted">
-          {advanced
-            ? "แผน Professional: ไฟล์ Excel มีชีตสรุปตามหมวดและสรุปรายเดือนเพิ่มให้ด้วย"
-            : "แผน Professional: ไฟล์ Excel จะมีชีตสรุปตามหมวดและสรุปรายเดือนเพิ่มให้"}
-        </p>
-        {error ? (
-          <p role="alert" className="text-sm text-expense">
-            {error}
+      {me.loading ? (
+        <LoadingBlock rows={2} />
+      ) : me.error ? (
+        <ErrorState message={me.error} onRetry={me.reload} />
+      ) : !allowed ? (
+        <div className="space-y-3 text-center">
+          <p className="text-base font-semibold">ส่งออก CSV / Excel สำหรับแผน Professional</p>
+          <p className="text-sm text-muted">
+            ดาวน์โหลดรายการไปทำบัญชีต่อในคอมพิวเตอร์หรือ Google Sheets ลองใช้ฟรี 7
+            วันได้ที่หน้าอัปเกรด
           </p>
-        ) : null}
-      </div>
+          <Link
+            href="/upgrade"
+            className="inline-flex h-11 items-center justify-center rounded-2xl bg-primary px-5 text-sm font-semibold text-surface"
+          >
+            ดูแผน Professional
+          </Link>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          <p className="text-sm text-muted">
+            ส่งออกตามตัวกรองที่เลือกอยู่ (สูงสุด 5,000 แถว)
+            ไฟล์จะเปิดในเบราว์เซอร์ของเครื่องเพื่อดาวน์โหลด ลิงก์ใช้ได้ 2 นาที
+          </p>
+          <button
+            type="button"
+            disabled={busy !== null}
+            onClick={() => start("csv")}
+            className="h-12 w-full rounded-2xl border border-primary text-base font-semibold text-primary disabled:opacity-60"
+          >
+            {busy === "csv" ? "กำลังเตรียมไฟล์..." : "ดาวน์โหลด CSV"}
+          </button>
+          <button
+            type="button"
+            disabled={busy !== null}
+            onClick={() => start("xlsx")}
+            className="h-12 w-full rounded-2xl bg-primary text-base font-semibold text-surface disabled:opacity-60"
+          >
+            {busy === "xlsx" ? "กำลังเตรียมไฟล์..." : "ดาวน์โหลด Excel (.xlsx)"}
+          </button>
+          <p className="text-xs text-muted">
+            ไฟล์ Excel มีชีตสรุปตามหมวดและสรุปรายเดือนเพิ่มให้ด้วย
+          </p>
+          {error ? (
+            <p role="alert" className="text-sm text-expense">
+              {error}
+            </p>
+          ) : null}
+        </div>
+      )}
     </Sheet>
   );
 }

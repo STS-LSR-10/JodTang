@@ -102,6 +102,8 @@ export const ME_FREE = {
     searchTotals: false,
     yearSummary: false,
     categoryCompare: false,
+    export: false,
+    dashboard: false,
   },
   slips: { used: 0, limit: 0, remaining: 0 },
   points: 7,

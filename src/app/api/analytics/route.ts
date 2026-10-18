@@ -3,6 +3,7 @@ import { apiError, guard, json } from "@/lib/api";
 import { requireUser } from "@/lib/auth/require-user";
 import { cycleRange } from "@/lib/budget-cycle";
 import { toSatang } from "@/lib/money";
+import { requireFeature } from "@/lib/plan-server";
 import { getSettings } from "@/lib/repo";
 import { bucketStarts, fillSeries, type SeriesRow } from "@/lib/series";
 import { getAdminClient } from "@/lib/supabase/admin";
@@ -31,6 +32,10 @@ export async function GET(request: Request): Promise<Response> {
   return guard(async () => {
     const auth = await requireUser(request);
     if (auth instanceof Response) return auth;
+
+    // The charts are a Professional feature (Free reads the summaries in the chat instead).
+    const locked = await requireFeature(getAdminClient(), auth.userId, "dashboard");
+    if (locked) return locked;
 
     const parsed = querySchema.safeParse(Object.fromEntries(new URL(request.url).searchParams));
     if (!parsed.success) return apiError("ตัวเลือกไม่ถูกต้อง", 400);

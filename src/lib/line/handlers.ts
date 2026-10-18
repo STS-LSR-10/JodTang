@@ -729,7 +729,15 @@ async function runCommand(
         return [text(`ใช้จ่ายตามหมวด (${subtitle})\nยังไม่มีรายจ่ายในรอบนี้`)];
       const totalSatang = slices.reduce((sum, s) => sum + s.amountSatang, 0);
       return [
-        buildCategorySpendCard({ subtitle, slices, totalSatang, moreUrl: pageUrl("/analytics") }),
+        buildCategorySpendCard({
+          subtitle,
+          slices,
+          totalSatang,
+          // the charts page is a Professional feature: Free is not sent to a locked page
+          moreUrl: can(effectivePlan(user.plan, user.plan_expires_at, now), "dashboard")
+            ? pageUrl("/analytics")
+            : undefined,
+        }),
       ];
     }
 

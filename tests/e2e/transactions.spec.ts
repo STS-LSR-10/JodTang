@@ -4,6 +4,7 @@ import {
   expectNoSeriousA11yViolations,
   mockApi,
   ME_FREE,
+  ME_PLUS,
   TX,
 } from "./helpers";
 
@@ -163,8 +164,24 @@ test.describe("transactions page (360px)", () => {
     expect(seen.some((s) => s.startsWith("POST"))).toBe(false);
   });
 
+  test("export sheet is locked for Free and points to the upgrade page", async ({ page }) => {
+    const { seen } = await mockApi(page, { "GET /api/transactions": LIST, "GET /api/me": ME_FREE });
+    await page.goto("/transactions");
+    await page.getByRole("button", { name: "ส่งออกไฟล์" }).click();
+
+    const dialog = page.getByRole("dialog", { name: "ส่งออกไฟล์" });
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByText("ส่งออก CSV / Excel สำหรับแผน Professional")).toBeVisible();
+    await expect(dialog.getByRole("link", { name: "ดูแผน Professional" })).toHaveAttribute(
+      "href",
+      "/upgrade",
+    );
+    await expect(page.getByRole("button", { name: "ดาวน์โหลด CSV" })).toHaveCount(0);
+    expect(seen.some((s) => s.includes("/api/export"))).toBe(false);
+  });
+
   test("export sheet explains the external download", async ({ page }) => {
-    await mockApi(page, { "GET /api/transactions": LIST, "GET /api/me": ME_FREE });
+    await mockApi(page, { "GET /api/transactions": LIST, "GET /api/me": ME_PLUS });
     await page.goto("/transactions");
     await page.getByRole("button", { name: "ส่งออกไฟล์" }).click();
 
