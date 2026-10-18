@@ -80,6 +80,19 @@ export function buildConfirmMessage(input: ConfirmCardInput): LineMessage {
     return {
       type: "text",
       text: `จดแล้ว: ${input.title} ${amountText} · ${category}${tagsText}`,
+      quickReply: {
+        items: [
+          {
+            type: "action",
+            action: {
+              type: "postback",
+              label: "📷 แนบรูป",
+              data: `a=ph&id=${input.txId}`,
+              displayText: "แนบรูป",
+            },
+          },
+        ],
+      },
     };
   }
 
@@ -317,6 +330,19 @@ export function buildConfirmMessage(input: ConfirmCardInput): LineMessage {
     }
   }
 
+  body.push({
+    type: "button",
+    style: "link",
+    height: "sm",
+    margin: "md",
+    action: {
+      type: "postback",
+      label: "📷 แนบรูป",
+      data: `a=ph&id=${input.txId}`,
+      displayText: "แนบรูป",
+    },
+  });
+
   return {
     type: "flex",
     altText: `จดแล้ว: ${input.title} ${amountText}`,
@@ -510,6 +536,20 @@ export function buildCategoryKeyboardList(
           fillInText: `${c.name} `,
         },
       })),
+    },
+  };
+}
+
+/** "Send the photo now": camera and gallery shortcuts under the question. */
+export function buildPhotoAsk(message: string): LineMessage {
+  return {
+    type: "text",
+    text: message,
+    quickReply: {
+      items: [
+        { type: "action", action: { type: "camera", label: "ถ่ายรูป" } },
+        { type: "action", action: { type: "cameraRoll", label: "เลือกจากอัลบั้ม" } },
+      ],
     },
   };
 }

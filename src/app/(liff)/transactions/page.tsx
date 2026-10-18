@@ -1,6 +1,15 @@
 "use client";
 
-import { CheckSquare, Download, FolderInput, Plus, Receipt, Trash2, X } from "lucide-react";
+import {
+  CheckSquare,
+  Download,
+  FolderInput,
+  Image as ImageIcon,
+  Plus,
+  Receipt,
+  Trash2,
+  X,
+} from "lucide-react";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Sheet } from "@/components/liff/sheet";
 import { EmptyState, ErrorState, LoadingBlock, PageHeader } from "@/components/liff/states";
@@ -57,6 +66,7 @@ export default function TransactionsPage() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [formOpen, setFormOpen] = useState(false);
   const [slipFor, setSlipFor] = useState<TxDto | null>(null);
+  const [photoFor, setPhotoFor] = useState<TxDto | null>(null);
   const [exportOpen, setExportOpen] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [editFor, setEditFor] = useState<TxDto | null>(null);
@@ -282,6 +292,16 @@ export default function TransactionsPage() {
                   action={
                     selecting ? null : (
                       <div className="flex shrink-0">
+                        {tx.hasPhoto ? (
+                          <button
+                            type="button"
+                            onClick={() => setPhotoFor(tx)}
+                            aria-label={`ดูรูปแนบ ${tx.title}`}
+                            className="flex h-11 w-11 items-center justify-center rounded-2xl text-primary"
+                          >
+                            <ImageIcon className="h-4 w-4" aria-hidden />
+                          </button>
+                        ) : null}
                         {tx.hasSlip ? (
                           <button
                             type="button"
@@ -372,6 +392,18 @@ export default function TransactionsPage() {
       ) : null}
 
       {slipFor ? <SlipSheet tx={slipFor} onClose={() => setSlipFor(null)} /> : null}
+
+      {photoFor ? (
+        <PhotoSheet
+          tx={photoFor}
+          onClose={() => setPhotoFor(null)}
+          onRemoved={() => {
+            setPhotoFor(null);
+            setNotice("ลบรูปแนบแล้ว");
+            list.reload();
+          }}
+        />
+      ) : null}
 
       {exportOpen ? (
         <ExportSheet
@@ -481,6 +513,68 @@ function SlipSheet({ tx, onClose }: { tx: TxDto; onClose: () => void }) {
           alt={`สลิปของรายการ ${tx.title}`}
           className="mx-auto max-h-[70vh] w-full rounded-2xl border border-border object-contain"
         />
+      )}
+    </Sheet>
+  );
+}
+
+/** Shows the photo attached to an entry, and lets the person remove it. */
+function PhotoSheet({
+  tx,
+  onClose,
+  onRemoved,
+}: {
+  tx: TxDto;
+  onClose: () => void;
+  onRemoved: () => void;
+}) {
+  const { api } = useLiff();
+  const photo = useApi<{ url: string }>(`/api/transactions/${tx.id}/photo`);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function remove() {
+    if (!window.confirm("ลบรูปแนบนี้ใช่ไหม? ลบแล้วกู้คืนไม่ได้")) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await api(`/api/transactions/${tx.id}/photo`, { method: "DELETE" });
+      onRemoved();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "ลบรูปไม่สำเร็จ");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Sheet title={`รูปแนบ: ${tx.title}`} onClose={onClose}>
+      {photo.loading ? (
+        <LoadingBlock rows={2} />
+      ) : photo.error || !photo.data ? (
+        <ErrorState message={photo.error ?? "เปิดรูปไม่สำเร็จ"} onRetry={photo.reload} />
+      ) : (
+        <div className="space-y-3">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={photo.data.url}
+            alt={`รูปแนบของรายการ ${tx.title}`}
+            className="mx-auto max-h-[60vh] w-full rounded-2xl border border-border object-contain"
+          />
+          {error ? (
+            <p role="alert" className="text-sm text-expense">
+              {error}
+            </p>
+          ) : null}
+          <button
+            type="button"
+            onClick={remove}
+            disabled={busy}
+            className="flex h-11 w-full items-center justify-center gap-2 rounded-2xl border border-border text-sm font-semibold text-expense disabled:opacity-60"
+          >
+            <Trash2 className="h-4 w-4" aria-hidden /> {busy ? "กำลังลบ..." : "ลบรูปแนบ"}
+          </button>
+        </div>
       )}
     </Sheet>
   );

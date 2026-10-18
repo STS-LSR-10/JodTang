@@ -128,6 +128,39 @@ describe("transaction tags (0014)", () => {
   });
 });
 
+describe("entry photos (0015)", () => {
+  it("an entry has no photo by default and the wait row follows the entry and the user", async () => {
+    const u = await newUser(db, "photos");
+    const tx = await one<{ id: string; photo_path: string | null; photo_at: string | null }>(
+      db,
+      "insert into transactions (user_id,type,amount,title) values ($1,'expense',10,'a') returning id, photo_path, photo_at",
+      [u],
+    );
+    expect(tx.photo_path).toBeNull();
+    expect(tx.photo_at).toBeNull();
+
+    await db.query(
+      "insert into photo_waits (user_id,tx_id,expires_at) values ($1,$2, now() + interval '10 minutes')",
+      [u, tx.id],
+    );
+    // one waiting entry per user: a second tap replaces it (primary key on user_id)
+    await expect(
+      db.query(
+        "insert into photo_waits (user_id,tx_id,expires_at) values ($1,$2, now() + interval '10 minutes')",
+        [u, tx.id],
+      ),
+    ).rejects.toThrow();
+
+    await db.query("delete from transactions where id = $1", [tx.id]);
+    const left = await one<{ n: number }>(
+      db,
+      "select count(*)::int as n from photo_waits where user_id = $1",
+      [u],
+    );
+    expect(left.n).toBe(0);
+  });
+});
+
 describe("summary and analytics functions", () => {
   it("add up confirmed entries only, in satang-exact numeric", async () => {
     const u = await newUser(db, "sums");
@@ -377,6 +410,10 @@ describe("deleting a user (erase-my-data)", () => {
     );
     await db.query("insert into point_ledger (user_id,delta,reason) values ($1,1,'daily')", [u]);
     await db.query(
+      "insert into photo_waits (user_id,tx_id,expires_at) values ($1,(select id from transactions where user_id = $1 limit 1), now() + interval '10 minutes')",
+      [u],
+    );
+    await db.query(
       "insert into category_overrides (user_id,category_id,is_hidden) values ($1,(select id from categories where user_id is null limit 1),true)",
       [u],
     );
@@ -394,6 +431,7 @@ describe("deleting a user (erase-my-data)", () => {
       "recurring_rules",
       "point_ledger",
       "category_overrides",
+      "photo_waits",
     ];
     for (const t of tables) {
       const r = await one<{ n: number }>(

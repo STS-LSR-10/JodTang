@@ -52,6 +52,7 @@ export const FEATURE_GROUPS: FeatureGroup[] = [
       { label: "จดย้อนหลัง", cells: [false, true, true] },
       { label: "จดหลายรายการในข้อความเดียว", cells: [false, true, true] },
       { label: "ติดแท็ก #Tag", cells: [false, true, true] },
+      { label: "แนบรูปประกอบรายการ", cells: [false, true, true] },
       { label: "จดด้วยเสียง", cells: [false, false, true] },
       { label: "ตั้งรายการจดอัตโนมัติ", cells: [false, "20 รายการ", "20 รายการ"] },
       { label: "เตือนจดประจำวัน", cells: [false, true, true] },

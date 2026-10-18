@@ -34,6 +34,7 @@ begin
     insert into transactions (user_id, type, amount, title) values (ub, 'expense', 20, 'b-secret')
       returning id into tb;
     insert into budgets (user_id, amount) values (ub, 100);
+    insert into photo_waits (user_id, tx_id, expires_at) values (ub, tb, now() + interval '10 minutes');
     insert into point_ledger (user_id, delta, reason) values (ub, 1, 'daily');
 
     -- 3) act as user A (a signed-in Supabase user whose JWT subject is A)
@@ -107,6 +108,8 @@ begin
     if n <> 0 then raise exception 'A can read line_events'; end if;
     select count(*) into n from rate_limits;
     if n <> 0 then raise exception 'A can read rate_limits'; end if;
+    select count(*) into n from photo_waits;
+    if n <> 0 then raise exception 'A can read photo_waits'; end if;
 
     reset role;
 

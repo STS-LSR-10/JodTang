@@ -13,6 +13,9 @@ export const PLAN_LABEL: Record<Plan, string> = {
   ultimate: "Ultimate",
 };
 
+/** Photos a person can attach to entries per month (a cost guard; same for every paid plan). */
+export const PHOTOS_PER_MONTH = 100;
+
 /** Slips a person can have read per month, by plan. Null means unlimited. */
 export const SLIP_LIMIT: Record<Plan, number | null> = {
   free: 0,
@@ -31,7 +34,8 @@ export type Feature =
   | "voiceLog"
   | "backdate"
   | "multiEntry"
-  | "tags";
+  | "tags"
+  | "entryPhoto";
 
 /** The lowest tier that has each feature (Ultimate always includes everything Professional has). */
 const MIN_PLAN: Record<Feature, "plus" | "ultimate"> = {
@@ -46,6 +50,7 @@ const MIN_PLAN: Record<Feature, "plus" | "ultimate"> = {
   backdate: "plus",
   multiEntry: "plus",
   tags: "plus",
+  entryPhoto: "plus",
 };
 
 export function isPaidPlan(plan: Plan): boolean {

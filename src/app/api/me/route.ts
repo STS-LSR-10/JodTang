@@ -25,6 +25,7 @@ const FEATURES: Feature[] = [
   "backdate",
   "multiEntry",
   "tags",
+  "entryPhoto",
 ];
 
 export async function GET(request: Request): Promise<Response> {

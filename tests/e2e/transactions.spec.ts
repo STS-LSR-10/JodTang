@@ -61,6 +61,33 @@ test.describe("transactions page (360px)", () => {
     await expect.poll(() => seen.some((s) => s.includes("q=%23company"))).toBe(true);
   });
 
+  test("an entry with a photo shows a photo button that opens and can remove it", async ({
+    page,
+  }) => {
+    const id = "44444444-4444-4444-4444-444444444444";
+    const png =
+      "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==";
+    const { seen } = await mockApi(page, {
+      "GET /api/transactions": {
+        items: [TX({ id, title: "ข้าวมันไก่", hasPhoto: true })],
+        hasMore: false,
+      },
+      [`GET /api/transactions/${id}/photo`]: { url: png, expiresIn: 60 },
+      [`DELETE /api/transactions/${id}/photo`]: { ok: true },
+      "GET /api/me": ME_FREE,
+    });
+    page.on("dialog", (d) => d.accept());
+    await page.goto("/transactions");
+
+    await page.getByRole("button", { name: "ดูรูปแนบ ข้าวมันไก่" }).click();
+    await expect(page.getByRole("img", { name: "รูปแนบของรายการ ข้าวมันไก่" })).toBeVisible();
+    await page.getByRole("button", { name: "ลบรูปแนบ" }).click();
+    await expect
+      .poll(() => seen.some((s) => s.includes(`DELETE /api/transactions/${id}/photo`)))
+      .toBe(true);
+    await expect(page.getByText("ลบรูปแนบแล้ว")).toBeVisible();
+  });
+
   test("empty state", async ({ page }) => {
     await mockApi(page, {
       "GET /api/transactions": { items: [], hasMore: false },

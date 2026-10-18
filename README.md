@@ -182,6 +182,7 @@ pnpm richmenu --replace   # สร้างเมนู อัปโหลดภ
 | DELETE | `/api/transactions/:id` | ลบ (soft delete) |
 | POST | `/api/transactions/bulk` | `{action:"delete"\|"move", ids≤100, categoryId?}` → `{updated, skipped}` (ย้ายหมวดข้ามรายการต่างประเภท) |
 | GET | `/api/transactions/:id/slip` | signed URL (60 วินาที) ของรูปสลิปที่แนบ |
+| GET/DELETE | `/api/transactions/:id/photo` | signed URL (60 วินาที) ของรูปที่แนบประกอบรายการ / ลบรูป (Professional ขึ้นไป แนบผ่านปุ่ม "📷 แนบรูป" ในแชท) |
 | GET | `/api/me` | แผนที่ใช้อยู่, สิทธิ์แต่ละฟีเจอร์, โควตาสลิป, ตังสะสม, streak, รหัสชวน |
 | POST | `/api/plan/checkout` | เริ่มอัปเกรด (stub: ตอบว่ายังไม่เปิด) |
 | POST | `/api/points/redeem` | แลกตังสะสมเป็นวันใช้ Plus |

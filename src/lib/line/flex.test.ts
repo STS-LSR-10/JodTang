@@ -68,7 +68,7 @@ describe("flex", () => {
     expect(JSON.stringify(buildConfirmMessage({ ...tagged, style: "full" }))).toContain(
       "#ปาร์ตี้ #trip",
     );
-    expect(buildConfirmMessage({ ...tagged, style: "short" })).toEqual({
+    expect(buildConfirmMessage({ ...tagged, style: "short" })).toMatchObject({
       type: "text",
       text: "จดแล้ว: กาแฟ ฿30 · อาหาร #ปาร์ตี้ #trip",
     });
@@ -86,7 +86,7 @@ describe("flex", () => {
 
   it("short style is a plain text message", () => {
     const msg = buildConfirmMessage({ ...base, style: "short" });
-    expect(msg).toEqual({ type: "text", text: "จดแล้ว: กาแฟ ฿30 · อาหาร" });
+    expect(msg).toMatchObject({ type: "text", text: "จดแล้ว: กาแฟ ฿30 · อาหาร" });
   });
 
   it("slip card has confirm / edit / cancel and flags an unknown date", () => {
@@ -146,6 +146,20 @@ describe("compose card", () => {
     expect(json).toContain('"inputOption":"openKeyboard"');
     expect(json).not.toContain("fillInText");
     expect(msg.altText).toBeTypeOf("string");
+  });
+});
+
+describe("the แนบรูป button", () => {
+  it("is on the full card as a postback for that entry", () => {
+    const json = JSON.stringify(buildConfirmMessage({ ...base, style: "full" }));
+    expect(json).toContain(`"data":"a=ph&id=${base.txId}"`);
+  });
+
+  it("is a quick reply under the short card", () => {
+    const msg = buildConfirmMessage({ ...base, style: "short" }) as unknown as {
+      quickReply: { items: { action: { data: string } }[] };
+    };
+    expect(msg.quickReply.items[0]?.action.data).toBe(`a=ph&id=${base.txId}`);
   });
 });
 

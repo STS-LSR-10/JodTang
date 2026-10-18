@@ -40,10 +40,13 @@ import {
 } from "@/lib/points";
 import { getSlip, learnMerchant } from "@/lib/slip-repo";
 import { handleSlipImage } from "@/lib/slips";
+import { handlePhotoImage, photoBlockedReply } from "@/lib/photos";
+import { getLivePhotoWait, getPhotoTx, startPhotoWait } from "@/lib/photo-repo";
 import {
   buildCategoryKeyboardList,
   buildComposeCard,
   buildConfirmMessage,
+  buildPhotoAsk,
   buildTypeQuestion,
 } from "./flex";
 import { buildCategoryChooser } from "./slip-flex";
@@ -58,6 +61,8 @@ import {
   MEMORY_PLUS_HINT_TEXT,
   NOT_FOUND_TEXT,
   NOT_UNDERSTOOD_TEXT,
+  PHOTO_ASK_REPLACE_TEXT,
+  PHOTO_ASK_TEXT,
   NOTHING_TO_DELETE_TEXT,
   REFERRAL_BONUS_TEXT,
   REFERRAL_FAIL_TEXT,
@@ -151,13 +156,26 @@ export async function handleEvent(event: LineEvent, deps: HandlerDeps): Promise<
       } else if (event.message?.type === "image") {
         const { slip } = deps;
         if (slip && event.message.id) {
-          await reply(
-            await handleSlipImage(
-              { db: deps.db, now: deps.now, fetchImage: slip.fetchImage, ocr: slip.ocr },
-              user,
-              event.message.id,
-            ),
-          );
+          // an image right after "แนบรูป" belongs to that entry, everything else is a slip
+          const wait = await getLivePhotoWait(deps.db, user.id, deps.now());
+          if (wait) {
+            await reply(
+              await handlePhotoImage(
+                { db: deps.db, now: deps.now, fetchImage: slip.fetchImage },
+                user,
+                event.message.id,
+                wait,
+              ),
+            );
+          } else {
+            await reply(
+              await handleSlipImage(
+                { db: deps.db, now: deps.now, fetchImage: slip.fetchImage, ocr: slip.ocr },
+                user,
+                event.message.id,
+              ),
+            );
+          }
         } else {
           await reply([text(SLIP_SOON_TEXT)]);
         }
@@ -494,6 +512,15 @@ async function handlePostback(
   }
 
   if (action === "edit") return [text(EDIT_HINT_TEXT)];
+
+  // "📷 แนบรูป" on an entry card: plan and cap first, then wait for the next image
+  if (action === "ph") {
+    const blocked = await photoBlockedReply(db, user.id, deps.now());
+    if (blocked) return blocked;
+    const current = await getPhotoTx(db, user.id, id);
+    await startPhotoWait(db, user.id, id, deps.now());
+    return [buildPhotoAsk(current?.photo_path ? PHOTO_ASK_REPLACE_TEXT : PHOTO_ASK_TEXT)];
+  }
 
   if (action === "pt") {
     if (tx.status !== "pending_confirm") return [text(NOT_FOUND_TEXT)];
