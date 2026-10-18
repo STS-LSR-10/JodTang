@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import { MIN_PLAN, type Feature } from "./plan";
 import {
   FEATURE_GROUPS,
-  featuresForPlan,
   MIN_CHARGE_BAHT,
   PRICES,
   prepaidUpgradeQuote,
@@ -49,29 +48,12 @@ describe("what each plan can do", () => {
     }
   });
 
-  it("a plan's list leaves out what it does not have, and grows with the plan", () => {
-    const labels = (plan: "free" | "plus" | "ultimate") =>
-      featuresForPlan(plan).flatMap((g) => g.items.map((i) => i.label));
-    const free = labels("free");
-    const plus = labels("plus");
-    const ultimate = labels("ultimate");
-    expect(free).not.toContain("จดย้อนหลัง (พิมพ์วันที่หรือเลือกจากปฏิทิน)");
-    expect(plus).toContain("จดย้อนหลัง (พิมพ์วันที่หรือเลือกจากปฏิทิน)");
-    expect(plus).not.toContain("จดด้วยเสียง");
-    expect(ultimate).toContain("จดด้วยเสียง");
-    expect(free.every((l) => plus.includes(l))).toBe(true);
-    expect(plus.every((l) => ultimate.includes(l))).toBe(true);
-    expect(free.length).toBeLessThan(plus.length);
-    expect(plus.length).toBeLessThan(ultimate.length);
-  });
-
-  it("limits show as a detail, and there are no empty groups", () => {
-    const wallets = featuresForPlan("plus")
-      .flatMap((g) => g.items)
-      .find((i) => i.label.startsWith("กระเป๋าเงิน"));
-    expect(wallets?.detail).toBe("สูงสุด 5 ใบ");
-    for (const plan of ["free", "plus", "ultimate"] as const) {
-      for (const group of featuresForPlan(plan)) expect(group.items.length).toBeGreaterThan(0);
+  it("rows are short and every limit text sits on a plan that has the feature", () => {
+    for (const row of rows) {
+      expect(row.label.length, row.label).toBeLessThanOrEqual(40);
+      const [free, plus, ultimate] = row.cells;
+      if (typeof free === "string") expect(plus).not.toBe(false);
+      if (typeof plus === "string") expect(ultimate).not.toBe(false);
     }
   });
 });

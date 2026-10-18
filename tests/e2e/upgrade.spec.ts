@@ -23,26 +23,19 @@ test.describe("upgrade page (360px)", () => {
     await expectNoHorizontalScroll(page);
   });
 
-  test("lists what each plan can do, leaving out what it does not have", async ({ page }) => {
+  test("shows short rows with a tick for the plans that have each function", async ({ page }) => {
     await mockApi(page, { "GET /api/me": ME_FREE });
     await page.goto("/upgrade");
-    const panel = page.getByRole("tabpanel");
+    const table = page.getByRole("table");
+    const has = (name: RegExp) => table.getByRole("row", { name });
 
-    await page.getByRole("tab", { name: "Free" }).click();
-    await expect(panel.getByText("จดรายรับรายจ่ายด้วยข้อความ")).toBeVisible();
-    await expect(panel.getByText("ลองฟรี 1 ใบ")).toBeVisible();
-    await expect(panel.getByText("จดย้อนหลัง")).toHaveCount(0);
-    await expect(panel.getByText("จดด้วยเสียง")).toHaveCount(0);
-
-    await page.getByRole("tab", { name: "Professional" }).click();
-    await expect(panel.getByText("จดย้อนหลัง")).toBeVisible();
-    await expect(panel.getByText("5 ใบ/เดือน")).toBeVisible();
-    await expect(panel.getByText("จดด้วยเสียง")).toHaveCount(0);
-
-    await page.getByRole("tab", { name: "Ultimate" }).click();
-    await expect(panel.getByText("จดด้วยเสียง")).toBeVisible();
-    await expect(panel.getByText("จดย้อนหลัง")).toBeVisible();
-    await expect(panel.getByText("เร็วๆ นี้")).toHaveCount(0);
+    await expect(has(/จดด้วยข้อความ/).getByText("มี", { exact: true })).toHaveCount(3);
+    await expect(has(/จดย้อนหลัง/).getByText("ไม่มี", { exact: true })).toHaveCount(1); // Free only
+    await expect(has(/จดย้อนหลัง/).getByText("มี", { exact: true })).toHaveCount(2);
+    await expect(has(/จดด้วยเสียง/).getByText("ไม่มี", { exact: true })).toHaveCount(2); // Free and Pro
+    await expect(has(/อ่านสลิปอัตโนมัติ/)).toContainText("ลองฟรี 1 ใบ");
+    await expect(has(/อ่านสลิปอัตโนมัติ/)).toContainText("5 ใบ/เดือน");
+    await expect(table.getByText("เร็วๆ นี้")).toHaveCount(0);
     await expectNoHorizontalScroll(page);
   });
 
@@ -297,7 +290,7 @@ test.describe("upgrade page (360px)", () => {
   test("has no serious accessibility violations", async ({ page }) => {
     await mockApi(page, { "GET /api/me": ME_FREE });
     await page.goto("/upgrade");
-    await expect(page.getByRole("tabpanel")).toBeVisible();
+    await expect(page.getByRole("table")).toBeVisible();
     await expectNoSeriousA11yViolations(page);
   });
 });

@@ -1,6 +1,49 @@
 "use client";
 
-import { Check, Crown, Sparkles } from "lucide-react";
+import {
+  ArrowLeftRight,
+  ArrowUpDown,
+  BarChart3,
+  Bell,
+  BellRing,
+  CalendarClock,
+  CalendarRange,
+  Check,
+  CreditCard,
+  Crown,
+  FileDown,
+  FileSpreadsheet,
+  Gift,
+  Globe,
+  HandCoins,
+  Image as ImageIcon,
+  LayoutDashboard,
+  ListPlus,
+  Lock,
+  Mail,
+  MessageSquareText,
+  Mic,
+  Minus,
+  Palette,
+  PiggyBank,
+  Plane,
+  Receipt,
+  Repeat,
+  ScanLine,
+  Search,
+  Shapes,
+  Sparkles,
+  Store,
+  Tag,
+  Target,
+  Trash2,
+  TrendingUp,
+  Undo2,
+  Users,
+  UsersRound,
+  Wallet,
+  type LucideIcon,
+} from "lucide-react";
 import { useState } from "react";
 import { useApi, useLiff } from "@/components/liff/liff-provider";
 import { Logo } from "@/components/logo";
@@ -8,7 +51,9 @@ import { PageHeader } from "@/components/liff/states";
 import { planAction, prepaidUpgradeFor } from "@/lib/payments/policy";
 import { PLAN_LABEL, type Plan } from "@/lib/plan";
 import {
-  featuresForPlan,
+  FEATURE_GROUPS,
+  type Cell,
+  type FeatureIcon,
   PLAN_HIGHLIGHTS,
   PRICES,
   yearlyPerDay,
@@ -323,7 +368,7 @@ export default function UpgradePage() {
           ยังไม่มีเงินสด? สะสมตังจากการจดทุกวันแล้วแลกเป็นวันใช้ Professional ได้ที่หน้าตั้งค่า
         </p>
 
-        <PlanFeatures />
+        <Comparison />
       </div>
     </main>
   );
@@ -408,73 +453,142 @@ function PlanCard({
   );
 }
 
-const FEATURE_TABS: { plan: Plan; label: string }[] = [
-  { plan: "free", label: "Free" },
-  { plan: "plus", label: "Professional" },
-  { plan: "ultimate", label: "Ultimate" },
-];
+const ICONS: Record<FeatureIcon, LucideIcon> = {
+  text: MessageSquareText,
+  shapes: Shapes,
+  undo: Undo2,
+  slip: ScanLine,
+  calendar: CalendarClock,
+  list: ListPlus,
+  tag: Tag,
+  image: ImageIcon,
+  receipt: Receipt,
+  sparkles: Sparkles,
+  mic: Mic,
+  globe: Globe,
+  repeat: Repeat,
+  bell: Bell,
+  bellring: BellRing,
+  store: Store,
+  wallet: Wallet,
+  transfer: ArrowLeftRight,
+  card: CreditCard,
+  users: Users,
+  debt: HandCoins,
+  target: Target,
+  piggy: PiggyBank,
+  plane: Plane,
+  group: UsersRound,
+  chart: BarChart3,
+  range: CalendarRange,
+  search: Search,
+  compare: ArrowUpDown,
+  dashboard: LayoutDashboard,
+  trend: TrendingUp,
+  mail: Mail,
+  download: FileDown,
+  sheet: FileSpreadsheet,
+  lock: Lock,
+  palette: Palette,
+  trash: Trash2,
+  gift: Gift,
+};
 
-/** What each plan can do: pick a plan to see its whole list (what it does not include is not shown). */
-function PlanFeatures() {
-  const [plan, setPlan] = useState<Plan>("plus");
-  const groups = featuresForPlan(plan);
+function CellView({ cell, tone }: { cell: Cell; tone: "pro" | "plain" }) {
+  if (typeof cell === "string") {
+    return (
+      <span
+        className={cn(
+          "block text-xs font-semibold leading-tight",
+          tone === "pro" ? "text-primary" : "text-foreground",
+        )}
+      >
+        {cell}
+      </span>
+    );
+  }
+  if (!cell) {
+    return (
+      <>
+        <Minus className="mx-auto h-4 w-4 text-muted" aria-hidden />
+        <span className="sr-only">ไม่มี</span>
+      </>
+    );
+  }
+  return (
+    <>
+      <Check
+        className={cn("mx-auto h-5 w-5", tone === "pro" ? "text-primary" : "text-foreground")}
+        aria-hidden
+      />
+      <span className="sr-only">มี</span>
+    </>
+  );
+}
+
+/** What each plan can do: short rows, a tick where the plan has it and a dash where it does not. */
+function Comparison() {
   return (
     <section
-      aria-label="ทำอะไรได้บ้าง"
-      className="space-y-3 rounded-3xl border border-border bg-surface p-4"
+      aria-label="เปรียบเทียบแผน"
+      className="overflow-hidden rounded-3xl border border-border bg-surface"
     >
-      <h2 className="text-base font-bold">ทำอะไรได้บ้าง?</h2>
-      <div role="tablist" aria-label="เลือกแผนเพื่อดูฟังก์ชัน" className="grid grid-cols-3 gap-1">
-        {FEATURE_TABS.map((t) => (
-          <button
-            key={t.plan}
-            type="button"
-            role="tab"
-            id={`features-tab-${t.plan}`}
-            aria-selected={plan === t.plan}
-            aria-controls="features-panel"
-            onClick={() => setPlan(t.plan)}
-            className={cn(
-              "min-h-11 rounded-2xl px-1 text-sm font-semibold",
-              plan === t.plan ? "bg-primary text-white" : "bg-background text-foreground",
-            )}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
-      <div
-        id="features-panel"
-        role="tabpanel"
-        aria-labelledby={`features-tab-${plan}`}
-        className="space-y-4"
-      >
-        {plan !== "free" ? (
-          <p className="text-xs text-muted">
-            {plan === "plus"
-              ? "ทุกอย่างของ Free และเพิ่มเติมด้านล่าง"
-              : "ทุกอย่างของ Professional และเพิ่มเติมด้านล่าง"}
-          </p>
-        ) : null}
-        {groups.map((group) => (
-          <div key={group.title}>
-            <h3 className="mb-1 text-xs font-bold text-muted">{group.title}</h3>
-            <ul className="space-y-1.5">
-              {group.items.map((item) => (
-                <li key={item.label} className="flex items-start gap-2 text-sm">
-                  <Check className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden />
-                  <span className="flex-1">{item.label}</span>
-                  {item.detail ? (
-                    <span className="shrink-0 text-xs font-semibold text-primary">
-                      {item.detail}
+      <table className="w-full table-fixed border-collapse text-sm">
+        <caption className="px-4 pb-1 pt-4 text-left text-base font-bold">ทำอะไรได้บ้าง?</caption>
+        <colgroup>
+          <col />
+          <col className="w-[62px]" />
+          <col className="w-[68px]" />
+          <col className="w-[68px]" />
+        </colgroup>
+        <thead>
+          <tr className="text-xs">
+            <th scope="col" className="sr-only">
+              ฟีเจอร์
+            </th>
+            <th scope="col" className="py-2 font-semibold">
+              Free
+            </th>
+            <th scope="col" className="py-2 font-semibold text-primary">
+              Pro
+            </th>
+            <th scope="col" className="py-2 font-semibold">
+              Ultimate
+            </th>
+          </tr>
+        </thead>
+        {FEATURE_GROUPS.map((group) => (
+          <tbody key={group.title}>
+            <tr>
+              <th
+                colSpan={4}
+                scope="colgroup"
+                className="px-4 pb-1 pt-4 text-left text-xs font-bold text-muted"
+              >
+                {group.title}
+              </th>
+            </tr>
+            {group.rows.map((row) => {
+              const Icon = ICONS[row.icon];
+              return (
+                <tr key={row.label} className="border-t border-border">
+                  <th scope="row" className="py-3 pl-4 pr-1 text-left text-sm font-normal">
+                    <span className="flex items-center gap-2">
+                      <Icon className="h-4 w-4 shrink-0 text-muted" aria-hidden />
+                      <span>{row.label}</span>
                     </span>
-                  ) : null}
-                </li>
-              ))}
-            </ul>
-          </div>
+                  </th>
+                  {row.cells.map((cell, i) => (
+                    <td key={i} className="px-1 py-3 text-center">
+                      <CellView cell={cell} tone={i === 1 ? "pro" : "plain"} />
+                    </td>
+                  ))}
+                </tr>
+              );
+            })}
+          </tbody>
         ))}
-      </div>
+      </table>
     </section>
   );
 }
