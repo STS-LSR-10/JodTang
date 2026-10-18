@@ -34,6 +34,16 @@ export function createLineClient(accessToken: string) {
       if (!res.ok) throw new Error(`LINE push failed: ${res.status}`);
     },
 
+    /** A member's profile in a group (the person does not have to be a friend of the bot). */
+    async getGroupMemberProfile(groupId: string, lineUserId: string): Promise<LineProfile | null> {
+      const res = await fetch(
+        `${API}/group/${encodeURIComponent(groupId)}/member/${encodeURIComponent(lineUserId)}`,
+        { headers },
+      );
+      if (!res.ok) return null;
+      return (await res.json()) as LineProfile;
+    },
+
     async getProfile(lineUserId: string): Promise<LineProfile | null> {
       const res = await fetch(`${API}/profile/${encodeURIComponent(lineUserId)}`, { headers });
       if (!res.ok) return null;

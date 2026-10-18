@@ -310,6 +310,106 @@ describe("wallets (0019)", () => {
   });
 });
 
+describe("group ledger (0027)", () => {
+  async function seed() {
+    const owner = await newUser(db, `gl-${Math.random()}`);
+    const group = (
+      await one<{ id: string }>(
+        db,
+        "insert into bot_groups (line_group_id, owner_user_id) values ($1,$2) returning id",
+        [`C${Math.random().toString(16).slice(2)}`, owner],
+      )
+    ).id;
+    const entry = (
+      payer: string,
+      amount: number,
+      at = "2026-10-10T05:00:00Z",
+      status = "confirmed",
+      g = group,
+    ) =>
+      db.query(
+        "insert into group_entries (group_id,payer_line_user_id,title,amount,occurred_at,status) values ($1,$2,'x',$3,$4,$5)",
+        [g, payer, amount, at, status],
+      );
+    return { owner, group, entry };
+  }
+  const totals = (g: string, from = "2026-10-01T00:00:00Z", to = "2026-11-01T00:00:00Z") =>
+    rows<{ payer_line_user_id: string; total: string; entries: number }>(
+      db,
+      "select payer_line_user_id, total::text, entries::int from group_payer_totals($1,$2,$3)",
+      [g, from, to],
+    );
+
+  it("adds up what each member paid, biggest first, ignoring deleted entries and other periods", async () => {
+    const { group, entry } = await seed();
+    await entry("Uanna", 300);
+    await entry("Ubob", 1200.5);
+    await entry("Uanna", 50);
+    await entry("Ubob", 999, "2026-10-11T05:00:00Z", "deleted");
+    await entry("Uanna", 777, "2026-09-01T05:00:00Z"); // another month
+    expect(await totals(group)).toEqual([
+      { payer_line_user_id: "Ubob", total: "1200.50", entries: 1 },
+      { payer_line_user_id: "Uanna", total: "350.00", entries: 2 },
+    ]);
+  });
+
+  it("one row per LINE group; a member is listed once per group", async () => {
+    const { owner, group } = await seed();
+    const line = await one<{ line_group_id: string }>(
+      db,
+      "select line_group_id from bot_groups where id = $1",
+      [group],
+    );
+    await expect(
+      db.query("insert into bot_groups (line_group_id, owner_user_id) values ($1,$2)", [
+        line.line_group_id,
+        owner,
+      ]),
+    ).rejects.toThrow();
+    await db.query(
+      "insert into group_members (group_id,line_user_id,display_name) values ($1,'Uanna','แอน')",
+      [group],
+    );
+    await expect(
+      db.query(
+        "insert into group_members (group_id,line_user_id,display_name) values ($1,'Uanna','แอนใหม่')",
+        [group],
+      ),
+    ).rejects.toThrow();
+  });
+
+  it("refuses a zero amount, a long title and an unknown status", async () => {
+    const { group, entry } = await seed();
+    await expect(entry("Uanna", 0)).rejects.toThrow();
+    await expect(entry("Uanna", 10, "2026-10-10T05:00:00Z", "weird")).rejects.toThrow();
+    await expect(
+      db.query(
+        "insert into group_entries (group_id,payer_line_user_id,title,amount) values ($1,'U',$2,5)",
+        [group, "x".repeat(61)],
+      ),
+    ).rejects.toThrow();
+  });
+
+  it("deleting the group deletes its members and entries; another group's totals stay apart", async () => {
+    const { group, entry } = await seed();
+    const other = await seed();
+    await entry("Uanna", 100);
+    await other.entry("Uanna", 5);
+    await db.query(
+      "insert into group_members (group_id,line_user_id,display_name) values ($1,'Uanna','แอน')",
+      [group],
+    );
+    expect((await totals(other.group))[0]?.total).toBe("5.00");
+    await db.query("delete from bot_groups where id = $1", [group]);
+    const left = await one<{ n: string }>(
+      db,
+      "select ((select count(*) from group_entries where group_id=$1) + (select count(*) from group_members where group_id=$1))::text as n",
+      [group],
+    );
+    expect(left.n).toBe("0");
+  });
+});
+
 describe("bills (0026)", () => {
   async function seed() {
     const u = await newUser(db, `b-${Math.random()}`);

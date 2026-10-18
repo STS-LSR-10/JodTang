@@ -40,6 +40,7 @@ GitHub Actions (รายชั่วโมง) ──► /api/cron/reminders �
    (Endpoint = **ราก** ของเว็บ) — ดูรายละเอียดใน [README](../README.md)
 3. **Vercel:** import repo, ปิด Deployment Protection, ตั้ง env ตามตารางด้านบน, Redeploy
 4. **LINE:** ตั้ง Webhook URL `https://<โดเมน>/api/line/webhook` แล้ว Verify
+   - **สมุดกลุ่ม (Ultimate, ไม่บังคับ):** ที่ LINE Official Account Manager → การตั้งค่า → *การตอบกลับ* (Response settings) เปิด **"อนุญาตให้บัญชีเข้าร่วมแชทกลุ่มและแชทหลายคน"** (Allow bot to join group chats) แล้วลองดึงบอทเข้ากลุ่มทดสอบ บอทต้องทักทายกลับ ถ้าเงียบ ตรวจว่าเปิด *Use webhook* และ event ถูกส่งมา (log `line_event_failed` ถ้ามี) · ผู้ใช้ที่ไม่ได้ยอมรับข้อกำหนด LINE OA จะไม่มี userId ในข้อความกลุ่ม บอทจึงแยกคนจ่ายไม่ได้ ให้เขาเพิ่มบอทเป็นเพื่อนก่อน
 5. **Rich Menu:** `pnpm richmenu --replace` (ใส่ `LINE_CHANNEL_ACCESS_TOKEN` ใน `.env.local`)
 6. **GitHub Secrets:** `APP_BASE_URL`, `CRON_SECRET` (ให้ตัวเตือนรายชั่วโมงทำงาน)
 

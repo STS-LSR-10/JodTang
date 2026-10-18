@@ -73,7 +73,8 @@ export type Feature =
   | "budgetAlert"
   | "dailyBudget"
   | "savingsGoal"
-  | "billReminder";
+  | "billReminder"
+  | "groupLedger";
 
 /** The lowest tier that has each feature (Ultimate always includes everything Professional has). */
 const MIN_PLAN: Record<Feature, "plus" | "ultimate"> = {
@@ -108,6 +109,7 @@ const MIN_PLAN: Record<Feature, "plus" | "ultimate"> = {
   dailyBudget: "plus",
   savingsGoal: "plus",
   billReminder: "ultimate",
+  groupLedger: "ultimate",
 };
 
 export function isPaidPlan(plan: Plan): boolean {

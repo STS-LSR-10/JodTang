@@ -52,6 +52,7 @@ const FEATURES: Feature[] = [
   "dailyBudget",
   "savingsGoal",
   "billReminder",
+  "groupLedger",
 ];
 
 export async function GET(request: Request): Promise<Response> {

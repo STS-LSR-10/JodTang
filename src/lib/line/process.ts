@@ -47,6 +47,7 @@ export async function processEvents(rawEvents: unknown[]): Promise<void> {
     db,
     reply: line.reply,
     getProfile: line.getProfile,
+    getGroupMemberProfile: line.getGroupMemberProfile,
     now: () => new Date(),
     limit: (bucket, subject, rule) => rateLimit(db, bucket, subject, rule),
     slip: {

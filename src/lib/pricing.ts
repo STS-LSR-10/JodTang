@@ -77,6 +77,7 @@ export const FEATURE_GROUPS: FeatureGroup[] = [
       { label: "งบรายวัน + บอทเตือนทันทีเมื่อใช้เกิน", cells: [false, true, true] },
       { label: "เป้าหมายการออม (กระปุก + กราฟ)", cells: [false, "5 ใบ", "20 ใบ"] },
       { label: "เตือนวันครบกำหนดจ่ายบิล (บัตรเครดิต ค่าไฟ ฯลฯ)", cells: [false, false, true] },
+      { label: "สมุดกลุ่ม LINE: ดึงบอทเข้ากลุ่ม ช่วยกันจด แยกคนจ่าย", cells: [false, false, true] },
       { label: "สร้างหมวดของตัวเอง + เลือกอีโมจิ", cells: [false, true, true] },
       { label: "บอทจำร้านค้า → หมวด", cells: [false, true, true] },
     ],
@@ -100,7 +101,6 @@ export const FEATURE_GROUPS: FeatureGroup[] = [
   {
     title: "เร็วๆ นี้",
     rows: [
-      { label: "จดในกลุ่ม", cells: [false, false, true], soon: true },
       { label: "จดด้วย PDF", cells: [false, false, true], soon: true },
       { label: "แนบสลิป ใบเสร็จ หลักฐาน", cells: [false, false, true], soon: true },
       { label: "รายการอัตโนมัติ 100 รายการ", cells: [false, false, true], soon: true },
@@ -121,7 +121,7 @@ export const PLAN_HIGHLIGHTS: Record<Plan, string[]> = {
     "ทุกอย่างใน Professional",
     "อ่านสลิปไม่จำกัด + แยกรายการจากใบเสร็จ",
     "พิมพ์ประโยคยาวๆ ให้ AI ช่วยอ่าน + จดด้วยเสียง",
-    "หลายกระเป๋าไม่จำกัด · จดในกลุ่ม (เร็วๆ นี้)",
+    "หลายกระเป๋าไม่จำกัด · สมุดกลุ่ม LINE แยกคนจ่าย",
     "จดด้วย PDF + แนบหลักฐาน (เร็วๆ นี้)",
   ],
 };

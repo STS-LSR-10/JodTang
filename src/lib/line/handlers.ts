@@ -76,6 +76,7 @@ import { buildForecastCard } from "./forecast-flex";
 import { buildInsightCard } from "./insight-flex";
 import { buildTransferDone, buildWalletChooser, buildWalletsCard } from "./wallet-flex";
 import { buildCardsCard } from "./card-flex";
+import { handleGroupEvent } from "./group-handlers";
 import { buildBillsCard } from "./bill-flex";
 import {
   MAX_ACTIVE_BILLS,
@@ -244,7 +245,7 @@ export interface LineEvent {
   type: string;
   webhookEventId?: string;
   replyToken?: string;
-  source?: { type: string; userId?: string };
+  source?: { type: string; userId?: string; groupId?: string };
   message?: { type: string; id?: string; text?: string; duration?: number };
   postback?: {
     data: string;
@@ -257,6 +258,11 @@ export interface HandlerDeps {
   db: SupabaseClient;
   reply: (replyToken: string, messages: LineMessage[]) => Promise<void>;
   getProfile: (lineUserId: string) => Promise<{ displayName?: string; pictureUrl?: string } | null>;
+  /** A member's profile inside a group (works without being friends). Absent -> neutral names. */
+  getGroupMemberProfile?: (
+    groupId: string,
+    lineUserId: string,
+  ) => Promise<{ displayName?: string; pictureUrl?: string } | null>;
   now: () => Date;
   /** Per-user rate limiter (absent in tests -> no limiting). */
   limit?: (bucket: string, subject: string, rule: LimitRule) => Promise<RateLimitResult>;
@@ -280,8 +286,11 @@ const MAX_REPLY_MESSAGES = 5;
 const MAX_CARDS_PER_REPLY = 3;
 
 export async function handleEvent(event: LineEvent, deps: HandlerDeps): Promise<void> {
+  // A LINE group: the group ledger (Ultimate) has its own, separate handling.
+  if (event.source?.type === "group") return handleGroupEvent(event, deps);
+
   const lineUserId = event.source?.userId;
-  // 1:1 chats only for now.
+  // Other than that, 1:1 chats only (multi-person "rooms" are not supported).
   if (!lineUserId || event.source?.type !== "user") return;
 
   // Spam / cost guard, before any database or paid-API work. Over the limit we answer once
