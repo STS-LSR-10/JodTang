@@ -4,6 +4,7 @@ import { requireUser } from "@/lib/auth/require-user";
 import { cycleRange } from "@/lib/budget-cycle";
 import { toSatang } from "@/lib/money";
 import { getBudgetMode, getSettings, loadBudgets, loadCategories, setBudget } from "@/lib/repo";
+import { requireFeature } from "@/lib/plan-server";
 import { getAdminClient } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -97,6 +98,14 @@ export async function PUT(request: Request): Promise<Response> {
     const body = parsed.data;
 
     const db = getAdminClient();
+    // Per-category budgets are for Professional and above. Clearing one and going back to the
+    // overall budget stay open to everyone (a lapsed plan keeps its data, read only).
+    const setsCategoryBudget =
+      body.mode === "category" || (body.categories ?? []).some((c) => c.amount !== null);
+    if (setsCategoryBudget) {
+      const locked = await requireFeature(db, auth.userId, "categoryBudget");
+      if (locked) return locked;
+    }
     const settings = await getSettings(db, auth.userId);
 
     if (body.categories?.length) {

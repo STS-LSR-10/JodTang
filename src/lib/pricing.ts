@@ -71,7 +71,9 @@ export const FEATURE_GROUPS: FeatureGroup[] = [
   {
     title: "หมวดและงบ",
     rows: [
-      { label: "ตั้งหมวดและงบ", cells: [true, true, true] },
+      { label: "ตั้งหมวดและงบรวม", cells: [true, true, true] },
+      { label: "งบแยกตามหมวดหมู่", cells: [false, true, true] },
+      { label: "เตือนเมื่อใช้งบ 80% / 100%", cells: [false, true, true] },
       { label: "สร้างหมวดของตัวเอง + เลือกอีโมจิ", cells: [false, true, true] },
       { label: "บอทจำร้านค้า → หมวด", cells: [false, true, true] },
     ],
@@ -105,7 +107,7 @@ export const FEATURE_GROUPS: FeatureGroup[] = [
 
 /** Short selling points shown on each plan card. */
 export const PLAN_HIGHLIGHTS: Record<Plan, string[]> = {
-  free: ["จดด้วยข้อความ", "ตั้งหมวดและงบ"],
+  free: ["จดด้วยข้อความ", "ตั้งหมวดและงบรวม"],
   plus: [
     "อ่านสลิป 5 ใบ/เดือน + จดย้อนหลัง",
     "รายการจดอัตโนมัติ + เตือนประจำวัน",

@@ -257,6 +257,66 @@ test.describe("budgets page (360px)", () => {
   });
 });
 
+test.describe("category budgets are Professional and above (360px)", () => {
+  const CATEGORY_MODE = {
+    ...BUDGETS,
+    mode: "category",
+    categories: [
+      {
+        categoryId: "a",
+        name: "อาหาร",
+        color: "#0F766E",
+        amountSatang: 300_000,
+        spentSatang: 100_000,
+      },
+    ],
+  };
+  const FOOD = { items: [CATEGORIES.items[0]] };
+
+  test("Free: the แยกหมวด choice is off and the upgrade note shows; the overall budget works", async ({
+    page,
+  }) => {
+    await mockApi(page, {
+      "GET /api/budgets": BUDGETS,
+      "GET /api/categories": CATEGORIES,
+      "GET /api/me": ME_FREE,
+    });
+    await page.goto("/budgets");
+
+    await expect(page.getByRole("radio", { name: "แยกหมวด" })).toBeDisabled();
+    await expect(page.getByRole("radio", { name: "งบรวม" })).toBeEnabled();
+    await expect(page.getByText("สำหรับแผน Professional").first()).toBeVisible();
+    await expect(page.getByRole("progressbar", { name: "การใช้งบ" })).toBeVisible();
+  });
+
+  test("Free with an old category budget: kept, shown, but read only", async ({ page }) => {
+    await mockApi(page, {
+      "GET /api/budgets": CATEGORY_MODE,
+      "GET /api/categories": FOOD,
+      "GET /api/me": ME_FREE,
+    });
+    await page.goto("/budgets");
+
+    const field = page.getByLabel("งบหมวด อาหาร");
+    await expect(field).toBeDisabled();
+    await expect(field).toHaveValue("3000");
+    await expect(page.getByRole("radio", { name: "งบรวม" })).toBeEnabled();
+  });
+
+  test("Professional: the แยกหมวด choice and the budget field are open", async ({ page }) => {
+    await mockApi(page, {
+      "GET /api/budgets": CATEGORY_MODE,
+      "GET /api/categories": FOOD,
+      "GET /api/me": ME_PLUS,
+    });
+    await page.goto("/budgets");
+
+    await expect(page.getByRole("radio", { name: "แยกหมวด" })).toBeEnabled();
+    await expect(page.getByLabel("งบหมวด อาหาร")).toBeEnabled();
+    await expect(page.getByText("จะแจ้งเตือนในแชทเมื่อใช้ถึง 80%")).toBeVisible();
+  });
+});
+
 test.describe("legal pages (public, no sign-in)", () => {
   for (const [path, heading] of [
     ["/privacy", "นโยบายความเป็นส่วนตัว"],

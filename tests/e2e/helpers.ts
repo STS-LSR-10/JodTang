@@ -92,6 +92,8 @@ export const ME_FREE = {
     creditCard: false,
     debts: false,
     foreignCurrency: false,
+    categoryBudget: false,
+    budgetAlert: false,
     merchantMemory: false,
     dailyReminder: false,
     advancedExport: false,

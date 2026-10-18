@@ -3,6 +3,7 @@
 import { ArrowDown, ArrowUp, Eye, EyeOff, Lock, Pencil, Plus } from "lucide-react";
 import Link from "next/link";
 import { useMemo, useState, type FormEvent } from "react";
+import { PlusLock } from "@/components/liff/settings/plus-lock";
 import { ProgressBar } from "@/components/liff/progress-bar";
 import { Sheet } from "@/components/liff/sheet";
 import { EmptyState, ErrorState, LoadingBlock, PageHeader } from "@/components/liff/states";
@@ -80,6 +81,9 @@ export default function BudgetsPage() {
   const me = useApi<{ features: Record<string, boolean> }>("/api/me");
   // Professional and above create and edit their own categories; the server checks it too.
   const locked = !me.loading && me.data !== null && me.data?.features.customCategory !== true;
+  // Per-category budgets and the 80% / 100% warnings are Professional and above too.
+  const budgetLocked = !me.loading && me.data !== null && me.data?.features.categoryBudget !== true;
+  const alertsOff = !me.loading && me.data !== null && me.data?.features.budgetAlert !== true;
   const [notice, setNotice] = useState<string | null>(null);
   const [editing, setEditing] = useState<CategoryItem | null>(null);
   const [adding, setAdding] = useState(false);
@@ -190,6 +194,8 @@ export default function BudgetsPage() {
             {kind === "expense" && budgets.data ? (
               <BudgetCard
                 data={budgets.data}
+                categoryLocked={budgetLocked}
+                alertsOff={alertsOff}
                 onChange={(body, done) =>
                   run(
                     () => api("/api/budgets", { method: "PUT", body: JSON.stringify(body) }),
@@ -278,6 +284,7 @@ export default function BudgetsPage() {
                           name={c.name}
                           amountSatang={b?.amountSatang ?? null}
                           spentSatang={b?.spentSatang ?? 0}
+                          readOnly={budgetLocked}
                           onSave={(value) =>
                             run(() =>
                               api("/api/budgets", {
@@ -423,9 +430,13 @@ function IconButton({
 
 function BudgetCard({
   data,
+  categoryLocked,
+  alertsOff,
   onChange,
 }: {
   data: BudgetsResponse;
+  categoryLocked: boolean;
+  alertsOff: boolean;
   onChange: (
     body: { mode?: "overall" | "category"; overall?: string | null },
     done?: string,
@@ -464,9 +475,10 @@ function BudgetCard({
             type="button"
             role="radio"
             aria-checked={data.mode === value}
+            disabled={value === "category" && categoryLocked && data.mode !== "category"}
             onClick={() => data.mode !== value && onChange({ mode: value })}
             className={cn(
-              "h-11 rounded-2xl border text-sm font-semibold",
+              "h-11 rounded-2xl border text-sm font-semibold disabled:opacity-40",
               data.mode === value
                 ? "border-primary bg-primary-soft text-primary"
                 : "border-border text-muted",
@@ -517,7 +529,14 @@ function BudgetCard({
           ตั้งงบของแต่ละหมวดได้ที่รายการด้านล่าง เว้นว่างไว้ถ้าไม่ต้องการจำกัด
         </p>
       )}
-      <p className="text-xs text-muted">จะแจ้งเตือนในแชทเมื่อใช้ถึง 80% และเมื่อเกินงบ</p>
+      {alertsOff || categoryLocked ? (
+        <PlusLock>
+          งบแยกหมวดและการแจ้งเตือนในแชทเมื่อใช้ถึง 80% / เกินงบ
+          {data.mode === "category" ? " (งบที่เคยตั้งไว้ยังอยู่ แก้ไขได้เมื่ออัปเกรด)" : ""}
+        </PlusLock>
+      ) : (
+        <p className="text-xs text-muted">จะแจ้งเตือนในแชทเมื่อใช้ถึง 80% และเมื่อเกินงบ</p>
+      )}
     </section>
   );
 }
@@ -526,11 +545,13 @@ function CategoryBudget({
   name,
   amountSatang,
   spentSatang,
+  readOnly,
   onSave,
 }: {
   name: string;
   amountSatang: number | null;
   spentSatang: number;
+  readOnly: boolean;
   onSave: (value: string | null) => void;
 }) {
   const initial = amountSatang ? formatBaht(amountSatang).replace(/,/g, "") : "";
@@ -551,10 +572,11 @@ function CategoryBudget({
         value={text}
         onChange={(e) => setText(e.target.value)}
         onBlur={commit}
+        disabled={readOnly}
         inputMode="decimal"
         placeholder="งบของหมวดนี้ (บาท)"
         aria-label={`งบหมวด ${name}`}
-        className="num h-11 w-full rounded-2xl border border-border bg-background px-4 text-sm outline-none focus:border-primary"
+        className="num h-11 w-full rounded-2xl border border-border bg-background px-4 text-sm outline-none focus:border-primary disabled:opacity-60"
       />
       {error ? (
         <p role="alert" className="text-xs text-expense">

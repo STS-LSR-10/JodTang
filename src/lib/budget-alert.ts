@@ -2,6 +2,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { alertText, crossedThreshold } from "@/lib/budget";
 import { cycleRange } from "@/lib/budget-cycle";
 import { toSatang } from "@/lib/money";
+import { can } from "@/lib/plan";
+import { getPlanInfo } from "@/lib/plan-server";
 import {
   expenseTotalSatang,
   getBudgetMode,
@@ -27,6 +29,9 @@ export async function budgetAlertsFor(
   },
 ): Promise<string[]> {
   if (input.type !== "expense") return [];
+  // 80% / 100% warnings are for Professional and above (a lapsed plan stops them)
+  const { plan } = await getPlanInfo(db, input.userId, input.now);
+  if (!can(plan, "budgetAlert")) return [];
 
   const [settings, mode, budgets] = await Promise.all([
     getSettings(db, input.userId),
