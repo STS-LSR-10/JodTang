@@ -18,6 +18,7 @@ export type Command =
   | { kind: "wallets" }
   | { kind: "cards"; name: string | null }
   | { kind: "debts" }
+  | { kind: "daily-budget"; action: "show" | "set" | "clear" | "usage"; amountSatang?: number }
   | DebtCommand
   | { kind: "transfer"; amountSatang: number; from: string; to: string }
   | { kind: "summary"; scope: "today" | "month" }
@@ -60,6 +61,19 @@ export function parseCommand(input: string): Command | null {
   // "บัตร" / "บัตรเครดิต" / "บัตร ktc" (a name has no digits: "บัตร 500" is an ordinary entry)
   const cards = /^(?:บัตรเครดิต|บัตร)(?:\s+([^\d]+))?$/.exec(text);
   if (cards) return { kind: "cards", name: cards[1]?.trim() || null };
+  // "งบวัน" shows, "งบวัน 500" sets, "งบวัน ปิด" clears the daily limit
+  const daily = /^(?:งบรายวัน|งบวัน)(?:\s+(.+))?$/.exec(text);
+  if (daily) {
+    const arg = daily[1]?.trim();
+    if (!arg) return { kind: "daily-budget", action: "show" };
+    if (["ปิด", "ล้าง", "ยกเลิก", "off"].includes(arg))
+      return { kind: "daily-budget", action: "clear" };
+    const m = /^(\d(?:[\d,]*\d)?(?:\.\d+)?)\s*(k|พัน|หมื่น|แสน|ล้าน)?\s*(?:บาท)?$/.exec(arg);
+    const satang = m?.[1] ? parseAmountToSatang(m[1], m[2]) : 0;
+    return satang > 0
+      ? { kind: "daily-budget", action: "set", amountSatang: satang }
+      : { kind: "daily-budget", action: "usage" };
+  }
   if (["หนี้", "หนี้สิน", "ลูกหนี้", "เจ้าหนี้", "debts"].includes(text)) return { kind: "debts" };
   const transfer = parseTransferText(text);
   if (transfer) return { kind: "transfer", ...transfer };

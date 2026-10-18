@@ -74,6 +74,7 @@ export const FEATURE_GROUPS: FeatureGroup[] = [
       { label: "ตั้งหมวดและงบรวม", cells: [true, true, true] },
       { label: "งบแยกตามหมวดหมู่", cells: [false, true, true] },
       { label: "เตือนเมื่อใช้งบ 80% / 100%", cells: [false, true, true] },
+      { label: "งบรายวัน + บอทเตือนทันทีเมื่อใช้เกิน", cells: [false, true, true] },
       { label: "สร้างหมวดของตัวเอง + เลือกอีโมจิ", cells: [false, true, true] },
       { label: "บอทจำร้านค้า → หมวด", cells: [false, true, true] },
     ],

@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { apiError, guard, json } from "@/lib/api";
 import { requireUser } from "@/lib/auth/require-user";
-import { budgetAlertsFor } from "@/lib/budget-alert";
+import { budgetAlertsFor, dailyBudgetAlertsFor } from "@/lib/budget-alert";
 import { categorizeByRules } from "@/lib/categorize/rules";
 import { getServerEnv } from "@/lib/env";
 import { createLineClient } from "@/lib/line/client";
@@ -153,6 +153,16 @@ export async function POST(request: Request): Promise<Response> {
         occurredAt: new Date(tx.occurred_at),
         now: new Date(),
       });
+      if (body.type === "expense") {
+        alerts.push(
+          ...(await dailyBudgetAlertsFor(db, {
+            userId: auth.userId,
+            amountSatang,
+            occurredAt: new Date(tx.occurred_at),
+            now: new Date(),
+          })),
+        );
+      }
       if (alerts.length > 0) {
         const line = createLineClient(getServerEnv().LINE_CHANNEL_ACCESS_TOKEN);
         await line.push(

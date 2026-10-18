@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 let plan = "free";
 const saved: { categoryId: string | null; amountSatang: number | null }[] = [];
-const modes: unknown[] = [];
+const modes: Record<string, unknown>[] = [];
 const FOOD = "11111111-1111-4111-8111-111111111111";
 
 vi.mock("@/lib/auth/require-user", () => ({
@@ -15,7 +15,7 @@ vi.mock("@/lib/supabase/admin", () => ({
   getAdminClient: () => ({
     from: () => ({
       upsert: async (row: unknown) => {
-        modes.push(row);
+        modes.push(row as Record<string, unknown>);
         return { error: null };
       },
     }),
@@ -80,5 +80,30 @@ describe("PUT /api/budgets: who may set what", () => {
       (await put({ mode: "category", categories: [{ categoryId: FOOD, amount: "1500" }] })).status,
     ).toBe(200);
     expect(saved).toMatchObject([{ categoryId: FOOD, amountSatang: 150_000 }]);
+  });
+});
+
+describe("PUT /api/budgets: the daily limit", () => {
+  it.each(["plus", "ultimate"])("%s sets it", async (p) => {
+    plan = p;
+    expect((await put({ daily: "500" })).status).toBe(200);
+    expect(modes[0]).toMatchObject({ user_id: "u1", daily_budget: "500.00" });
+  });
+
+  it("Free cannot set it but can clear one left from before", async () => {
+    const res = await put({ daily: "500" });
+    expect(res.status).toBe(403);
+    expect(await res.json()).toMatchObject({ upgrade: true });
+    expect(modes).toHaveLength(0);
+
+    expect((await put({ daily: null })).status).toBe(200);
+    expect(modes[0]).toMatchObject({ daily_budget: null });
+  });
+
+  it("zero clears it and a bad amount is refused", async () => {
+    plan = "plus";
+    expect((await put({ daily: "0" })).status).toBe(200);
+    expect(modes[0]).toMatchObject({ daily_budget: null });
+    expect((await put({ daily: "abc" })).status).toBe(400);
   });
 });

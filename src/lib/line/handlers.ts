@@ -1,9 +1,9 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { budgetAlertsFor } from "@/lib/budget-alert";
+import { budgetAlertsFor, dailyBudgetAlertsFor } from "@/lib/budget-alert";
 import { calendarMonthRange, cycleRange, dayRange } from "@/lib/budget-cycle";
 import { categorizeByRules, matchLeadingCategory, type CategoryLite } from "@/lib/categorize/rules";
 import { parseCommand, type Command } from "@/lib/commands";
-import { formatBaht } from "@/lib/money";
+import { formatBaht, satangToString, toSatang } from "@/lib/money";
 import {
   CONFIRM_THRESHOLD,
   LARGE_AMOUNT_SATANG,
@@ -13,6 +13,7 @@ import {
 import {
   categoryTotalSatang,
   ensureUser,
+  expenseTotalSatang,
   getLatestConfirmed,
   getSettings,
   getTransaction,
@@ -75,6 +76,7 @@ import { buildForecastCard } from "./forecast-flex";
 import { buildInsightCard } from "./insight-flex";
 import { buildTransferDone, buildWalletChooser, buildWalletsCard } from "./wallet-flex";
 import { buildCardsCard } from "./card-flex";
+import { dailyBudgetStatus } from "@/lib/daily-budget";
 import { convertToSatang, formatForeign, formatRate } from "@/lib/fx";
 import { getRate } from "@/lib/fx-repo";
 import { bangkokDateKey } from "@/lib/points";
@@ -176,6 +178,11 @@ import {
   WALLET_MOVED_TEXT,
   WALLET_NOT_FOUND_TEXT,
   CARD_LOCKED_TEXT,
+  DAILY_BUDGET_CLEARED_TEXT,
+  DAILY_BUDGET_LOCKED_TEXT,
+  DAILY_BUDGET_NONE_TEXT,
+  DAILY_BUDGET_USAGE_TEXT,
+  dailyBudgetSetText,
   DEBT_BAD_DUE_TEXT,
   FX_FAILED_TEXT,
   FX_LOCKED_TEXT,
@@ -540,6 +547,25 @@ async function runDebt(
         .join("\n"),
     }),
   ];
+}
+
+/** The daily limit in satang when they have one and their plan allows it, else null. */
+async function dailyLimitOf(user: UserRow, deps: HandlerDeps): Promise<number | null> {
+  if (!can(effectivePlan(user.plan, user.plan_expires_at, deps.now()), "dailyBudget")) return null;
+  const settings = await getSettings(deps.db, user.id);
+  return settings.daily_budget === null || settings.daily_budget === undefined
+    ? null
+    : toSatang(settings.daily_budget);
+}
+
+async function saveDailyBudget(deps: HandlerDeps, userId: string, satang: number | null) {
+  const { error } = await deps.db
+    .from("user_settings")
+    .upsert(
+      { user_id: userId, daily_budget: satang === null ? null : satangToString(satang) },
+      { onConflict: "user_id" },
+    );
+  if (error) throw new Error(`save daily budget: ${error.message}`);
 }
 
 /** "บัตร": the card summary. null when a typed name matches none of their cards. */
@@ -910,6 +936,7 @@ async function saveEntries(
   for (const c of confirmed) {
     alerts.push(...(await safeAlerts(deps, user.id, c.tx, c.categoryId)));
   }
+  alerts.push(...(await safeDailyAlerts(deps, user.id, confirmed)));
   alerts.push(
     ...(await cardLimitAlerts(
       deps,
@@ -1042,6 +1069,32 @@ async function safeAlerts(
   }
 }
 
+/** The daily-limit scold for what this message added to today (best effort, like the budget alerts). */
+async function safeDailyAlerts(
+  deps: HandlerDeps,
+  userId: string,
+  saved: { tx: TxRow }[],
+): Promise<string[]> {
+  const today = deps.now();
+  const expenses = saved.filter((s) => s.tx.type === "expense");
+  const todays = expenses.filter(
+    (s) => bangkokDateKey(new Date(s.tx.occurred_at)) === bangkokDateKey(today),
+  );
+  const amountSatang = todays.reduce((sum, s) => sum + txAmountSatang(s.tx), 0);
+  if (amountSatang <= 0) return [];
+  try {
+    return await dailyBudgetAlertsFor(deps.db, {
+      userId,
+      amountSatang,
+      occurredAt: today,
+      now: today,
+    });
+  } catch (error) {
+    log.error("daily_budget_alert_failed", error);
+    return [];
+  }
+}
+
 async function confirmCard(
   tx: TxRow,
   categoryId: string | null,
@@ -1119,9 +1172,18 @@ async function runCommand(
         );
         const subtitle = formatThaiDate(now);
         if (data.current.count === 0) return [text(`สรุปวันนี้ (${subtitle})\nยังไม่มีรายการเลย`)];
+        // with a daily limit set (Professional and above) the card says how much of it is used
+        const limit = await dailyLimitOf(user, deps);
         return [
           withSummaryShortcuts(
-            buildSummaryCard({ title: "สรุปวันนี้", range, data, subtitle, liffUrl }),
+            buildSummaryCard({
+              title: "สรุปวันนี้",
+              range,
+              data,
+              subtitle,
+              liffUrl,
+              dailyLimitSatang: limit ?? undefined,
+            }),
           ),
         ];
       }
@@ -1238,6 +1300,29 @@ async function runCommand(
           moreUrl: pageUrl("/summary"),
         }),
       ];
+    }
+
+    case "daily-budget": {
+      const plan = effectivePlan(user.plan, user.plan_expires_at, deps.now());
+      if (command.action === "usage") return [text(DAILY_BUDGET_USAGE_TEXT)];
+      if (command.action === "clear") {
+        await saveDailyBudget(deps, user.id, null);
+        return [text(DAILY_BUDGET_CLEARED_TEXT)];
+      }
+      if (!can(plan, "dailyBudget")) return [text(DAILY_BUDGET_LOCKED_TEXT)];
+      if (command.action === "set" && command.amountSatang) {
+        await saveDailyBudget(deps, user.id, command.amountSatang);
+        return [text(dailyBudgetSetText(formatBaht(command.amountSatang)))];
+      }
+      const limit = await dailyLimitOf(user, deps);
+      if (limit === null) return [text(DAILY_BUDGET_NONE_TEXT)];
+      const range = dayRange(deps.now());
+      const spent = await expenseTotalSatang(db, {
+        userId: user.id,
+        from: range.from,
+        to: range.to,
+      });
+      return [text(dailyBudgetStatus(spent, limit))];
     }
 
     case "debts": {

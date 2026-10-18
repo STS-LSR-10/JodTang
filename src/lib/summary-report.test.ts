@@ -216,3 +216,33 @@ describe("buildSummaryCard", () => {
     expect(next).toBe(old);
   });
 });
+
+describe("buildSummaryCard: the daily limit line", () => {
+  const range = { from: new Date("2026-10-17T17:00:00Z"), to: new Date("2026-10-18T17:00:00Z") };
+  const data = (expense: number) => ({
+    current: { income: 0, expense, count: 2 },
+    previous: { income: 0, expense: 0, count: 0 },
+    topExpenses: [],
+  });
+  const json = (expense: number, dailyLimitSatang?: number) =>
+    JSON.stringify(
+      buildSummaryCard({
+        title: "สรุปวันนี้",
+        range,
+        data: data(expense) as never,
+        dailyLimitSatang,
+      }),
+    );
+
+  it("says how much of the day's limit is used", () => {
+    expect(json(32_000, 50_000)).toContain("ใช้ไป 64% ของงบวันนี้ ฿500");
+  });
+
+  it("says how much over when over", () => {
+    expect(json(62_000, 50_000)).toContain("เกินงบวันนี้ ฿120");
+  });
+
+  it("has no such line without a limit", () => {
+    expect(json(32_000)).not.toContain("งบวันนี้");
+  });
+});

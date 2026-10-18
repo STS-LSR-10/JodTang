@@ -317,6 +317,81 @@ test.describe("category budgets are Professional and above (360px)", () => {
   });
 });
 
+test.describe("daily budget (360px)", () => {
+  const WITH_DAILY = { ...BUDGETS, daily: { amountSatang: 50_000, spentSatang: 62_000 } };
+  const NO_DAILY = { ...BUDGETS, daily: { amountSatang: null, spentSatang: 32_000 } };
+
+  test("Professional: shows today's use of the limit and saves a new one", async ({ page }) => {
+    const bodies: unknown[] = [];
+    await mockApi(page, {
+      "GET /api/budgets": WITH_DAILY,
+      "GET /api/categories": CATEGORIES,
+      "GET /api/me": ME_PLUS,
+      "PUT /api/budgets": async (route: Route) => {
+        bodies.push(route.request().postDataJSON());
+        return { ok: true };
+      },
+    });
+    await page.goto("/budgets");
+
+    const section = page.getByRole("region", { name: "งบรายวัน" });
+    await expect(section.getByRole("progressbar", { name: "การใช้งบวันนี้" })).toBeVisible();
+    await expect(section.getByText("เกินงบ")).toBeVisible();
+    await section.getByLabel("งบรายวัน").fill("800");
+    await section.getByRole("button", { name: "บันทึก" }).click();
+    await expect.poll(() => bodies.length).toBe(1);
+    expect(bodies[0]).toEqual({ daily: "800" });
+  });
+
+  test("clearing the field sends null", async ({ page }) => {
+    const bodies: unknown[] = [];
+    await mockApi(page, {
+      "GET /api/budgets": WITH_DAILY,
+      "GET /api/categories": CATEGORIES,
+      "GET /api/me": ME_PLUS,
+      "PUT /api/budgets": async (route: Route) => {
+        bodies.push(route.request().postDataJSON());
+        return { ok: true };
+      },
+    });
+    await page.goto("/budgets");
+
+    const section = page.getByRole("region", { name: "งบรายวัน" });
+    await section.getByLabel("งบรายวัน").fill("");
+    await section.getByRole("button", { name: "บันทึก" }).click();
+    await expect.poll(() => bodies.length).toBe(1);
+    expect(bodies[0]).toEqual({ daily: null });
+  });
+
+  test("a bad amount is refused before sending", async ({ page }) => {
+    await mockApi(page, {
+      "GET /api/budgets": NO_DAILY,
+      "GET /api/categories": CATEGORIES,
+      "GET /api/me": ME_PLUS,
+    });
+    await page.goto("/budgets");
+
+    const section = page.getByRole("region", { name: "งบรายวัน" });
+    await section.getByLabel("งบรายวัน").fill("abc");
+    await section.getByRole("button", { name: "บันทึก" }).click();
+    await expect(section.getByText("จำนวนเงินไม่ถูกต้อง")).toBeVisible();
+  });
+
+  test("Free: the field is off with an upgrade note", async ({ page }) => {
+    await mockApi(page, {
+      "GET /api/budgets": NO_DAILY,
+      "GET /api/categories": CATEGORIES,
+      "GET /api/me": ME_FREE,
+    });
+    await page.goto("/budgets");
+
+    const section = page.getByRole("region", { name: "งบรายวัน" });
+    await expect(section.getByLabel("งบรายวัน")).toBeDisabled();
+    await expect(section.getByText("สำหรับแผน Professional")).toBeVisible();
+    await expectNoHorizontalScroll(page);
+  });
+});
+
 test.describe("legal pages (public, no sign-in)", () => {
   for (const [path, heading] of [
     ["/privacy", "นโยบายความเป็นส่วนตัว"],

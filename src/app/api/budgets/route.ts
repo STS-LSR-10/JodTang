@@ -1,9 +1,16 @@
 import { z } from "zod";
 import { apiError, guard, json } from "@/lib/api";
 import { requireUser } from "@/lib/auth/require-user";
-import { cycleRange } from "@/lib/budget-cycle";
-import { toSatang } from "@/lib/money";
-import { getBudgetMode, getSettings, loadBudgets, loadCategories, setBudget } from "@/lib/repo";
+import { cycleRange, dayRange } from "@/lib/budget-cycle";
+import { satangToString, toSatang } from "@/lib/money";
+import {
+  expenseTotalSatang,
+  getBudgetMode,
+  getSettings,
+  loadBudgets,
+  loadCategories,
+  setBudget,
+} from "@/lib/repo";
 import { requireFeature } from "@/lib/plan-server";
 import { getAdminClient } from "@/lib/supabase/admin";
 
@@ -24,8 +31,9 @@ export async function GET(request: Request): Promise<Response> {
     const db = getAdminClient();
     const settings = await getSettings(db, auth.userId);
     const range = cycleRange(new Date(), settings.budget_cycle, settings.cycle_start_day);
+    const today = dayRange(new Date());
 
-    const [mode, budgets, categories, spend] = await Promise.all([
+    const [mode, budgets, categories, spend, spentToday] = await Promise.all([
       getBudgetMode(db, auth.userId),
       loadBudgets(db, auth.userId),
       loadCategories(db, auth.userId),
@@ -35,6 +43,7 @@ export async function GET(request: Request): Promise<Response> {
         p_to: range.to.toISOString(),
         p_type: "expense",
       }),
+      expenseTotalSatang(db, { userId: auth.userId, from: today.from, to: today.to }),
     ]);
     if (spend.error) throw new Error(`spend: ${spend.error.message}`);
 
@@ -52,6 +61,13 @@ export async function GET(request: Request): Promise<Response> {
       cycle: settings.budget_cycle,
       range: { from: range.from.toISOString(), to: range.to.toISOString() },
       overall: { amountSatang: budgetBy.get(null) ?? null, spentSatang: overallSpent },
+      daily: {
+        amountSatang:
+          settings.daily_budget === null || settings.daily_budget === undefined
+            ? null
+            : toSatang(settings.daily_budget),
+        spentSatang: spentToday,
+      },
       categories: categories
         .filter((c) => c.type === "expense" && !c.is_hidden)
         .sort((a, b) => a.sort_order - b.sort_order)
@@ -74,6 +90,8 @@ const amountSchema = z
 const putSchema = z.object({
   mode: z.enum(["overall", "category"]).optional(),
   overall: amountSchema.optional(),
+  /** Limit for one day, all categories together; null clears it. */
+  daily: amountSchema.optional(),
   categories: z
     .array(z.object({ categoryId: z.string().uuid(), amount: amountSchema }))
     .max(100)
@@ -106,6 +124,12 @@ export async function PUT(request: Request): Promise<Response> {
       const locked = await requireFeature(db, auth.userId, "categoryBudget");
       if (locked) return locked;
     }
+    // The daily limit is for Professional and above (clearing it is open to everyone).
+    const daily = toBudgetSatang(body.daily);
+    if (daily !== undefined && daily !== null) {
+      const locked = await requireFeature(db, auth.userId, "dailyBudget");
+      if (locked) return locked;
+    }
     const settings = await getSettings(db, auth.userId);
 
     if (body.categories?.length) {
@@ -124,6 +148,17 @@ export async function PUT(request: Request): Promise<Response> {
         .from("user_settings")
         .upsert({ user_id: auth.userId, budget_mode: body.mode }, { onConflict: "user_id" });
       if (error) throw new Error(`save mode: ${error.message}`);
+    }
+
+    if (daily !== undefined) {
+      const { error } = await db.from("user_settings").upsert(
+        {
+          user_id: auth.userId,
+          daily_budget: daily === null ? null : satangToString(daily),
+        },
+        { onConflict: "user_id" },
+      );
+      if (error) throw new Error(`save daily budget: ${error.message}`);
     }
 
     const overall = toBudgetSatang(body.overall);

@@ -49,6 +49,7 @@ const FEATURES: Feature[] = [
   "foreignCurrency",
   "categoryBudget",
   "budgetAlert",
+  "dailyBudget",
 ];
 
 export async function GET(request: Request): Promise<Response> {

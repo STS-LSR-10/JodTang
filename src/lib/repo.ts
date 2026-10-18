@@ -27,6 +27,8 @@ export interface SettingsRow {
   /** Automatic summary in the chat (Professional and above), Monday 09:00 / cycle start day 09:00 */
   weekly_summary_enabled: boolean;
   monthly_summary_enabled: boolean;
+  /** Limit for one day, all categories together (Professional and above); null = none. */
+  daily_budget?: number | string | null;
 }
 
 export interface TxRow {
@@ -114,7 +116,7 @@ export async function getSettings(db: SupabaseClient, userId: string): Promise<S
   const { data, error } = await db
     .from("user_settings")
     .select(
-      "budget_cycle,cycle_start_day,confirm_style,daily_reminder_enabled,daily_reminder_time,weekly_summary_enabled,monthly_summary_enabled",
+      "budget_cycle,cycle_start_day,confirm_style,daily_reminder_enabled,daily_reminder_time,weekly_summary_enabled,monthly_summary_enabled,daily_budget",
     )
     .eq("user_id", userId)
     .maybeSingle();

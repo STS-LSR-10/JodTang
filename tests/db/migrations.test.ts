@@ -310,6 +310,42 @@ describe("wallets (0019)", () => {
   });
 });
 
+describe("daily budget (0024)", () => {
+  it("is empty until set, then holds a positive amount", async () => {
+    const u = await newUser(db, `db-${Math.random()}`);
+    expect(
+      (
+        await one<{ daily_budget: string | null }>(
+          db,
+          "select daily_budget::text from user_settings where user_id=$1",
+          [u],
+        )
+      ).daily_budget,
+    ).toBeNull();
+    await db.query("update user_settings set daily_budget = 500 where user_id = $1", [u]);
+    expect(
+      (
+        await one<{ daily_budget: string }>(
+          db,
+          "select daily_budget::text from user_settings where user_id=$1",
+          [u],
+        )
+      ).daily_budget,
+    ).toBe("500.00");
+    await db.query("update user_settings set daily_budget = null where user_id = $1", [u]);
+  });
+
+  it("refuses zero and negative amounts", async () => {
+    const u = await newUser(db, `db0-${Math.random()}`);
+    await expect(
+      db.query("update user_settings set daily_budget = 0 where user_id = $1", [u]),
+    ).rejects.toThrow();
+    await expect(
+      db.query("update user_settings set daily_budget = -5 where user_id = $1", [u]),
+    ).rejects.toThrow();
+  });
+});
+
 describe("foreign currency (0023)", () => {
   it("keeps the original amount, currency and rate next to the baht amount", async () => {
     const u = await newUser(db, `fx-${Math.random()}`);

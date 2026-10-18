@@ -33,6 +33,8 @@ interface BudgetsResponse {
   mode: "overall" | "category";
   cycle: "monthly" | "weekly";
   overall: { amountSatang: number | null; spentSatang: number };
+  /** The limit for one day (Professional and above) and today's spending. */
+  daily?: { amountSatang: number | null; spentSatang: number };
   categories: {
     categoryId: string;
     name: string;
@@ -83,6 +85,7 @@ export default function BudgetsPage() {
   const locked = !me.loading && me.data !== null && me.data?.features.customCategory !== true;
   // Per-category budgets and the 80% / 100% warnings are Professional and above too.
   const budgetLocked = !me.loading && me.data !== null && me.data?.features.categoryBudget !== true;
+  const dailyLocked = !me.loading && me.data !== null && me.data?.features.dailyBudget !== true;
   const alertsOff = !me.loading && me.data !== null && me.data?.features.budgetAlert !== true;
   const [notice, setNotice] = useState<string | null>(null);
   const [editing, setEditing] = useState<CategoryItem | null>(null);
@@ -191,6 +194,22 @@ export default function BudgetsPage() {
           <ErrorState message={error} onRetry={refresh} />
         ) : (
           <>
+            {kind === "expense" && budgets.data?.daily ? (
+              <DailyBudgetCard
+                daily={budgets.data.daily}
+                locked={dailyLocked}
+                onSave={(value) =>
+                  run(
+                    () =>
+                      api("/api/budgets", {
+                        method: "PUT",
+                        body: JSON.stringify({ daily: value }),
+                      }),
+                    value ? "ตั้งงบรายวันแล้ว" : "ล้างงบรายวันแล้ว",
+                  )
+                }
+              />
+            ) : null}
             {kind === "expense" && budgets.data ? (
               <BudgetCard
                 data={budgets.data}
@@ -536,6 +555,82 @@ function BudgetCard({
         </PlusLock>
       ) : (
         <p className="text-xs text-muted">จะแจ้งเตือนในแชทเมื่อใช้ถึง 80% และเมื่อเกินงบ</p>
+      )}
+    </section>
+  );
+}
+
+function DailyBudgetCard({
+  daily,
+  locked,
+  onSave,
+}: {
+  daily: { amountSatang: number | null; spentSatang: number };
+  locked: boolean;
+  onSave: (value: string | null) => void;
+}) {
+  const initial = daily.amountSatang ? formatBaht(daily.amountSatang).replace(/,/g, "") : "";
+  const [text, setText] = useState(initial);
+  const [error, setError] = useState<string | null>(null);
+
+  function save() {
+    const parsed = parseAmount(text);
+    if (!parsed.ok) return setError("จำนวนเงินไม่ถูกต้อง (เช่น 500 หรือ 500.50)");
+    setError(null);
+    onSave(parsed.value);
+  }
+
+  return (
+    <section
+      aria-label="งบรายวัน"
+      className="space-y-3 rounded-2xl border border-border bg-surface p-4 shadow-card"
+    >
+      <div className="flex items-center justify-between">
+        <h2 className="font-semibold">งบรายวัน</h2>
+        <span className="text-xs text-muted">ทุกหมวดรวมกัน</span>
+      </div>
+      <div className="flex gap-2">
+        <input
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          disabled={locked}
+          inputMode="decimal"
+          placeholder="วันหนึ่งใช้ไม่เกิน (บาท)"
+          aria-label="งบรายวัน"
+          className="num h-11 min-w-0 flex-1 rounded-2xl border border-border bg-background px-4 outline-none focus:border-primary disabled:opacity-60"
+        />
+        <button
+          type="button"
+          onClick={save}
+          disabled={locked}
+          className="h-11 rounded-2xl bg-primary px-4 text-sm font-semibold text-surface disabled:opacity-40"
+        >
+          บันทึก
+        </button>
+      </div>
+      {error ? (
+        <p role="alert" className="text-sm text-expense">
+          {error}
+        </p>
+      ) : null}
+      {daily.amountSatang ? (
+        <>
+          <p className="text-xs text-muted">วันนี้</p>
+          <ProgressBar
+            spentSatang={daily.spentSatang}
+            limitSatang={daily.amountSatang}
+            label="การใช้งบวันนี้"
+          />
+        </>
+      ) : (
+        <p className="text-xs text-muted">
+          ยังไม่ได้ตั้งงบรายวัน วันนี้ใช้ไปแล้ว ฿{formatBaht(daily.spentSatang)}
+        </p>
+      )}
+      {locked ? (
+        <PlusLock>บอทเตือนทันทีเมื่อวันนี้ใช้เกินวงเงินที่ตั้งไว้</PlusLock>
+      ) : (
+        <p className="text-xs text-muted">ถ้าวันนี้ใช้เกิน บอทจะเตือนในแชททันที เว้นว่างเพื่อปิด</p>
       )}
     </section>
   );

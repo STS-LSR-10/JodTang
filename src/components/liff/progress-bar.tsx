@@ -12,9 +12,12 @@ const STATE_STYLE = {
 export function ProgressBar({
   spentSatang,
   limitSatang,
+  label = "การใช้งบ",
 }: {
   spentSatang: number;
   limitSatang: number;
+  /** Accessible name; give each bar on a page its own. */
+  label?: string;
 }) {
   const state = budgetState(spentSatang, limitSatang);
   const pct = percentUsed(spentSatang, limitSatang);
@@ -26,7 +29,7 @@ export function ProgressBar({
         aria-valuemin={0}
         aria-valuemax={100}
         aria-valuenow={Math.min(pct, 100)}
-        aria-label="การใช้งบ"
+        aria-label={label}
         className="h-2.5 w-full overflow-hidden rounded-full bg-border"
       >
         <div

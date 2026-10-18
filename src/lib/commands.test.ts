@@ -190,3 +190,36 @@ describe("parseCommand: cards", () => {
     expect(parseCommand("บัตรจอดรถ 50")).toBeNull();
   });
 });
+
+describe("parseCommand: daily budget", () => {
+  it("shows, sets and clears", () => {
+    expect(parseCommand("งบวัน")).toEqual({ kind: "daily-budget", action: "show" });
+    expect(parseCommand("งบรายวัน")).toEqual({ kind: "daily-budget", action: "show" });
+    expect(parseCommand("งบวัน 500")).toEqual({
+      kind: "daily-budget",
+      action: "set",
+      amountSatang: 50000,
+    });
+    expect(parseCommand("งบวัน 1,200.50 บาท")).toEqual({
+      kind: "daily-budget",
+      action: "set",
+      amountSatang: 120050,
+    });
+    expect(parseCommand("งบวัน ๕๐๐")).toEqual({
+      kind: "daily-budget",
+      action: "set",
+      amountSatang: 50000,
+    });
+    expect(parseCommand("งบวัน ปิด")).toEqual({ kind: "daily-budget", action: "clear" });
+    expect(parseCommand("งบวัน off")).toEqual({ kind: "daily-budget", action: "clear" });
+  });
+
+  it("anything else after it is the usage hint", () => {
+    expect(parseCommand("งบวัน abc")).toEqual({ kind: "daily-budget", action: "usage" });
+    expect(parseCommand("งบวัน 0")).toEqual({ kind: "daily-budget", action: "usage" });
+  });
+
+  it("an entry that merely starts with it is not a command", () => {
+    expect(parseCommand("งบวันเกิดแม่ 500")).toBeNull();
+  });
+});

@@ -1,7 +1,9 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { alertText, crossedThreshold } from "@/lib/budget";
-import { cycleRange } from "@/lib/budget-cycle";
+import { cycleRange, dayRange } from "@/lib/budget-cycle";
+import { dailyBudgetAlert } from "@/lib/daily-budget";
 import { toSatang } from "@/lib/money";
+import { bangkokDateKey } from "@/lib/points";
 import { can } from "@/lib/plan";
 import { getPlanInfo } from "@/lib/plan-server";
 import {
@@ -65,4 +67,38 @@ export async function budgetAlertsFor(
     scopeName = categories.find((c) => c.id === input.categoryId)?.name ?? null;
   }
   return [alertText({ level, scopeName, spentSatang: after, limitSatang: limit })];
+}
+
+/**
+ * After expenses were saved: the scold when today's spending went over the daily limit (Professional
+ * and above). `amountSatang` is everything just added to today, so several entries from one message
+ * give one warning. Entries dated on another day are not today's business. Best effort like the
+ * budget alerts.
+ */
+export async function dailyBudgetAlertsFor(
+  db: SupabaseClient,
+  input: { userId: string; amountSatang: number; occurredAt: Date; now: Date; pick?: number },
+): Promise<string[]> {
+  if (input.amountSatang <= 0) return [];
+  if (bangkokDateKey(input.occurredAt) !== bangkokDateKey(input.now)) return [];
+  const { plan } = await getPlanInfo(db, input.userId, input.now);
+  if (!can(plan, "dailyBudget")) return [];
+
+  const settings = await getSettings(db, input.userId);
+  if (settings.daily_budget === null || settings.daily_budget === undefined) return [];
+  const limit = toSatang(settings.daily_budget);
+
+  const range = dayRange(input.now);
+  const after = await expenseTotalSatang(db, {
+    userId: input.userId,
+    from: range.from,
+    to: range.to,
+  });
+  const alert = dailyBudgetAlert({
+    beforeSatang: after - input.amountSatang,
+    afterSatang: after,
+    limitSatang: limit,
+    pick: input.pick,
+  });
+  return alert ? [alert] : [];
 }

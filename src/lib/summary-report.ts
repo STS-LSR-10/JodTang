@@ -185,6 +185,8 @@ export function buildSummaryCard(input: {
   against?: string;
   /** Replaces the range under the title (e.g. a single dated day). */
   subtitle?: string;
+  /** A day card with a daily limit set: adds a line with how much of it is used. */
+  dailyLimitSatang?: number;
   liffUrl?: string;
 }): LineMessage {
   const { title, range, data, against } = input;
@@ -201,6 +203,26 @@ export function buildSummaryCard(input: {
       net < 0 ? COLOR.expense : COLOR.income,
     ),
   ];
+
+  if (input.dailyLimitSatang && input.dailyLimitSatang > 0) {
+    const used = Math.floor((data.current.expense * 100) / input.dailyLimitSatang);
+    body.push({
+      type: "text",
+      text:
+        data.current.expense > input.dailyLimitSatang
+          ? `เกินงบวันนี้ ฿${formatBaht(data.current.expense - input.dailyLimitSatang)} (งบ ฿${formatBaht(input.dailyLimitSatang)})`
+          : `ใช้ไป ${used}% ของงบวันนี้ ฿${formatBaht(input.dailyLimitSatang)}`,
+      size: "xs",
+      color:
+        data.current.expense > input.dailyLimitSatang
+          ? COLOR.expense
+          : used >= 80
+            ? "#D97706"
+            : COLOR.muted,
+      wrap: true,
+      margin: "md",
+    });
+  }
 
   if (data.topExpenses.length > 0) {
     body.push(

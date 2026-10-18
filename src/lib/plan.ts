@@ -66,7 +66,8 @@ export type Feature =
   | "debts"
   | "foreignCurrency"
   | "categoryBudget"
-  | "budgetAlert";
+  | "budgetAlert"
+  | "dailyBudget";
 
 /** The lowest tier that has each feature (Ultimate always includes everything Professional has). */
 const MIN_PLAN: Record<Feature, "plus" | "ultimate"> = {
@@ -98,6 +99,7 @@ const MIN_PLAN: Record<Feature, "plus" | "ultimate"> = {
   foreignCurrency: "ultimate",
   categoryBudget: "plus",
   budgetAlert: "plus",
+  dailyBudget: "plus",
 };
 
 export function isPaidPlan(plan: Plan): boolean {
