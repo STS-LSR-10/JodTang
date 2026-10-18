@@ -310,6 +310,141 @@ describe("wallets (0019)", () => {
   });
 });
 
+describe("pin lock (0031)", () => {
+  it("one row per person with no PIN, no failures and no lock by default", async () => {
+    const u = await newUser(db, `pin-${Math.random()}`);
+    await db.query("insert into user_security (user_id) values ($1)", [u]);
+    const r = await one<{
+      pin_hash: string | null;
+      failed_count: number;
+      lock_level: number;
+      locked_until: string | null;
+    }>(
+      db,
+      "select pin_hash, failed_count, lock_level, locked_until::text from user_security where user_id = $1",
+      [u],
+    );
+    expect(r).toEqual({ pin_hash: null, failed_count: 0, lock_level: 0, locked_until: null });
+    await expect(
+      db.query("insert into user_security (user_id) values ($1)", [u]),
+    ).rejects.toThrow();
+  });
+
+  it("a hash needs its salt and the other way round", async () => {
+    const u = await newUser(db, `pin2-${Math.random()}`);
+    await expect(
+      db.query("insert into user_security (user_id,pin_hash) values ($1,'h')", [u]),
+    ).rejects.toThrow();
+    await expect(
+      db.query("insert into user_security (user_id,pin_salt) values ($1,'s')", [u]),
+    ).rejects.toThrow();
+    await db.query("insert into user_security (user_id,pin_hash,pin_salt) values ($1,'h','s')", [
+      u,
+    ]);
+  });
+
+  it("counters cannot go negative; deleting the person deletes their row", async () => {
+    const u = await newUser(db, `pin3-${Math.random()}`);
+    await db.query("insert into user_security (user_id) values ($1)", [u]);
+    await expect(
+      db.query("update user_security set failed_count = -1 where user_id = $1", [u]),
+    ).rejects.toThrow();
+    await db.query("delete from users where id = $1", [u]);
+    const left = await one<{ n: string }>(
+      db,
+      "select count(*)::text as n from user_security where user_id = $1",
+      [u],
+    );
+    expect(left.n).toBe("0");
+  });
+});
+
+describe("pin attempts (0031)", () => {
+  async function person() {
+    const u = await newUser(db, `pa-${Math.random()}`);
+    await db.query("insert into user_security (user_id,pin_hash,pin_salt) values ($1,'h','s')", [
+      u,
+    ]);
+    return u;
+  }
+  const NOW = "2026-10-18T05:00:00Z";
+  const later = (min: number) => new Date(Date.parse(NOW) + min * 60_000).toISOString();
+  const take = (u: string, at = NOW) =>
+    one<{
+      allowed: boolean;
+      failed_count: number;
+      lock_level: number;
+      locked_until: string | null;
+      attempts_left: number;
+    }>(
+      db,
+      "select allowed, failed_count, lock_level, locked_until::text, attempts_left from pin_take_attempt($1,$2,5)",
+      [u, at],
+    );
+
+  it("counts down the tries: 4, 3, 2, 1 left", async () => {
+    const u = await person();
+    const left: number[] = [];
+    for (let i = 0; i < 4; i++) left.push((await take(u)).attempts_left);
+    expect(left).toEqual([4, 3, 2, 1]);
+  });
+
+  it("the fifth try starts a 15 minute lock and later tries are refused without being checked", async () => {
+    const u = await person();
+    for (let i = 0; i < 4; i++) await take(u);
+    const fifth = await take(u);
+    expect(fifth).toMatchObject({
+      allowed: true,
+      attempts_left: 0,
+      lock_level: 1,
+      failed_count: 0,
+    });
+    expect(new Date(fifth.locked_until ?? "").getTime() - Date.parse(NOW)).toBe(15 * 60_000);
+    expect(await take(u, later(14))).toMatchObject({ allowed: false });
+    expect(await take(u, later(14))).toMatchObject({ allowed: false });
+  });
+
+  it("each further lock waits longer: 15, then 30, then 60, and 60 stays", async () => {
+    const u = await person();
+    const minutes: number[] = [];
+    let at = Date.parse(NOW);
+    for (let round = 0; round < 4; round++) {
+      let last = await take(u, new Date(at).toISOString());
+      for (let i = 0; i < 4; i++) last = await take(u, new Date(at).toISOString());
+      minutes.push((new Date(last.locked_until ?? "").getTime() - at) / 60_000);
+      at += 61 * 60_000; // wait out the lock
+    }
+    expect(minutes).toEqual([15, 30, 60, 60]);
+  });
+
+  it("after the lock has passed tries are allowed again", async () => {
+    const u = await person();
+    for (let i = 0; i < 5; i++) await take(u);
+    expect((await take(u, later(16))).allowed).toBe(true);
+  });
+
+  it("a right PIN clears the count, the level and the lock", async () => {
+    const u = await person();
+    for (let i = 0; i < 5; i++) await take(u);
+    await db.query("select pin_clear_attempts($1,$2)", [u, later(20)]);
+    const r = await one<{ failed_count: number; lock_level: number; locked_until: string | null }>(
+      db,
+      "select failed_count, lock_level, locked_until::text from user_security where user_id = $1",
+      [u],
+    );
+    expect(r).toEqual({ failed_count: 0, lock_level: 0, locked_until: null });
+  });
+
+  it("a person with no row cannot be tried at all; everybody's counts are their own", async () => {
+    const none = await newUser(db, `pa-none-${Math.random()}`);
+    expect(await take(none)).toMatchObject({ allowed: false });
+    const a = await person();
+    const b = await person();
+    for (let i = 0; i < 3; i++) await take(a);
+    expect((await take(b)).attempts_left).toBe(4);
+  });
+});
+
 describe("data reset (0030)", () => {
   async function seed() {
     const me = await newUser(db, `dr-${Math.random()}`);

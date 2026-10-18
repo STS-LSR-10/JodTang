@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useApi, useLiff } from "@/components/liff/liff-provider";
 import { DeleteCard } from "@/components/liff/settings/delete-card";
+import { PinCard } from "@/components/liff/settings/pin-card";
 import { ResetCard } from "@/components/liff/settings/reset-card";
 import { MemoryCard } from "@/components/liff/settings/memory-card";
 import { PlanCard } from "@/components/liff/settings/plan-card";
@@ -202,6 +203,7 @@ export default function SettingsPage() {
             <RecurringCard me={me.data} />
             <MemoryCard me={me.data} />
             <ReferralCard me={me.data} onChanged={me.reload} />
+            <PinCard />
             <ResetCard />
             <DeleteCard />
 

@@ -54,6 +54,7 @@ const FEATURES: Feature[] = [
   "billReminder",
   "groupLedger",
   "sharedWallet",
+  "pinLock",
 ];
 
 export async function GET(request: Request): Promise<Response> {

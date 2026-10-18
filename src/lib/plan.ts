@@ -85,7 +85,8 @@ export type Feature =
   | "savingsGoal"
   | "billReminder"
   | "groupLedger"
-  | "sharedWallet";
+  | "sharedWallet"
+  | "pinLock";
 
 /** The lowest tier that has each feature (Ultimate always includes everything Professional has). */
 const MIN_PLAN: Record<Feature, "plus" | "ultimate"> = {
@@ -122,6 +123,7 @@ const MIN_PLAN: Record<Feature, "plus" | "ultimate"> = {
   billReminder: "ultimate",
   groupLedger: "ultimate",
   sharedWallet: "plus",
+  pinLock: "plus",
 };
 
 export function isPaidPlan(plan: Plan): boolean {

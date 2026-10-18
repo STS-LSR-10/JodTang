@@ -76,6 +76,7 @@ import { buildForecastCard } from "./forecast-flex";
 import { buildInsightCard } from "./insight-flex";
 import { buildTransferDone, buildWalletChooser, buildWalletsCard } from "./wallet-flex";
 import { buildCardsCard } from "./card-flex";
+import { setResetRequested } from "@/lib/pin-repo";
 import { JOIN_FAIL_TEXT } from "@/lib/shared-wallet";
 import { createInvite, membersOf, redeemInvite, removeMember } from "@/lib/shared-wallet-repo";
 import { sharedMemberLimit } from "@/lib/plan";
@@ -205,6 +206,7 @@ import {
   BILL_USAGE_TEXT,
   billAmbiguousText,
   billFullText,
+  PIN_RESET_CANCELLED_TEXT,
   SHARED_INVITE_OWNER_ONLY_TEXT,
   SHARED_JOIN_USAGE_TEXT,
   SHARED_OWNER_CANNOT_LEAVE_TEXT,
@@ -1867,6 +1869,12 @@ async function handlePostback(
     // a stale button (this round was already settled) must not skip the next round too
     if (bill.nextDueOn !== dueOn) return [text(BILL_GONE_TEXT)];
     return billPaid(bill, user, deps, action === "bp");
+  }
+
+  // "ยกเลิกคำขอ" under the notice that somebody asked to remove the PIN
+  if (action === "pinx") {
+    await setResetRequested(deps.db, user.id, null);
+    return [text(PIN_RESET_CANCELLED_TEXT)];
   }
 
   // "↩ ยกเลิก" under a deposit into a goal: the id is a deposit, g is its goal
