@@ -9,7 +9,11 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
-/** Daily: create the entries of recurring rules that are due (Vercel Cron, GET + Bearer CRON_SECRET). */
+/**
+ * Create the entries of recurring rules that are due (called hourly by GitHub Actions, GET + Bearer
+ * CRON_SECRET). Safe to call as often as you like: a rule is claimed once per due date, and a missed
+ * run is caught up on the next one.
+ */
 export async function GET(request: Request): Promise<Response> {
   let secret: string;
   try {

@@ -169,12 +169,11 @@ pnpm lint && pnpm typecheck && pnpm test
 
 | งาน           | endpoint              | ตัวเรียก                                                 |
 | ------------- | --------------------- | -------------------------------------------------------- |
-| จดรายการประจำ | `/api/cron/recurring` | Vercel Cron วันละครั้ง (`vercel.json`)                   |
+| จดรายการประจำ | `/api/cron/recurring` | GitHub Actions ทุกชั่วโมง (`.github/workflows/cron.yml`) |
 | เตือนรายวัน   | `/api/cron/reminders` | GitHub Actions ทุกชั่วโมง (`.github/workflows/cron.yml`) |
 
-Vercel แผน Hobby รัน cron ได้วันละครั้งเท่านั้น (ตั้งรายชั่วโมงแล้ว deploy จะล้ม) จึงให้ GitHub Actions เรียกตัวเตือน
-ตั้งที่ GitHub → Settings → Secrets and variables → Actions: `APP_BASE_URL` (เช่น `https://jod-tang.vercel.app`) และ `CRON_SECRET` (ค่าเดียวกับใน Vercel)
-ถ้าใช้แผน Pro สามารถย้ายตัวเตือนเข้า `vercel.json` แล้วลบ workflow ได้
+ตัวตั้งเวลาอยู่ที่ GitHub Actions ทั้งหมด ไม่ผูกกับโฮสต์ (ย้ายจาก Vercel ไป Cloudflare ฯลฯ ได้โดยไม่ต้องแก้) สองงานเรียกซ้ำได้อย่างปลอดภัย: รายการประจำที่ค้างจะถูกตามให้ครบและแต่ละกฎถูกจองครั้งเดียวต่อวันครบกำหนด
+ตั้งที่ GitHub → Settings → Secrets and variables → Actions: `APP_BASE_URL` (เช่น `https://jod-tang.vercel.app`) และ `CRON_SECRET` (ค่าเดียวกับบนโฮสต์) — ถ้าเปลี่ยนโดเมนหรือย้ายโฮสต์ ต้องแก้ `APP_BASE_URL` ที่นี่ด้วย
 
 **ส่งออก (Professional ขึ้นไป)** — ที่หน้ารายการ กดไอคอนดาวน์โหลด (Free เห็นหน้าอธิบายพร้อมลิงก์อัปเกรด และเซิร์ฟเวอร์ตอบ 403) เลือก CSV หรือ Excel ตามตัวกรองที่เลือกอยู่ (สูงสุด 5,000 แถว)
 ลิงก์ดาวน์โหลดมีอายุ 2 นาทีและเปิดในเบราว์เซอร์ของเครื่อง (เบราว์เซอร์ในแอป LINE ดาวน์โหลดไฟล์ไม่ได้)

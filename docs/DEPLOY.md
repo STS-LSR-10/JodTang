@@ -2,14 +2,15 @@
 
 เอกสารนี้ไม่มีความลับใด ๆ ค่า secret อยู่ใน Vercel / GitHub Secrets / `.env.local` เท่านั้น
 
+> วางแผนย้ายโฮสต์ไป Cloudflare ไว้แล้ว (ยังไม่ย้าย): ดู [CLOUDFLARE-MIGRATION.md](CLOUDFLARE-MIGRATION.md)
+
 ## 1) ภาพรวมระบบ
 
 ```
 LINE ──► Vercel (Next.js: /api/line/webhook, LIFF pages, /api/*) ──► Supabase (Postgres + Storage)
                       │                                         ▲
                       ├──► ผู้ให้บริการอ่านสลิป (EasySlip → AI)  │
-Vercel Cron (รายวัน) ─┴──► /api/cron/recurring                  │
-GitHub Actions (รายชั่วโมง) ──► /api/cron/reminders ─────────────┘
+GitHub Actions (รายชั่วโมง) ──► /api/cron/recurring + /api/cron/reminders ─┘
 ```
 
 ## 2) Environment variables

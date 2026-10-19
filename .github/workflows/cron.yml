@@ -1,10 +1,12 @@
 name: Hourly cron
 
-# Vercel Hobby only allows one cron run per day (see vercel.json: recurring rules, 00:00 Bangkok).
-# The daily reminder needs an hourly tick, so GitHub Actions calls the endpoint instead.
+# Scheduled jobs are called from here, not from the host (Vercel Cron), so the app can move to
+# another host (Cloudflare Workers, ...) without touching them. Both endpoints are safe to call
+# often: the recurring one catches up on anything that was missed and claims each rule once, and the
+# reminders one only acts on what is due this hour.
 # Needs two repository secrets: APP_BASE_URL (https://<your-domain>) and CRON_SECRET (same value
-# as in Vercel). Without them the job exits quietly. On a Vercel plan that allows hourly crons,
-# move this entry into vercel.json and delete this workflow.
+# as on the host). Without them the job exits quietly.
+# GitHub may start a scheduled run a few minutes late (or skip one under load): that is fine for both.
 
 on:
   schedule:
@@ -12,14 +14,28 @@ on:
   workflow_dispatch:
 
 jobs:
-  reminders:
+  cron:
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    env:
+      APP_BASE_URL: ${{ secrets.APP_BASE_URL }}
+      CRON_SECRET: ${{ secrets.CRON_SECRET }}
     steps:
+      # The recurring entries (e.g. rent on the 1st) are created as soon as they fall due, within the hour.
+      - name: Call /api/cron/recurring
+        run: |
+          if [ -z "$APP_BASE_URL" ] || [ -z "$CRON_SECRET" ]; then
+            echo "APP_BASE_URL / CRON_SECRET secrets are not set; skipping."
+            exit 0
+          fi
+          curl --fail --silent --show-error --max-time 60 \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            "${APP_BASE_URL%/}/api/cron/recurring"
+          echo
+
+      # Runs even when the step above failed, so one broken job never silences the other.
       - name: Call /api/cron/reminders
-        env:
-          APP_BASE_URL: ${{ secrets.APP_BASE_URL }}
-          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        if: ${{ always() }}
         run: |
           if [ -z "$APP_BASE_URL" ] || [ -z "$CRON_SECRET" ]; then
             echo "APP_BASE_URL / CRON_SECRET secrets are not set; skipping."

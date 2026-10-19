@@ -16,7 +16,7 @@ export const maxDuration = 60;
 /**
  * Hourly: push the daily "you have not recorded today" nudge and the weekly / monthly summaries
  * (Professional and above).
- * Triggered by GitHub Actions (or Vercel Cron on a plan that allows hourly schedules);
+ * Triggered hourly by GitHub Actions;
  * GET + Authorization: Bearer CRON_SECRET.
  */
 export async function GET(request: Request): Promise<Response> {
