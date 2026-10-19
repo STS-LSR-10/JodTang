@@ -151,6 +151,8 @@ import {
 } from "./flex";
 import { buildCategoryChooser } from "./slip-flex";
 import { startTrialFromChat, upsellReply } from "./upsell-reply";
+import { buildHelpCarousel, buildWelcomeCard } from "./help-flex";
+import { notUnderstood } from "./not-understood";
 import {
   EDIT_HINT_TEXT,
   EDIT_USAGE_TEXT,
@@ -160,10 +162,8 @@ import {
   MULTI_ENTRY_LOCKED_TEXT,
   TAGS_LOCKED_TEXT,
   ERROR_TEXT,
-  HELP_TEXT,
   MEMORY_PLUS_HINT_TEXT,
   NOT_FOUND_TEXT,
-  NOT_UNDERSTOOD_TEXT,
   PHOTO_ASK_REPLACE_TEXT,
   PHOTO_ASK_TEXT,
   COMPARE_EMPTY_TEXT,
@@ -251,7 +251,6 @@ import {
   TRANSFER_SAME_TEXT,
   TRANSFER_USAGE_TEXT,
   VOICE_UNAVAILABLE_TEXT,
-  WELCOME_TEXT,
   text,
 } from "./messages";
 import { log } from "@/lib/log";
@@ -342,7 +341,7 @@ export async function handleEvent(event: LineEvent, deps: HandlerDeps): Promise<
 
   switch (event.type) {
     case "follow":
-      await reply([text(WELCOME_TEXT)]);
+      await reply([buildWelcomeCard({ appUrl: appBaseUrl() })]);
       return;
     case "message":
       if (event.message?.type === "text" && event.message.text !== undefined) {
@@ -407,6 +406,11 @@ export async function handleEvent(event: LineEvent, deps: HandlerDeps): Promise<
 
 // ───────────────────────── text ─────────────────────────
 
+/** The public app URL without a trailing slash, when it is configured. */
+function appBaseUrl(): string | undefined {
+  return process.env.APP_BASE_URL?.replace(/\/$/, "") || undefined;
+}
+
 async function handleText(input: string, user: UserRow, deps: HandlerDeps): Promise<LineMessage[]> {
   const command = parseCommand(input);
   if (command?.kind === "transfer") {
@@ -460,7 +464,7 @@ async function handleText(input: string, user: UserRow, deps: HandlerDeps): Prom
     if (smart) return smart;
   }
 
-  if (entries.length === 0) return [text(NOT_UNDERSTOOD_TEXT)];
+  if (entries.length === 0) return [notUnderstood()];
   // "ราเมน 1500 JPY": convert to baht first (Ultimate); everything after sees plain baht entries
   if (entries.some((e) => e.foreign)) {
     if (!can(plan, "foreignCurrency")) return [text(FX_LOCKED_TEXT)];
@@ -1441,7 +1445,12 @@ async function runCommand(
   const { db } = deps;
   switch (command.kind) {
     case "help":
-      return [text(HELP_TEXT)];
+      return [
+        buildHelpCarousel({
+          plan: effectivePlan(user.plan, user.plan_expires_at, deps.now()),
+          appUrl: appBaseUrl(),
+        }),
+      ];
 
     case "summary": {
       const now = deps.now();
@@ -1828,7 +1837,7 @@ async function handlePostback(
       occurredAt: deps.now(),
       backdated: false,
     }));
-    if (redo.length === 0) return [text(NOT_UNDERSTOOD_TEXT)];
+    if (redo.length === 0) return [notUnderstood()];
     const plan = effectivePlan(user.plan, user.plan_expires_at, deps.now());
     // Only the date is changed; anything else Free cannot do (several entries, tags) still applies.
     if (redo.length > 1 && !can(plan, "multiEntry")) return [text(MULTI_ENTRY_LOCKED_TEXT)];

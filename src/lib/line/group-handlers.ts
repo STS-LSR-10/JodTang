@@ -39,6 +39,7 @@ import { parseMessage } from "@/lib/parse/text-parser";
 import { can, effectivePlan } from "@/lib/plan";
 import { LIMITS } from "@/lib/rate-limit";
 import { ensureUser } from "@/lib/repo";
+import { buildGroupHelpCard } from "./help-flex";
 import { formatThaiDate } from "@/lib/thai-date";
 import type { LineMessage } from "@/lib/types";
 import { buildGroupSummaryCard, buildTripSummaryCard } from "./group-flex";
@@ -59,7 +60,6 @@ import {
   GROUP_DELETED_TEXT,
   GROUP_ENTRY_GONE_TEXT,
   GROUP_EXPENSE_ONLY_TEXT,
-  GROUP_HELP_TEXT,
   GROUP_LOCKED_TEXT,
   GROUP_NOT_OPEN_TEXT,
   GROUP_NOTHING_TO_DELETE_TEXT,
@@ -151,7 +151,7 @@ async function runGroupCommand(
   const userId = event.source?.userId;
   const now = deps.now();
 
-  if (command.kind === "help") return reply([text(GROUP_HELP_TEXT)]);
+  if (command.kind === "help") return reply([buildGroupHelpCard()]);
 
   if (command.kind === "open") {
     if (!userId) return reply([text(GROUP_NO_USER_TEXT)]);
