@@ -5,6 +5,8 @@ import {
   type BillRow,
   type BillShare,
   type BillStatus,
+  type OpenShare,
+  type PaidVia,
 } from "@/lib/split-bill";
 
 function fail(context: string, error: { message: string }): never {
@@ -115,12 +117,14 @@ interface MemberDb {
   share_satang: number | string | null;
   paid: boolean;
   qr_token: string;
+  claimed_at: string | null;
+  paid_via: PaidVia | null;
 }
 
 export async function billMembers(db: SupabaseClient, billId: string): Promise<BillMemberRow[]> {
   const { data, error } = await db
     .from("split_bill_members")
-    .select("line_user_id,share_satang,paid,qr_token")
+    .select("line_user_id,share_satang,paid,qr_token,claimed_at,paid_via")
     .eq("bill_id", billId)
     .order("joined_at", { ascending: true });
   if (error) fail("load bill members", error);
@@ -129,6 +133,8 @@ export async function billMembers(db: SupabaseClient, billId: string): Promise<B
     shareSatang: r.share_satang === null ? null : Number(r.share_satang),
     paid: r.paid,
     qrToken: r.qr_token,
+    claimed: r.claimed_at !== null,
+    paidVia: r.paid_via,
   }));
 }
 
@@ -280,4 +286,104 @@ export async function shareByToken(
     shareSatang: Number(m.share_satang),
     status: b.status,
   };
+}
+
+export type ClaimResult = "ok" | "already" | "none";
+
+/** "โอนแล้ว": remember that this person says they paid (the payer still confirms). */
+export async function claimPaid(
+  db: SupabaseClient,
+  billId: string,
+  lineUserId: string,
+): Promise<ClaimResult> {
+  const { data, error } = await db.rpc("split_bill_claim", { p_bill: billId, p_user: lineUserId });
+  if (error) fail("claim paid", error);
+  return data === "ok" || data === "already" ? data : "none";
+}
+
+/** The payer takes a tick back. */
+export async function unpay(
+  db: SupabaseClient,
+  billId: string,
+  lineUserId: string,
+): Promise<"ok" | "none"> {
+  const { data, error } = await db.rpc("split_bill_unpay", { p_bill: billId, p_user: lineUserId });
+  if (error) fail("unpay", error);
+  return data === "ok" ? "ok" : "none";
+}
+
+export type SlipPayResult = "ok" | "duplicate" | "already" | "none";
+
+/** A slip that covers the share: records it (one slip pays one share) and marks the share paid. */
+export async function payBySlip(
+  db: SupabaseClient,
+  input: {
+    billId: string;
+    lineUserId: string;
+    sha256: string;
+    reference: string | null;
+    amountSatang: number;
+    receiverVerified: boolean;
+  },
+): Promise<SlipPayResult> {
+  const { data, error } = await db.rpc("split_bill_pay_by_slip", {
+    p_bill: input.billId,
+    p_user: input.lineUserId,
+    p_sha: input.sha256,
+    p_ref: input.reference,
+    p_amount: input.amountSatang,
+    p_verified: input.receiverVerified,
+  });
+  if (error) fail("pay by slip", error);
+  return data === "ok" || data === "duplicate" || data === "already" ? data : "none";
+}
+
+/** Has this slip (by picture or by the bank's reference) been used on a bill already? */
+export async function slipUsed(
+  db: SupabaseClient,
+  sha256: string | null,
+  reference: string | null,
+): Promise<boolean> {
+  if (sha256) {
+    const bySha = await db.from("split_bill_slips").select("id").eq("sha256", sha256).limit(1);
+    if (bySha.error) fail("check slip", bySha.error);
+    if ((bySha.data ?? []).length > 0) return true;
+  }
+  if (!reference) return false;
+  const byRef = await db.from("split_bill_slips").select("id").eq("reference", reference).limit(1);
+  if (byRef.error) fail("check slip reference", byRef.error);
+  return (byRef.data ?? []).length > 0;
+}
+
+/** The shares this person has not paid yet, on bills in this group that are collecting. */
+export async function openSharesOf(
+  db: SupabaseClient,
+  groupId: string,
+  lineUserId: string,
+): Promise<OpenShare[]> {
+  const mine = await db
+    .from("split_bill_members")
+    .select("bill_id,share_satang")
+    .eq("line_user_id", lineUserId)
+    .eq("paid", false)
+    .not("share_satang", "is", null);
+  if (mine.error) fail("load open shares", mine.error);
+  const shares = new Map(
+    ((mine.data ?? []) as { bill_id: string; share_satang: number | string }[]).map((r) => [
+      r.bill_id,
+      Number(r.share_satang),
+    ]),
+  );
+  if (shares.size === 0) return [];
+  const { data, error } = await db
+    .from("split_bills")
+    .select(BILL_COLUMNS)
+    .eq("group_id", groupId)
+    .eq("status", "collecting")
+    .in("id", [...shares.keys()]);
+  if (error) fail("load open share bills", error);
+  return ((data ?? []) as BillDb[]).map((r) => ({
+    bill: toBill(r),
+    shareSatang: shares.get(r.id) ?? 0,
+  }));
 }

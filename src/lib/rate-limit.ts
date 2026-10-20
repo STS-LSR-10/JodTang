@@ -20,6 +20,8 @@ export const LIMITS = {
   chat: { limit: 30, windowSeconds: 60 },
   /** Chat images per user: each one can trigger paid OCR calls. */
   chatImage: { limit: 10, windowSeconds: 60 },
+  /** Pictures sent into a group by someone who owes on a bill: each can be a paid slip reading. */
+  groupSlip: { limit: 10, windowSeconds: 3600 },
   /** Voice messages per user: each one is a paid transcription call. */
   chatVoice: { limit: 5, windowSeconds: 60 },
   /** ... and a daily ceiling so one account cannot run up the AI bill. */

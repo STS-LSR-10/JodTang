@@ -2531,3 +2531,167 @@ describe("split bills (0035)", () => {
     expect(left.n).toBe(0);
   });
 });
+
+describe("split bills round 2: claim, slips, unpay (0036)", () => {
+  async function collecting(amount = 90_000) {
+    const owner = await newUser(db, `sb2-${Math.random()}`);
+    const group = (
+      await one<{ id: string }>(
+        db,
+        "insert into bot_groups (line_group_id, owner_user_id) values ($1,$2) returning id",
+        [`C${Math.random().toString(16).slice(2)}`, owner],
+      )
+    ).id;
+    const bill = (
+      await one<{ id: string }>(
+        db,
+        "insert into split_bills (group_id, payer_line_user_id, title, amount_satang) values ($1,'Uanna','หมูกระทะ',$2) returning id",
+        [group, amount],
+      )
+    ).id;
+    for (const u of ["Uanna", "Ubob", "Uchom"])
+      await db.query("select split_bill_join($1,$2)", [bill, u]);
+    const each = amount / 3;
+    await db.query("select split_bill_close($1,$2::jsonb)", [
+      bill,
+      JSON.stringify([
+        { user: "Uanna", share: each },
+        { user: "Ubob", share: each },
+        { user: "Uchom", share: each },
+      ]),
+    ]);
+    // "@T" in a call stands for a tag that is unique to this test (the database is shared between tests,
+    // and a slip can be used once, ever)
+    const tag = Math.random().toString(16).slice(2);
+    const call = async (sql: string, ...args: unknown[]) =>
+      (await one<{ r: string }>(db, `select ${sql.replaceAll("@T", tag)} as r`, args)).r;
+    const member = (user: string) =>
+      one<{ paid: boolean; claimed_at: string | null; paid_via: string | null }>(
+        db,
+        "select paid, claimed_at::text, paid_via from split_bill_members where bill_id = $1 and line_user_id = $2",
+        [bill, user],
+      );
+    const status = async () =>
+      (await one<{ s: string }>(db, "select status as s from split_bills where id = $1", [bill])).s;
+    return { bill, call, member, status, group };
+  }
+
+  it("the payer's own share is 'paid by the payer' from the start", async () => {
+    const { member } = await collecting();
+    expect(await member("Uanna")).toMatchObject({ paid: true, paid_via: "payer" });
+    expect(await member("Ubob")).toMatchObject({ paid: false, paid_via: null });
+  });
+
+  it("claim: ok once, then 'already'; not for strangers; and the payer's tick clears it", async () => {
+    const { bill, call, member } = await collecting();
+    expect(await call("split_bill_claim($1,'Ubob')", bill)).toBe("ok");
+    expect(await call("split_bill_claim($1,'Ubob')", bill)).toBe("already");
+    expect(await call("split_bill_claim($1,'Unobody')", bill)).toBe("none");
+    expect((await member("Ubob")).claimed_at).not.toBeNull();
+    expect(await call("split_bill_mark_paid($1,'Ubob')", bill)).toBe("ok");
+    expect(await member("Ubob")).toMatchObject({ paid: true, claimed_at: null, paid_via: "payer" });
+    expect(await call("split_bill_claim($1,'Ubob')", bill)).toBe("already"); // already paid
+  });
+
+  it("claim does nothing before the list is closed", async () => {
+    const owner = await newUser(db, `sb2-${Math.random()}`);
+    const group = (
+      await one<{ id: string }>(
+        db,
+        "insert into bot_groups (line_group_id, owner_user_id) values ($1,$2) returning id",
+        [`C${Math.random().toString(16).slice(2)}`, owner],
+      )
+    ).id;
+    const bill = (
+      await one<{ id: string }>(
+        db,
+        "insert into split_bills (group_id, payer_line_user_id, title, amount_satang) values ($1,'Uanna','x',100) returning id",
+        [group],
+      )
+    ).id;
+    await db.query("select split_bill_join($1,'Ubob')", [bill]);
+    expect(
+      (await one<{ r: string }>(db, "select split_bill_claim($1,'Ubob') as r", [bill])).r,
+    ).toBe("none");
+  });
+
+  it("pay by slip: marks the share paid, clears the claim, records the slip, and a settled bill follows", async () => {
+    const { bill, call, member, status } = await collecting();
+    await call("split_bill_claim($1,'Ubob')", bill);
+    expect(
+      await call("split_bill_pay_by_slip($1,'Ubob','sha-@T-1','REF@T1',30000,true)", bill),
+    ).toBe("ok");
+    expect(await member("Ubob")).toMatchObject({ paid: true, claimed_at: null, paid_via: "slip" });
+    expect(
+      await call("split_bill_pay_by_slip($1,'Ubob','sha-@T-9','REF@T9',30000,true)", bill),
+    ).toBe("already");
+    expect(await status()).toBe("collecting");
+    expect(
+      await call("split_bill_pay_by_slip($1,'Uchom','sha-@T-2','REF@T2',30000,false)", bill),
+    ).toBe("ok");
+    expect(await member("Uchom")).toMatchObject({ paid: true, paid_via: "slip_unverified" });
+    expect(await status()).toBe("settled");
+  });
+
+  it("one slip pays one share, ever: the same picture or the same reference is a duplicate", async () => {
+    const { bill, call, member } = await collecting();
+    expect(
+      await call("split_bill_pay_by_slip($1,'Ubob','sha-@T-1','REF@T1',30000,true)", bill),
+    ).toBe("ok");
+    expect(
+      await call("split_bill_pay_by_slip($1,'Uchom','sha-@T-1','REF@T2',30000,true)", bill),
+    ).toBe("duplicate");
+    expect(
+      await call("split_bill_pay_by_slip($1,'Uchom','sha-@T-3','REF@T1',30000,true)", bill),
+    ).toBe("duplicate");
+    expect((await member("Uchom")).paid).toBe(false); // the failed attempts left nothing behind
+    expect(
+      await call("split_bill_pay_by_slip($1,'Uchom','sha-@T-3','REF@T3',30000,true)", bill),
+    ).toBe("ok");
+  });
+
+  it("a slip with no reference number still works, and two without one do not clash", async () => {
+    const { bill } = await collecting();
+    for (const u of ["Ubob", "Uchom"]) {
+      const r = await one<{ r: string }>(
+        db,
+        "select split_bill_pay_by_slip($1,$2,$3,null,30000,true) as r",
+        [bill, u, `sha-${bill}-${u}`],
+      );
+      expect(r.r).toBe("ok");
+    }
+  });
+
+  it("slips cannot pay a share on a bill that is not collecting", async () => {
+    const { bill, call } = await collecting();
+    await db.query("update split_bills set status = 'cancelled' where id = $1", [bill]);
+    expect(
+      await call("split_bill_pay_by_slip($1,'Ubob','sha-@T-1','REF@T1',30000,true)", bill),
+    ).toBe("none");
+  });
+
+  it("unpay: the payer takes a tick back; never their own share; a settled bill goes back to collecting", async () => {
+    const { bill, call, member, status } = await collecting();
+    await call("split_bill_mark_paid($1,'Ubob')", bill);
+    await call("split_bill_mark_paid($1,'Uchom')", bill);
+    expect(await status()).toBe("settled");
+    expect(await call("split_bill_unpay($1,'Uchom')", bill)).toBe("ok");
+    expect(await member("Uchom")).toMatchObject({ paid: false, paid_via: null });
+    expect(await status()).toBe("collecting");
+    expect(await call("split_bill_unpay($1,'Uchom')", bill)).toBe("none"); // not paid any more
+    expect(await call("split_bill_unpay($1,'Uanna')", bill)).toBe("none"); // the payer's own share
+    expect((await member("Uanna")).paid).toBe(true);
+  });
+
+  it("deleting the group takes the slips with it", async () => {
+    const { bill, call, group } = await collecting();
+    await call("split_bill_pay_by_slip($1,'Ubob','sha-@T-1','REF@T1',30000,true)", bill);
+    await db.query("delete from bot_groups where id = $1", [group]);
+    const n = await one<{ n: number }>(
+      db,
+      "select count(*)::int as n from split_bill_slips where bill_id = $1",
+      [bill],
+    );
+    expect(n.n).toBe(0);
+  });
+});

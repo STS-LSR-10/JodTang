@@ -52,6 +52,7 @@ import {
   splitAmount,
 } from "@/lib/trip";
 import { BILL_POSTBACKS, handleBillPostback, runBillCommand } from "./split-bill-handlers";
+import { checkGroupSlip } from "./split-bill-slip";
 import type { HandlerDeps, LineEvent } from "./handlers";
 import {
   GROUP_ALREADY_OPEN_TEXT,
@@ -116,6 +117,11 @@ export async function handleGroupEvent(event: LineEvent, deps: HandlerDeps): Pro
       await handleGroupPostback(event, groupId, deps, reply);
       return;
     case "message": {
+      // a picture: a slip from someone who owes on a bill (anyone else's picture gets no answer)
+      if (event.message?.type === "image" && event.message.id) {
+        await handleGroupImage(event, groupId, event.message.id, deps, reply);
+        return;
+      }
       if (event.message?.type !== "text" || event.message.text === undefined) return;
       const command = parseGroupCommand(event.message.text);
       if (!command) return; // ordinary chat: stay quiet
@@ -132,6 +138,35 @@ export async function handleGroupEvent(event: LineEvent, deps: HandlerDeps): Pro
 }
 
 type Reply = (messages: LineMessage[]) => Promise<void>;
+
+/** A picture in a group: only looked at when the sender still owes on a bill of this ledger. */
+async function handleGroupImage(
+  event: LineEvent,
+  groupId: string,
+  messageId: string,
+  deps: HandlerDeps,
+  reply: Reply,
+): Promise<void> {
+  const userId = event.source?.userId;
+  if (!userId || !deps.slip) return;
+  const group = await getGroup(deps.db, groupId);
+  if (!group || !group.isActive) return;
+  const { owner, writable } = await ownerState(deps.db, group, deps.now());
+  await checkGroupSlip(
+    {
+      db: deps.db,
+      group,
+      userId,
+      writable,
+      isOwner: owner !== null && owner.lineUserId === userId,
+      knownName: (id) => knownName(deps.db, group, id, deps),
+      appUrl: appBaseUrl(),
+      reply,
+    },
+    deps,
+    messageId,
+  );
+}
 
 /** Is the ledger usable for writing: its owner still on Ultimate? */
 async function ownerState(db: SupabaseClient, group: GroupRow, now: Date) {
@@ -243,6 +278,8 @@ async function runGroupCommand(
     case "bill-close":
     case "bill-cancel":
     case "bill-paid":
+    case "bill-unpaid":
+    case "bill-claim":
       return runBillCommand(command, {
         db,
         group,

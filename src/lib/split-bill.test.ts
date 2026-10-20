@@ -1,6 +1,15 @@
 import { describe, expect, it } from "vitest";
 import { parseGroupCommand } from "./group";
-import { billShares, parseBillCommand, totalOwed, unpaid } from "./split-bill";
+import {
+  billShares,
+  evaluateSlip,
+  parseBillCommand,
+  receiverLast4s,
+  totalOwed,
+  unpaid,
+  type BillRow,
+  type OpenShare,
+} from "./split-bill";
 
 describe("parseBillCommand", () => {
   it("title then amount", () => {
@@ -56,6 +65,13 @@ describe("parseBillCommand", () => {
       kind: "bill-paid",
       names: ["แอน", "บ๊อบ"],
     });
+  });
+
+  it("โอนแล้ว and ยังไม่ได้รับ", () => {
+    expect(parseBillCommand("โอนแล้ว")).toEqual({ kind: "bill-claim" });
+    expect(parseBillCommand("ยังไม่ได้รับ แอน")).toEqual({ kind: "bill-unpaid", names: ["แอน"] });
+    expect(parseBillCommand("โอนแล้วนะ")).toBeNull();
+    expect(parseBillCommand("ยังไม่ได้รับ")).toBeNull();
   });
 
   it("ordinary chat is not a command", () => {
@@ -119,5 +135,148 @@ describe("who still owes", () => {
     expect(unpaid(members, "Uanna").map((x) => x.lineUserId)).toEqual(["Ubob", "Udan"]);
     expect(totalOwed(members, "Uanna")).toBe(550);
     expect(totalOwed([m("Uanna", 300, false)], "Uanna")).toBe(0); // the payer never owes themself
+  });
+});
+
+describe("evaluateSlip", () => {
+  const bill = (id: string, createdAt: string, payer = "Uanna"): BillRow => ({
+    id,
+    groupId: "g",
+    payerLineUserId: payer,
+    title: id,
+    amountSatang: 90_000,
+    status: "collecting",
+    createdAt,
+  });
+  const open = (
+    id: string,
+    share: number,
+    createdAt = "2026-10-18T05:00:00Z",
+    payer = "Uanna",
+  ): OpenShare => ({
+    bill: bill(id, createdAt, payer),
+    shareSatang: share,
+  });
+  const payee = { promptpayId: "0812345678", bankAccount: "123-4-56789-0" };
+  const base = {
+    amountSatang: 30_000,
+    paidAt: new Date("2026-10-18T05:05:00Z"),
+    receiverLast4: "5678",
+    payeeOf: () => payee,
+  };
+
+  it("nothing owed, nothing to decide", () => {
+    expect(evaluateSlip({ ...base, open: [] })).toBeNull();
+  });
+
+  it("pays a share when the slip covers it and goes to the payer's PromptPay or bank account", () => {
+    const v = evaluateSlip({ ...base, open: [open("b1", 30_000)] });
+    expect(v).toMatchObject({ kind: "paid", receiver: "verified", overSatang: 0 });
+    // the bank account's last four digits count too
+    expect(
+      evaluateSlip({ ...base, receiverLast4: "7890", open: [open("b1", 30_000)] }),
+    ).toMatchObject({
+      kind: "paid",
+      receiver: "verified",
+    });
+  });
+
+  it("more than the share is fine and the extra is reported", () => {
+    expect(
+      evaluateSlip({ ...base, amountSatang: 35_050, open: [open("b1", 30_000)] }),
+    ).toMatchObject({
+      kind: "paid",
+      overSatang: 5050,
+    });
+  });
+
+  it("less than every open share is 'too little', with the smallest share to compare", () => {
+    expect(
+      evaluateSlip({
+        ...base,
+        amountSatang: 20_000,
+        open: [open("b1", 30_000), open("b2", 25_000)],
+      }),
+    ).toEqual({
+      kind: "too_little",
+      amountSatang: 20_000,
+      smallestShareSatang: 25_000,
+    });
+  });
+
+  it("with two open shares it takes the biggest the slip covers (the older bill when equal)", () => {
+    const v = evaluateSlip({
+      ...base,
+      amountSatang: 30_000,
+      open: [
+        open("small", 10_000),
+        open("big", 30_000, "2026-10-18T05:00:00Z"),
+        open("tooBig", 40_000),
+      ],
+    });
+    expect(v).toMatchObject({ kind: "paid", share: { bill: { id: "big" } } });
+    const tie = evaluateSlip({
+      ...base,
+      open: [
+        open("newer", 30_000, "2026-10-18T06:00:00Z"),
+        open("older", 30_000, "2026-10-18T05:00:00Z"),
+      ],
+    });
+    expect(tie).toMatchObject({ share: { bill: { id: "older" } } });
+  });
+
+  it("a receiver that is not the payer's is refused", () => {
+    expect(
+      evaluateSlip({ ...base, receiverLast4: "0000", open: [open("b1", 30_000)] }),
+    ).toMatchObject({
+      kind: "receiver_mismatch",
+    });
+  });
+
+  it("a receiver the slip does not show, or a payer with nothing set, is accepted as unverified", () => {
+    expect(
+      evaluateSlip({ ...base, receiverLast4: null, open: [open("b1", 30_000)] }),
+    ).toMatchObject({
+      kind: "paid",
+      receiver: "unverified",
+    });
+    expect(
+      evaluateSlip({ ...base, payeeOf: () => null, open: [open("b1", 30_000)] }),
+    ).toMatchObject({
+      kind: "paid",
+      receiver: "unverified",
+    });
+  });
+
+  it("each bill is checked against its own payer's account", () => {
+    const v = evaluateSlip({
+      ...base,
+      open: [open("b1", 30_000, "2026-10-18T05:00:00Z", "Ubob")],
+      payeeOf: (payer) =>
+        payer === "Ubob" ? { promptpayId: "0899990000", bankAccount: null } : payee,
+    });
+    expect(v?.kind).toBe("receiver_mismatch"); // 5678 is Anna's, not Bob's
+  });
+
+  it("a slip made before the bill was opened is refused, a few minutes of clock difference are not", () => {
+    const o = [open("b1", 30_000, "2026-10-18T05:00:00Z")];
+    expect(evaluateSlip({ ...base, paidAt: new Date("2026-10-18T03:00:00Z"), open: o })?.kind).toBe(
+      "before_bill",
+    );
+    expect(evaluateSlip({ ...base, paidAt: new Date("2026-10-18T04:55:00Z"), open: o })?.kind).toBe(
+      "paid",
+    );
+    expect(evaluateSlip({ ...base, paidAt: null, open: o })?.kind).toBe("paid"); // a slip with no time is judged on the rest
+  });
+});
+
+describe("receiverLast4s", () => {
+  it("the last four digits of every place the payer can be paid", () => {
+    expect(receiverLast4s({ promptpayId: "0812345678", bankAccount: "123-4-56789-0" })).toEqual([
+      "5678",
+      "7890",
+    ]);
+    expect(receiverLast4s({ promptpayId: null, bankAccount: "12" })).toEqual([]);
+    expect(receiverLast4s(null)).toEqual([]);
   });
 });

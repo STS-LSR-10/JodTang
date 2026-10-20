@@ -14,6 +14,7 @@ import { topicBubble } from "./help-flex";
 
 const PAID_BG = "#E8F8EF";
 const OWED_BG = "#FFF1E5";
+const CLAIMED_BG = "#FFF8DB";
 
 const baht = (satang: number) => `฿${formatBaht(satang)}`;
 
@@ -115,6 +116,19 @@ export function buildBillJoiningCard(input: {
   };
 }
 
+/** The line under a name on the collecting card: how this share stands. */
+function statusOf(m: BillMemberRow, payer: string): string {
+  if (m.lineUserId === payer) return "คนจ่าย";
+  if (m.paid) {
+    return m.paidVia === "slip"
+      ? "✅ จ่ายแล้ว · ตรวจสลิปแล้ว"
+      : m.paidVia === "slip_unverified"
+        ? "✅ จ่ายแล้ว · สลิป (ตรวจผู้รับไม่ได้)"
+        : "✅ จ่ายแล้ว";
+  }
+  return m.claimed ? "🕒 แจ้งโอนแล้ว รอคนจ่ายยืนยัน" : "⏳ ยังไม่จ่าย";
+}
+
 /** The bill after the list is closed: everyone's share and whether it is paid, with the pay buttons. */
 export function buildBillCollectingCard(input: {
   bill: BillRow;
@@ -128,12 +142,14 @@ export function buildBillCollectingCard(input: {
   const settled = left.length === 0;
   const tiles = members.map((m) =>
     tile(
-      m.paid ? PAID_BG : OWED_BG,
+      m.paid ? PAID_BG : m.claimed ? CLAIMED_BG : OWED_BG,
       input.nameOf(m.lineUserId),
       baht(m.shareSatang ?? 0),
-      m.lineUserId === bill.payerLineUserId ? "คนจ่าย" : m.paid ? "✅ จ่ายแล้ว" : "⏳ ยังไม่จ่าย",
+      statusOf(m, bill.payerLineUserId),
     ),
   );
+  // people who said "โอนแล้ว" come first: those are the ones the payer should look at
+  const toTick = [...left].sort((a, b) => Number(b.claimed ?? false) - Number(a.claimed ?? false));
   return {
     type: "flex",
     altText: settled
@@ -174,7 +190,8 @@ export function buildBillCollectingCard(input: {
               "primary",
               postback("💸 จ่ายส่วนของฉัน", `a=gbq&b=${bill.id}`, "จ่ายส่วนของฉัน"),
             ),
-            ...left
+            button("secondary", postback("📨 โอนแล้ว", `a=gbm&b=${bill.id}`, "โอนแล้ว")),
+            ...toTick
               .slice(0, MAX_PAID_BUTTONS)
               .map((m) =>
                 button(
@@ -189,7 +206,7 @@ export function buildBillCollectingCard(input: {
             {
               type: "text",
               text:
-                "คนจ่ายกดปุ่ม ✅ เมื่อเงินเข้า" +
+                "โอนแล้วส่งรูปสลิปเข้ากลุ่มได้เลย บอทตรวจยอดให้ · คนจ่ายกดปุ่ม ✅ เมื่อเงินเข้า" +
                 (left.length > MAX_PAID_BUTTONS ? " (คนที่เหลือพิมพ์ ได้รับแล้ว ชื่อ)" : ""),
               size: "xxs",
               color: COLOR.muted,

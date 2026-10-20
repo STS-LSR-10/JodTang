@@ -14,7 +14,10 @@ import {
   joinBill,
   latestBillBy,
   listBills,
+  claimPaid,
   markPaid,
+  openSharesOf,
+  unpay,
 } from "@/lib/split-bill-repo";
 import type { LineMessage } from "@/lib/types";
 import {
@@ -42,6 +45,7 @@ export interface BillContext {
 }
 
 const NAME_FALLBACK = "สมาชิกกลุ่ม";
+const baht = (satang: number) => `฿${formatBaht(satang)}`;
 
 export const BILL_USAGE_TEXT =
   'คนที่จ่ายก่อนพิมพ์ เช่น "หารบิล หมูกระทะ 1200" (ใส่ชื่อคนที่หารต่อท้ายได้ เช่น "หารบิล หมูกระทะ 1200 แอน บ๊อบ") เพื่อนที่ไปด้วยกดปุ่ม "ร่วมหาร" แล้วคนจ่ายกด "ปิดรายชื่อ" บอทจะหารเท่ากันให้';
@@ -68,7 +72,7 @@ async function names(db: SupabaseClient, groupId: string) {
 const mayManage = (ctx: BillContext, bill: BillRow) =>
   ctx.isOwner || (ctx.userId !== undefined && ctx.userId === bill.payerLineUserId);
 
-async function collectingCard(ctx: BillContext, bill: BillRow): Promise<LineMessage> {
+export async function collectingCardFor(ctx: BillContext, bill: BillRow): Promise<LineMessage> {
   const [members, nameOf] = await Promise.all([
     billMembers(ctx.db, bill.id),
     names(ctx.db, ctx.group.id),
@@ -96,7 +100,7 @@ async function closeFlow(ctx: BillContext, bill: BillRow): Promise<void> {
   const closed = await closeBill(ctx.db, bill.id, shares);
   if (!closed) return ctx.reply([text("บิลนี้ปิดรายชื่อไปแล้วนะ")]);
   const fresh = (await getBill(ctx.db, ctx.group.id, bill.id)) ?? bill;
-  const messages: LineMessage[] = [await collectingCard(ctx, fresh)];
+  const messages: LineMessage[] = [await collectingCardFor(ctx, fresh)];
   const payment = await getPaymentByLine(ctx.db, bill.payerLineUserId);
   if (!payment || (!payment.promptpayId && !payment.bankAccount)) {
     const payerName = (await names(ctx.db, ctx.group.id))(bill.payerLineUserId);
@@ -134,7 +138,63 @@ async function paidFlow(ctx: BillContext, bill: BillRow, targets: string[]): Pro
     );
   }
   const fresh = (await getBill(ctx.db, ctx.group.id, bill.id)) ?? bill;
-  return ctx.reply([text(lines.join("\n")), await collectingCard(ctx, fresh)]);
+  return ctx.reply([text(lines.join("\n")), await collectingCardFor(ctx, fresh)]);
+}
+
+/** "โอนแล้ว": a friend says they paid; the payer is asked to confirm. */
+async function claimFlow(ctx: BillContext, bill: BillRow): Promise<void> {
+  if (!ctx.userId) return ctx.reply([text(NO_USER_TEXT)]);
+  if (!ctx.writable) return ctx.reply([text(PAUSED_TEXT)]);
+  if (bill.status === "joining")
+    return ctx.reply([text("ยังไม่ปิดรายชื่อ รอให้คนจ่ายกด “ปิดรายชื่อ” ก่อนนะ")]);
+  const result = await claimPaid(ctx.db, bill.id, ctx.userId);
+  if (result === "none")
+    return ctx.reply([text("คุณไม่ได้อยู่ในรายชื่อหารของบิลนี้ หรือบิลนี้เก็บเสร็จแล้วนะ")]);
+  if (result === "already")
+    return ctx.reply([text("แจ้งโอนไปแล้ว หรือส่วนของคุณจ่ายเรียบร้อยแล้วนะ")]);
+  const [members, nameOf] = await Promise.all([
+    billMembers(ctx.db, bill.id),
+    names(ctx.db, ctx.group.id),
+  ]);
+  const mine = members.find((m) => m.lineUserId === ctx.userId);
+  const who = nameOf(ctx.userId);
+  return ctx.reply([
+    {
+      type: "text",
+      text: `🕒 ${who} แจ้งว่าโอนส่วนของ "${bill.title}" ${baht(mine?.shareSatang ?? 0)} แล้ว ${nameOf(bill.payerLineUserId)} ช่วยตรวจแล้วกดยืนยันด้วยนะ (หรือส่งรูปสลิปเข้ากลุ่ม บอทจะตรวจยอดให้เอง)`,
+      quickReply: {
+        items: [
+          {
+            type: "action",
+            action: {
+              type: "postback",
+              label: `✅ ได้รับจาก ${who}`.slice(0, 20),
+              data: `a=gbp&b=${bill.id}&u=${ctx.userId}`,
+              displayText: `ได้รับเงินจาก ${who}`,
+            },
+          },
+        ],
+      },
+    },
+  ]);
+}
+
+/** The payer takes a tick back. */
+async function unpayFlow(ctx: BillContext, bill: BillRow, targets: string[]): Promise<void> {
+  if (!ctx.writable) return ctx.reply([text(PAUSED_TEXT)]);
+  if (!mayManage(ctx, bill)) return ctx.reply([text(NOT_PAYER_TEXT)]);
+  const nameOf = await names(ctx.db, ctx.group.id);
+  const lines: string[] = [];
+  for (const id of targets) {
+    const result = await unpay(ctx.db, bill.id, id);
+    lines.push(
+      result === "ok"
+        ? `↩ ยกเลิกการรับเงินจาก ${nameOf(id)} แล้ว (ยังค้างอยู่)`
+        : `${nameOf(id)} ยังไม่ได้ถูกติ๊กว่าจ่าย หรือเป็นคนจ่ายบิลนี้`,
+    );
+  }
+  const fresh = (await getBill(ctx.db, ctx.group.id, bill.id)) ?? bill;
+  return ctx.reply([text(lines.join("\n")), await collectingCardFor(ctx, fresh)]);
 }
 
 /** "💸 จ่ายส่วนของฉัน": this person's QR with their own amount inside. */
@@ -275,6 +335,38 @@ export async function runBillCommand(command: BillCommand, ctx: BillContext): Pr
       return cancelFlow(ctx, bill);
     }
 
+    case "bill-claim": {
+      if (!userId) return ctx.reply([text(NO_USER_TEXT)]);
+      const open = await openSharesOf(db, group.id, userId);
+      if (open.length === 0) return ctx.reply([text("ตอนนี้คุณไม่มียอดค้างในกลุ่มนี้นะ")]);
+      if (open.length > 1) {
+        return ctx.reply([
+          text("คุณมียอดค้างหลายบิล กดปุ่ม “📨 โอนแล้ว” ที่การ์ดของบิลที่โอนไปนะ"),
+        ]);
+      }
+      return claimFlow(ctx, (open[0] as { bill: BillRow }).bill);
+    }
+
+    case "bill-unpaid": {
+      if (!userId) return ctx.reply([text(NO_USER_TEXT)]);
+      const bill = await latestBillBy(db, group.id, userId, ["collecting", "settled"]);
+      if (!bill) return ctx.reply([text("ไม่เจอบิลของคุณที่กำลังเก็บเงินอยู่")]);
+      const known = await memberNames(db, group.id);
+      const members = await billMembers(db, bill.id);
+      const people = members.map((m) => ({
+        id: m.lineUserId,
+        name: known.get(m.lineUserId)?.name ?? NAME_FALLBACK,
+      }));
+      const found = resolveNames(command.names, people);
+      if (!found.ok) {
+        const bad = found.unknown.length > 0 ? found.unknown : found.ambiguous;
+        return ctx.reply([
+          text(`ไม่เจอ ${bad.join(", ")} ในบิล "${bill.title}" พิมพ์ชื่อให้ตรงกับชื่อใน LINE นะ`),
+        ]);
+      }
+      return unpayFlow(ctx, bill, found.ids);
+    }
+
     case "bill-paid": {
       if (!userId) return ctx.reply([text(NO_USER_TEXT)]);
       const bill = await latestBillBy(db, group.id, userId, ["collecting"]);
@@ -324,6 +416,12 @@ export async function handleBillPostback(
       return cancelFlow(ctx, bill);
     case "gbq":
       return qrFlow(ctx, bill);
+    case "gbm":
+      return claimFlow(ctx, bill);
+    case "gbu": {
+      const target = params.get("u") ?? "";
+      return unpayFlow(ctx, bill, target ? [target] : []);
+    }
     case "gbp": {
       const target = params.get("u") ?? "";
       return paidFlow(ctx, bill, target ? [target] : []);
@@ -333,4 +431,4 @@ export async function handleBillPostback(
   }
 }
 
-export const BILL_POSTBACKS = new Set(["gbj", "gbc", "gbx", "gbq", "gbp"]);
+export const BILL_POSTBACKS = new Set(["gbj", "gbc", "gbx", "gbq", "gbp", "gbm", "gbu"]);
