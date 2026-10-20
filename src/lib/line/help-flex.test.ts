@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { parseCommand } from "@/lib/commands";
+import { parseGroupCommand } from "@/lib/group";
 import { applyTheme } from "@/lib/personalize";
 import {
   buildGroupHelpCard,
+  buildGroupWelcomeCard,
   buildHelpPrompt,
   buildHelpTopicCard,
   buildWelcomeCard,
@@ -174,5 +176,29 @@ describe("welcome and group cards", () => {
     expect(card).toContain("จด ข้าวเที่ยง 350");
     expect(card).toContain("ปิดสมุดกลุ่ม");
     expect(card).not.toContain('"type":"message"');
+  });
+});
+
+describe("group welcome card", () => {
+  it("says who it is for, three steps, and has the two buttons that type the commands", () => {
+    const card = json(buildGroupWelcomeCard({ appUrl: "https://x.test" }));
+    expect(card).toContain("ครอบครัว");
+    expect(card).toContain("เริ่มใช้ใน 3 ขั้น");
+    expect(card).toContain('"label":"📒 เปิดสมุดกลุ่ม","text":"เปิดสมุดกลุ่ม"');
+    expect(card).toContain('"label":"📖 วิธีใช้","text":"วิธีใช้งาน"');
+    expect(card).toContain("https://x.test/logo.png");
+    expect(card).toContain("Ultimate"); // the opener must be Ultimate; the rest are free
+    expect(card.length).toBeLessThan(50_000);
+  });
+
+  it("works without a public address (no logo, nothing undefined)", () => {
+    const card = json(buildGroupWelcomeCard({}));
+    expect(card).not.toContain("logo.png");
+    expect(card).not.toContain("undefined");
+  });
+
+  it("the typed commands are ones the group understands", () => {
+    expect(parseGroupCommand("เปิดสมุดกลุ่ม")?.kind).toBeDefined();
+    expect(parseGroupCommand("วิธีใช้งาน")?.kind).toBe("help");
   });
 });

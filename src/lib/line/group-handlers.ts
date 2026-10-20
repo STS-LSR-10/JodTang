@@ -39,7 +39,7 @@ import { parseMessage } from "@/lib/parse/text-parser";
 import { can, effectivePlan } from "@/lib/plan";
 import { LIMITS } from "@/lib/rate-limit";
 import { ensureUser } from "@/lib/repo";
-import { buildGroupHelpCard } from "./help-flex";
+import { buildGroupHelpCard, buildGroupWelcomeCard } from "./help-flex";
 import { formatThaiDate } from "@/lib/thai-date";
 import type { LineMessage } from "@/lib/types";
 import { buildGroupSummaryCard, buildTripSummaryCard } from "./group-flex";
@@ -82,7 +82,6 @@ import {
   groupSplitUnknownText,
   groupTripJoinedText,
   groupTripStartedText,
-  GROUP_WELCOME_TEXT,
   text,
 } from "./messages";
 
@@ -102,7 +101,9 @@ export async function handleGroupEvent(event: LineEvent, deps: HandlerDeps): Pro
 
   switch (event.type) {
     case "join":
-      await reply([text(GROUP_WELCOME_TEXT)]);
+      await reply([
+        buildGroupWelcomeCard({ appUrl: process.env.APP_BASE_URL?.replace(/\/$/, "") }),
+      ]);
       return;
     case "leave":
       await closeGroup(deps.db, groupId);

@@ -694,3 +694,173 @@ export function buildGroupHelpCard(): LineMessage {
     },
   };
 }
+
+/**
+ * What the group sees when the bot is added: who it is for, three steps to start, and two buttons that
+ * type the command for whoever taps them ("เปิดสมุดกลุ่ม" needs an Ultimate member, anyone else is told
+ * so by the bot). Groups have no single person's theme, so it keeps the default colours.
+ */
+export function buildGroupWelcomeCard(input: { appUrl?: string }): LineMessage {
+  const pill = (icon: string, label: string, bg: string) => ({
+    type: "box",
+    layout: "horizontal",
+    spacing: "sm",
+    alignItems: "center",
+    margin: "sm",
+    paddingAll: "8px",
+    cornerRadius: "12px",
+    backgroundColor: bg,
+    contents: [
+      { type: "text", text: icon, size: "lg", flex: 0, color: "#000000" },
+      {
+        type: "text",
+        text: label,
+        size: "sm",
+        weight: "bold",
+        color: "#14352E",
+        flex: 1,
+        wrap: true,
+      },
+    ],
+  });
+  const step = (n: string, text: string, hint?: string) => ({
+    type: "box",
+    layout: "horizontal",
+    spacing: "md",
+    margin: "md",
+    contents: [
+      {
+        type: "box",
+        layout: "vertical",
+        width: "24px",
+        height: "24px",
+        cornerRadius: "12px",
+        backgroundColor: COLOR.primary,
+        justifyContent: "center",
+        alignItems: "center",
+        flex: 0,
+        contents: [
+          { type: "text", text: n, size: "xs", weight: "bold", color: "#FFFFFF", align: "center" },
+        ],
+      },
+      {
+        type: "box",
+        layout: "vertical",
+        spacing: "xs",
+        flex: 1,
+        contents: [
+          { type: "text", text, size: "sm", weight: "bold", color: "#14352E", wrap: true },
+          ...(hint
+            ? [{ type: "text", text: hint, size: "xs", color: COLOR.muted, wrap: true }]
+            : []),
+        ],
+      },
+    ],
+  });
+  const logo =
+    input.appUrl?.startsWith("https://") === true
+      ? [
+          {
+            type: "image",
+            url: `${input.appUrl}/logo.png`,
+            size: "48px",
+            aspectMode: "fit",
+            flex: 0,
+          },
+        ]
+      : [];
+  return {
+    type: "flex",
+    altText: 'จดตังค์มาแล้ว! ช่วยกันจดรายจ่ายในกลุ่ม พิมพ์ "เปิดสมุดกลุ่ม" เพื่อเริ่ม',
+    contents: {
+      type: "bubble",
+      size: "mega",
+      header: {
+        type: "box",
+        layout: "horizontal",
+        backgroundColor: COLOR.primarySoft,
+        paddingAll: "16px",
+        spacing: "md",
+        alignItems: "center",
+        contents: [
+          ...logo,
+          {
+            type: "box",
+            layout: "vertical",
+            spacing: "xs",
+            flex: 1,
+            contents: [
+              {
+                type: "text",
+                text: "จดตังค์ มาช่วยจดแล้ว 👋",
+                weight: "bold",
+                size: "lg",
+                color: "#0B5D4F",
+                wrap: true,
+              },
+              {
+                type: "text",
+                text: "ช่วยกันจดรายจ่ายของกลุ่ม ดูว่าใครจ่ายไปเท่าไร",
+                size: "xs",
+                color: "#3F6B63",
+                wrap: true,
+              },
+            ],
+          },
+        ],
+      },
+      body: {
+        type: "box",
+        layout: "vertical",
+        paddingAll: "16px",
+        contents: [
+          { type: "text", text: "เหมาะกับ", size: "xs", weight: "bold", color: COLOR.muted },
+          pill("👨‍👩‍👧", "ครอบครัว · คู่รัก", "#FDECEF"),
+          pill("✈️", "กลุ่มเพื่อนไปเที่ยว (หารค่าทริปได้)", "#E8F1FD"),
+          pill("🏠", "เพื่อนร่วมบ้าน · ร่วมห้อง", "#E8F8EF"),
+          { type: "separator", margin: "lg" },
+          {
+            type: "text",
+            text: "เริ่มใช้ใน 3 ขั้น",
+            size: "xs",
+            weight: "bold",
+            color: COLOR.muted,
+            margin: "lg",
+          },
+          step(
+            "1",
+            "กดปุ่ม “เปิดสมุดกลุ่ม”",
+            "ผู้เปิดสมุดต้องเป็น Ultimate (ทดลองฟรี 7 วันได้) เพื่อน ๆ จดได้ฟรี",
+          ),
+          step(
+            "2",
+            "จดรายจ่าย พิมพ์ จด ข้าวเที่ยง 350",
+            "ต้องขึ้นต้นด้วย “จด” ข้อความคุยทั่วไปบอทไม่จด",
+          ),
+          step("3", "พิมพ์ สรุป", "ดูยอดรวมและใครจ่ายไปเท่าไร"),
+        ],
+      },
+      footer: {
+        type: "box",
+        layout: "vertical",
+        paddingAll: "12px",
+        spacing: "sm",
+        contents: [
+          {
+            type: "button",
+            style: "primary",
+            height: "sm",
+            color: COLOR.primary,
+            action: { type: "message", label: "📒 เปิดสมุดกลุ่ม", text: "เปิดสมุดกลุ่ม" },
+          },
+          {
+            type: "button",
+            style: "secondary",
+            height: "sm",
+            action: { type: "message", label: "📖 วิธีใช้", text: "วิธีใช้งาน" },
+          },
+        ],
+      },
+    },
+  };
+}

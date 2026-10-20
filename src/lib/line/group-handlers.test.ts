@@ -204,7 +204,12 @@ describe("the bot joining and leaving", () => {
       { type: "join", replyToken: "rt", source: { type: "group", groupId: GID } },
       deps,
     );
-    expect(said(reply)).toContain("เปิดสมุดกลุ่ม");
+    const card = said(reply);
+    expect(card).toContain('"type":"flex"');
+    // two buttons: open the ledger, and how to use it (each types the command for the person who taps)
+    expect(card).toContain('"label":"📒 เปิดสมุดกลุ่ม","text":"เปิดสมุดกลุ่ม"');
+    expect(card).toContain('"label":"📖 วิธีใช้","text":"วิธีใช้งาน"');
+    expect(card).toContain("Ultimate");
 
     ({ deps, reply } = setup());
     await handleEvent({ type: "leave", source: { type: "group", groupId: GID } }, deps);
