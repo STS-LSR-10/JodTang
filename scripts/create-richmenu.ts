@@ -124,8 +124,8 @@ async function main() {
       case "compose":
         return compose;
       case "help":
-        // sends "ช่วยเหลือ" as the user's message; the bot answers with the usage guide
-        return { type: "message", label, text: "ช่วยเหลือ" };
+        // sends "วิธีใช้งาน" as the user's message; the bot asks what they want to know (topic chips)
+        return { type: "message", label, text: "วิธีใช้งาน" };
       case "invite":
         // share text + LIFF link (Bot link "aggressive" prompts non-friends to add the account)
         return {

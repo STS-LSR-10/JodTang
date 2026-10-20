@@ -3,13 +3,14 @@ import { parseCommand } from "@/lib/commands";
 import { applyTheme } from "@/lib/personalize";
 import {
   buildGroupHelpCard,
-  buildHelpCarousel,
+  buildHelpPrompt,
+  buildHelpTopicCard,
   buildWelcomeCard,
-  HELP_SECTIONS,
+  HELP_TOPICS,
+  isHelpTopic,
 } from "./help-flex";
 
 const json = (m: unknown) => JSON.stringify(m);
-const bubbles = (m: unknown) => (m as { contents: { contents: unknown[] } }).contents.contents;
 
 /** Commands that only show something: safe to run from a button. */
 const READ_ONLY = new Set([
@@ -29,26 +30,44 @@ const READ_ONLY = new Set([
   "goals",
 ]);
 
-describe("help carousel", () => {
-  it("has a card per kind of thing, within LINE's limit, plus the shortcuts", () => {
-    const card = buildHelpCarousel({ plan: "free", appUrl: "https://x.test" });
-    expect(card.type).toBe("flex");
-    expect((card.contents as { type: string }).type).toBe("carousel");
-    expect(bubbles(card)).toHaveLength(HELP_SECTIONS.length + 1);
-    expect(bubbles(card).length).toBeLessThanOrEqual(12);
-    expect(json(card).length).toBeLessThan(50_000); // LINE's flex message size limit
+describe("help topics", () => {
+  const all = HELP_TOPICS.flatMap((t) => t.items.map((item) => ({ topic: t, item })));
+
+  it("fit LINE: chips within the limits, cards short enough for a phone", () => {
+    const prompt = buildHelpPrompt() as unknown as {
+      quickReply: { items: { action: { label: string } }[] };
+    };
+    const labels = prompt.quickReply.items.map((i) => i.action.label);
+    expect(labels).toHaveLength(HELP_TOPICS.length);
+    expect(labels.length).toBeLessThanOrEqual(13);
+    for (const label of labels) expect(label.length, label).toBeLessThanOrEqual(20);
+    expect(new Set(HELP_TOPICS.map((t) => t.id)).size).toBe(HELP_TOPICS.length);
+    for (const topic of HELP_TOPICS) {
+      expect(topic.items.length, topic.id).toBeLessThanOrEqual(6);
+      for (const item of topic.items) {
+        expect(item.cmd.length, item.cmd).toBeLessThanOrEqual(40);
+        expect(item.desc.length, item.desc).toBeGreaterThan(3);
+        expect(item.icon.length).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  it("every topic card has the chips under it, so they stay on screen", () => {
+    for (const topic of HELP_TOPICS) {
+      const card = buildHelpTopicCard({ topic: topic.id, plan: "free", appUrl: "https://x.test" });
+      const text = json(card.quickReply);
+      for (const t of HELP_TOPICS) expect(text).toContain(`a=help&t=${t.id}`);
+      expect(json(card).length).toBeLessThan(50_000);
+    }
   });
 
   it("every button sends a real read-only command (and never a recording or deleting one)", () => {
-    for (const section of HELP_SECTIONS) {
-      for (const item of section.items) {
-        if (!item.send) continue;
-        const command = parseCommand(item.send);
-        expect(command, `"${item.send}" is not a command`).not.toBeNull();
-        expect(READ_ONLY.has(command!.kind), `${item.send} is ${command!.kind}`).toBe(true);
-      }
+    for (const { item } of all) {
+      if (!item.send) continue;
+      const command = parseCommand(item.send);
+      expect(command, `"${item.send}" is not a command`).not.toBeNull();
+      expect(READ_ONLY.has(command!.kind), `${item.send} is ${command!.kind}`).toBe(true);
     }
-    // the examples that record, delete or edit are never buttons
     for (const cmd of [
       "กาแฟ 30",
       "ลบล่าสุด",
@@ -57,59 +76,87 @@ describe("help carousel", () => {
       "งบวัน 500",
       "ออม เที่ยวญี่ปุ่น 2000",
     ]) {
-      const item = HELP_SECTIONS.flatMap((s) => s.items).find((i) => i.cmd === cmd);
-      expect(item, cmd).toBeDefined();
-      expect(item!.send, cmd).toBeUndefined();
+      const found = all.find((x) => x.item.cmd === cmd);
+      expect(found, cmd).toBeDefined();
+      expect(found!.item.send, cmd).toBeUndefined();
     }
   });
 
   it("only what the plan has can be tapped; the rest is dimmed with its badge", () => {
     const taps = (plan: "free" | "plus" | "ultimate") =>
-      (json(buildHelpCarousel({ plan })).match(/"type":"message"/g) ?? []).length;
+      HELP_TOPICS.reduce(
+        (n, t) =>
+          n +
+          (json(buildHelpTopicCard({ topic: t.id, plan })).match(/"type":"message"/g) ?? []).length,
+        0,
+      );
     expect(taps("free")).toBeGreaterThan(0);
     expect(taps("plus")).toBeGreaterThan(taps("free"));
     expect(taps("ultimate")).toBeGreaterThan(taps("plus"));
 
-    const free = json(buildHelpCarousel({ plan: "free" }));
+    const free = json(buildHelpTopicCard({ topic: "record", plan: "free" }));
     expect(free).toContain("Pro");
-    expect(free).toContain("Ultimate");
-    expect(free).not.toContain("Pro ✓"); // Free has no Pro things to tick
-    expect(json(buildHelpCarousel({ plan: "plus" }))).toContain("Pro ✓");
-    expect(json(buildHelpCarousel({ plan: "ultimate" }))).toContain("Ultimate ✓");
+    expect(free).not.toContain("Pro ✓");
+    expect(json(buildHelpTopicCard({ topic: "record", plan: "plus" }))).toContain("Pro ✓");
+    expect(json(buildHelpTopicCard({ topic: "debt", plan: "ultimate" }))).toContain("Ultimate ✓");
   });
 
   it("a Free user cannot tap a Professional command (it would only bounce)", () => {
-    const free = json(buildHelpCarousel({ plan: "free" }));
     const sends = (j: string, text: string) =>
       j.includes(`"type":"message","label":"${text}","text":"${text}"`);
-    expect(sends(free, "สรุปปี")).toBe(false);
-    expect(sends(free, "สรุปวันนี้")).toBe(true);
-    expect(sends(json(buildHelpCarousel({ plan: "plus" })), "สรุปปี")).toBe(true);
+    const freeSummary = json(buildHelpTopicCard({ topic: "summary", plan: "free" }));
+    expect(sends(freeSummary, "สรุปปี")).toBe(false);
+    expect(sends(freeSummary, "สรุปวันนี้")).toBe(true);
+    expect(sends(json(buildHelpTopicCard({ topic: "summary", plan: "plus" })), "สรุปปี")).toBe(
+      true,
+    );
   });
 
-  it("the shortcuts open the app pages, or say where to find the menu when the URL is unknown", () => {
-    expect(json(buildHelpCarousel({ plan: "free", appUrl: "https://x.test" }))).toContain(
-      "https://x.test/upgrade",
-    );
-    const none = json(buildHelpCarousel({ plan: "free" }));
+  it("the shortcuts card opens the app pages, or says where the menu is when the URL is unknown", () => {
+    expect(
+      json(buildHelpTopicCard({ topic: "shortcuts", plan: "free", appUrl: "https://x.test" })),
+    ).toContain("https://x.test/upgrade");
+    const none = json(buildHelpTopicCard({ topic: "shortcuts", plan: "free" }));
     expect(none).not.toContain("undefined");
     expect(none).toContain("เมนูด้านล่าง");
   });
 
-  it("every example is short enough to fit a phone card and has a description", () => {
-    for (const section of HELP_SECTIONS) {
-      expect(section.items.length).toBeLessThanOrEqual(10);
-      for (const item of section.items) {
-        expect(item.cmd.length, item.cmd).toBeLessThanOrEqual(40);
-        expect(item.desc.length, item.desc).toBeGreaterThan(3);
-      }
-    }
+  it("the logo shows only with a public https address", () => {
+    expect(
+      json(buildHelpTopicCard({ topic: "record", plan: "free", appUrl: "https://x.test" })),
+    ).toContain("https://x.test/logo.png");
+    expect(json(buildHelpTopicCard({ topic: "record", plan: "free" }))).not.toContain("logo.png");
+    expect(
+      json(buildHelpTopicCard({ topic: "record", plan: "free", appUrl: "http://localhost:3000" })),
+    ).not.toContain("logo.png");
+  });
+
+  it("an unknown topic id falls back to the first topic", () => {
+    expect(isHelpTopic("record")).toBe(true);
+    expect(isHelpTopic("nope")).toBe(false);
+    expect(isHelpTopic(null)).toBe(false);
   });
 
   it("follows the person's colour theme", () => {
-    const themed = json(applyTheme([buildHelpCarousel({ plan: "plus" })], "ocean"));
+    const themed = json(
+      applyTheme([buildHelpTopicCard({ topic: "record", plan: "plus" })], "ocean"),
+    );
     expect(themed).toContain("#E0F2FE");
     expect(themed).not.toContain("#CCFBF1");
+  });
+});
+
+describe("the question", () => {
+  it("has its own wording for each manner of the bot (never the sample's)", () => {
+    const wording = (["polite", "friendly", "strict", "cheer"] as const).map(
+      (p) => (buildHelpPrompt(p) as unknown as { text: string }).text,
+    );
+    expect(new Set(wording).size).toBe(4);
+    for (const text of wording) {
+      expect(text).not.toContain("สงสัยตรงไหน");
+      expect(text).not.toContain("คะลูก");
+      expect(text.length).toBeGreaterThan(10);
+    }
   });
 });
 
@@ -117,7 +164,7 @@ describe("welcome and group cards", () => {
   it("the welcome card shows examples and a button to the full guide", () => {
     const card = json(buildWelcomeCard({ appUrl: "https://x.test" }));
     expect(card).toContain("กาแฟ 30");
-    expect(card).toContain('"text":"ช่วยเหลือ"');
+    expect(card).toContain('"text":"วิธีใช้งาน"');
     expect(card).toContain("https://x.test/summary");
     expect(json(buildWelcomeCard({}))).not.toContain("undefined");
   });

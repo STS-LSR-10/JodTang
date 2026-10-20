@@ -65,7 +65,7 @@ export function parseGroupCommand(input: string): GroupCommand | null {
   if (one === "สรุปวันนี้") return { kind: "summary", scope: "today" };
   if (["ล่าสุด", "รายการล่าสุด"].includes(one)) return { kind: "recent" };
   if (one === "ลบล่าสุด") return { kind: "delete-last" };
-  if (["ช่วยเหลือ", "วิธีใช้", "เมนู", "help"].includes(one)) return { kind: "help" };
+  if (["ช่วยเหลือ", "วิธีใช้", "วิธีใช้งาน", "เมนู", "help"].includes(one)) return { kind: "help" };
 
   const trip = parseTripCommand(text);
   if (trip) return trip;

@@ -151,7 +151,7 @@ import {
 } from "./flex";
 import { buildCategoryChooser } from "./slip-flex";
 import { startTrialFromChat, upsellReply } from "./upsell-reply";
-import { buildHelpCarousel, buildWelcomeCard } from "./help-flex";
+import { buildHelpPrompt, buildHelpTopicCard, buildWelcomeCard, isHelpTopic } from "./help-flex";
 import { notUnderstood } from "./not-understood";
 import {
   EDIT_HINT_TEXT,
@@ -1445,12 +1445,7 @@ async function runCommand(
   const { db } = deps;
   switch (command.kind) {
     case "help":
-      return [
-        buildHelpCarousel({
-          plan: effectivePlan(user.plan, user.plan_expires_at, deps.now()),
-          appUrl: appBaseUrl(),
-        }),
-      ];
+      return [buildHelpPrompt((await prefsOf(deps, user)).persona)];
 
     case "summary": {
       const now = deps.now();
@@ -1825,6 +1820,18 @@ async function handlePostback(
   const action = params.get("a");
   // Rich Menu "จดตังค์": answer with the how-to card; its button opens the keyboard (a=compose-go).
   if (action === "compose") return [buildComposeCard()];
+  // A topic chip under the help question: that topic's card (it carries the chips along, so they stay).
+  if (action === "help") {
+    const topic = params.get("t");
+    if (!isHelpTopic(topic)) return [buildHelpPrompt((await prefsOf(deps, user)).persona)];
+    return [
+      buildHelpTopicCard({
+        topic,
+        plan: effectivePlan(user.plan, user.plan_expires_at, deps.now()),
+        appUrl: appBaseUrl(),
+      }),
+    ];
+  }
   // "ทดลองใช้ฟรี 7 วัน" on an upgrade card: the same trial as on the web, started in the chat.
   if (action === "trial") {
     return startTrialFromChat(deps.db, user.id, deps.now(), formatThaiDate);

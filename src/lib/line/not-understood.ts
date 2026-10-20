@@ -10,7 +10,7 @@ export function notUnderstood(): LineMessage {
       items: [
         {
           type: "action",
-          action: { type: "message", label: "📖 ดูวิธีใช้", text: "ช่วยเหลือ" },
+          action: { type: "message", label: "📖 ดูวิธีใช้", text: "วิธีใช้งาน" },
         },
       ],
     },

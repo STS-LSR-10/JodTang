@@ -1,3 +1,4 @@
+import type { PersonaId } from "@/lib/personalize";
 import type { Plan } from "@/lib/plan";
 import type { LineMessage } from "@/lib/types";
 import { COLOR } from "./flex";
@@ -9,6 +10,8 @@ const RANK: Record<Plan, number> = { free: 0, plus: 1, ultimate: 2 };
 const NEED_RANK: Record<Need, number> = { free: 0, plus: 1, ultimate: 2 };
 
 export interface HelpItem {
+  /** An emoji for the round icon at the left of the row. */
+  icon: string;
   /** What to type, e.g. "สรุปวันนี้" or "กาแฟ 30". */
   cmd: string;
   /** One short line: what it does. */
@@ -22,108 +25,232 @@ export interface HelpItem {
   send?: string;
 }
 
-export interface HelpSection {
+export type HelpTopicId =
+  | "record"
+  | "special"
+  | "summary"
+  | "search"
+  | "wallet"
+  | "budget"
+  | "debt"
+  | "other"
+  | "shortcuts";
+
+export interface HelpTopic {
+  id: HelpTopicId;
+  /** The chip under the question (20 characters at most). */
+  chip: string;
   icon: string;
   title: string;
   subtitle: string;
+  /** A short closing line at the foot of the card. */
+  tagline: string;
+  /** At most 6: more does not fit a phone screen. */
   items: HelpItem[];
 }
 
-export const HELP_SECTIONS: HelpSection[] = [
+export const HELP_TOPICS: HelpTopic[] = [
   {
+    id: "record",
+    chip: "📝 จดรายการ",
     icon: "📝",
     title: "จดรายการ",
     subtitle: "พิมพ์ชื่อรายการ แล้วตามด้วยจำนวนเงิน",
+    tagline: "พิมพ์สั้น ๆ ก็จดเสร็จแล้ว",
     items: [
-      { cmd: "กาแฟ 30", desc: "จดรายจ่าย (ทศนิยมได้ เช่น ข้าว 50.50)", need: "free" },
-      { cmd: "เงินเดือน 20000", desc: "จดรายรับ (ใส่คอมมาได้ 20,000)", need: "free" },
-      { cmd: "+500 ขายของ", desc: "ใส่ + เป็นรายรับ · − เป็นรายจ่าย", need: "free" },
-      { cmd: "เมื่อวาน กาแฟ 45", desc: "จดย้อนหลัง · หรือ 12/10 ค่าไฟ 1200", need: "plus" },
-      { cmd: "ข้าว 50, กาแฟ 45", desc: "หลายรายการ คั่นด้วยคอมมาหรือขึ้นบรรทัดใหม่", need: "plus" },
-      { cmd: "หมูกระทะ 500 #ปาร์ตี้", desc: "ติดแท็ก # เพื่อค้นหาทีหลัง", need: "plus" },
+      { icon: "☕", cmd: "กาแฟ 30", desc: "จดรายจ่าย (ทศนิยมได้ เช่น ข้าว 50.50)", need: "free" },
+      { icon: "💰", cmd: "เงินเดือน 20000", desc: "จดรายรับ (ใส่คอมมาได้ 20,000)", need: "free" },
+      { icon: "➕", cmd: "+500 ขายของ", desc: "ใส่ + เป็นรายรับ · − เป็นรายจ่าย", need: "free" },
+      {
+        icon: "📅",
+        cmd: "เมื่อวาน กาแฟ 45",
+        desc: "จดย้อนหลัง · หรือ 12/10 ค่าไฟ 1200",
+        need: "plus",
+      },
+      {
+        icon: "🧾",
+        cmd: "ข้าว 50, กาแฟ 45",
+        desc: "หลายรายการ คั่นด้วยคอมมาหรือขึ้นบรรทัดใหม่",
+        need: "plus",
+      },
+      {
+        icon: "🏷️",
+        cmd: "หมูกระทะ 500 #ปาร์ตี้",
+        desc: "ติดแท็ก # เพื่อค้นหาทีหลัง",
+        need: "plus",
+      },
     ],
   },
   {
+    id: "special",
+    chip: "📷 จดแบบพิเศษ",
     icon: "📷",
     title: "จดแบบพิเศษ",
     subtitle: "ส่งรูป ส่งเสียง หรือเงินต่างประเทศ",
+    tagline: "ไม่ต้องพิมพ์เองก็จดได้",
     items: [
-      { cmd: "ส่งรูปสลิป", desc: "บอทอ่านยอดให้ · Free ลองฟรี 1 ใบ", need: "free" },
+      { icon: "📷", cmd: "ส่งรูปสลิป", desc: "บอทอ่านยอดให้ · Free ลองฟรี 1 ใบ", need: "free" },
       {
+        icon: "🎤",
         cmd: "ส่งข้อความเสียง",
         desc: "พูดว่า “กาแฟสามสิบบาท” · Free ลองฟรี 1 ครั้ง",
         need: "plus",
       },
-      { cmd: "กาแฟ 45 @KTC", desc: "จดลงกระเป๋าที่ต้องการ", need: "plus" },
-      { cmd: "ราเมน 1500 JPY", desc: "เงินต่างสกุล แปลงเป็นบาทให้", need: "ultimate" },
-      { cmd: "พิมพ์เป็นประโยคยาว ๆ", desc: "AI ช่วยอ่านแล้วถามยืนยันก่อนจด", need: "ultimate" },
+      { icon: "👛", cmd: "กาแฟ 45 @KTC", desc: "จดลงกระเป๋าที่ต้องการ", need: "plus" },
+      { icon: "💴", cmd: "ราเมน 1500 JPY", desc: "เงินต่างสกุล แปลงเป็นบาทให้", need: "ultimate" },
+      {
+        icon: "✨",
+        cmd: "พิมพ์เป็นประโยคยาว ๆ",
+        desc: "AI ช่วยอ่านแล้วถามยืนยันก่อนจด",
+        need: "ultimate",
+      },
     ],
   },
   {
+    id: "summary",
+    chip: "📊 สรุป",
     icon: "📊",
-    title: "สรุปและค้นหา",
-    subtitle: "กดที่คำสั่งเพื่อดูได้เลย",
+    title: "สรุป",
+    subtitle: "แตะที่แถวเพื่อดูได้เลย",
+    tagline: "รู้ทันทีว่าเงินไปไหนบ้าง",
     items: [
       {
+        icon: "☀️",
         cmd: "สรุปวันนี้",
         desc: "รายรับ รายจ่าย คงเหลือของวันนี้",
         need: "free",
         send: "สรุปวันนี้",
       },
       {
+        icon: "🗓️",
         cmd: "สรุปเดือนนี้",
         desc: "ตามรอบงบ พร้อมเทียบเดือนก่อน",
         need: "free",
         send: "สรุปเดือนนี้",
       },
-      { cmd: "สรุปหมวด", desc: "รายจ่ายแยกตามหมวด", need: "free", send: "สรุปหมวด" },
-      { cmd: "ล่าสุด", desc: "5 รายการล่าสุด", need: "free", send: "ล่าสุด" },
-      { cmd: "สรุปปี", desc: "ภาพรวมทั้งปี", need: "plus", send: "สรุปปี" },
-      { cmd: "เทียบเดือน", desc: "เทียบเดือนต่อเดือนรายหมวด", need: "plus", send: "เทียบเดือน" },
-      { cmd: "สรุป 1/10 ถึง 15/10", desc: "เลือกช่วงวันเอง", need: "plus" },
-      { cmd: "ค้นหา กาแฟ", desc: "หารายการพร้อมยอดรวม", need: "plus" },
-      { cmd: "พยากรณ์", desc: "คาดเงินปลายรอบ", need: "ultimate", send: "พยากรณ์" },
-      { cmd: "วิเคราะห์", desc: "AI วิเคราะห์การใช้จ่าย", need: "ultimate" },
+      { icon: "🥧", cmd: "สรุปหมวด", desc: "รายจ่ายแยกตามหมวด", need: "free", send: "สรุปหมวด" },
+      { icon: "🕘", cmd: "ล่าสุด", desc: "5 รายการล่าสุด", need: "free", send: "ล่าสุด" },
+      { icon: "📆", cmd: "สรุปปี", desc: "ภาพรวมทั้งปี", need: "plus", send: "สรุปปี" },
+      {
+        icon: "⚖️",
+        cmd: "เทียบเดือน",
+        desc: "เทียบเดือนต่อเดือนรายหมวด",
+        need: "plus",
+        send: "เทียบเดือน",
+      },
     ],
   },
   {
+    id: "search",
+    chip: "🔎 ค้นหา/วิเคราะห์",
+    icon: "🔎",
+    title: "ค้นหาและวิเคราะห์",
+    subtitle: "เจาะลึกการใช้จ่ายของคุณ",
+    tagline: "ให้ตัวเลขช่วยตัดสินใจ",
+    items: [
+      { icon: "🗓️", cmd: "สรุป 1/10 ถึง 15/10", desc: "เลือกช่วงวันเอง", need: "plus" },
+      { icon: "🔎", cmd: "ค้นหา กาแฟ", desc: "หารายการพร้อมยอดรวม", need: "plus" },
+      { icon: "🔮", cmd: "พยากรณ์", desc: "คาดเงินปลายรอบ", need: "ultimate", send: "พยากรณ์" },
+      { icon: "🧠", cmd: "วิเคราะห์", desc: "AI วิเคราะห์การใช้จ่าย", need: "ultimate" },
+    ],
+  },
+  {
+    id: "wallet",
+    chip: "👛 กระเป๋า/บัตร",
     icon: "👛",
     title: "กระเป๋าและบัตร",
     subtitle: "แยกเงินสด บัญชี บัตรเครดิต",
+    tagline: "แยกเงินให้เป็นระเบียบ",
     items: [
-      { cmd: "กระเป๋า", desc: "ยอดแต่ละใบและยอดรวม", need: "free", send: "กระเป๋า" },
-      { cmd: "โอน 500 เงินสด>KTC", desc: "โอนระหว่างกระเป๋า ไม่นับเป็นรายจ่าย", need: "plus" },
-      { cmd: "บัตร", desc: "วงเงิน และยอดตามรอบบิลของบัตรเครดิต", need: "plus", send: "บัตร" },
-      { cmd: "เชิญ กองกลาง", desc: "ชวนแฟนใช้กระเป๋าร่วมกัน (ได้รหัส 6 หลัก)", need: "plus" },
-      { cmd: "ร่วมกระเป๋า 123456", desc: "เข้ากระเป๋าร่วมด้วยรหัสที่ได้รับ", need: "free" },
+      { icon: "👛", cmd: "กระเป๋า", desc: "ยอดแต่ละใบและยอดรวม", need: "free", send: "กระเป๋า" },
+      {
+        icon: "🔁",
+        cmd: "โอน 500 เงินสด>KTC",
+        desc: "โอนระหว่างกระเป๋า ไม่นับเป็นรายจ่าย",
+        need: "plus",
+      },
+      {
+        icon: "💳",
+        cmd: "บัตร",
+        desc: "วงเงิน และยอดตามรอบบิลของบัตรเครดิต",
+        need: "plus",
+        send: "บัตร",
+      },
+      {
+        icon: "💞",
+        cmd: "เชิญ กองกลาง",
+        desc: "ชวนแฟนใช้กระเป๋าร่วมกัน (ได้รหัส 6 หลัก)",
+        need: "plus",
+      },
+      {
+        icon: "🔑",
+        cmd: "ร่วมกระเป๋า 123456",
+        desc: "เข้ากระเป๋าร่วมด้วยรหัสที่ได้รับ",
+        need: "free",
+      },
     ],
   },
   {
+    id: "budget",
+    chip: "🎯 งบและเป้าหมาย",
     icon: "🎯",
     title: "งบและเป้าหมาย",
     subtitle: "คุมรายจ่ายและเก็บเงิน",
+    tagline: "ค่อย ๆ เก็บ ถึงเป้าแน่นอน",
     items: [
-      { cmd: "งบวัน 500", desc: "ตั้งงบรายวัน เกินแล้วบอทเตือนทันที", need: "plus" },
-      { cmd: "งบวัน", desc: "ดูสถานะงบวันนี้ · ปิดด้วย งบวัน ปิด", need: "plus", send: "งบวัน" },
-      { cmd: "เป้าหมาย", desc: "ดูกระปุกออมทั้งหมด", need: "plus", send: "เป้าหมาย" },
-      { cmd: "เป้าหมาย ใหม่ เที่ยวญี่ปุ่น 30000", desc: "สร้างกระปุกใหม่", need: "plus" },
-      { cmd: "ออม เที่ยวญี่ปุ่น 2000", desc: "หยอดเงิน · ถอนด้วย ถอน … 500", need: "plus" },
+      { icon: "⏰", cmd: "งบวัน 500", desc: "ตั้งงบรายวัน เกินแล้วบอทเตือนทันที", need: "plus" },
+      {
+        icon: "📉",
+        cmd: "งบวัน",
+        desc: "ดูสถานะงบวันนี้ · ปิดด้วย งบวัน ปิด",
+        need: "plus",
+        send: "งบวัน",
+      },
+      { icon: "🐷", cmd: "เป้าหมาย", desc: "ดูกระปุกออมทั้งหมด", need: "plus", send: "เป้าหมาย" },
+      {
+        icon: "🌱",
+        cmd: "เป้าหมาย ใหม่ เที่ยวญี่ปุ่น 30000",
+        desc: "สร้างกระปุกใหม่",
+        need: "plus",
+      },
+      {
+        icon: "🪙",
+        cmd: "ออม เที่ยวญี่ปุ่น 2000",
+        desc: "หยอดเงิน · ถอนด้วย ถอน … 500",
+        need: "plus",
+      },
     ],
   },
   {
+    id: "debt",
+    chip: "🤝 หนี้และบิล",
     icon: "🤝",
     title: "หนี้และบิล",
     subtitle: "ให้ยืม ยืม และเตือนวันจ่าย",
+    tagline: "ไม่ลืมทั้งเงินที่ต้องจ่ายและเงินที่ต้องได้คืน",
     items: [
       {
+        icon: "🤲",
         cmd: "ให้ยืม สมชาย 500",
         desc: "จดเงินที่ให้ยืม · ยืม แม่ 2000 คืน 25/10",
         need: "ultimate",
       },
-      { cmd: "สมชายคืน 200", desc: "จดเงินที่คืนมา · คืนแม่ 1000 เมื่อคืนเอง", need: "ultimate" },
-      { cmd: "หนี้", desc: "ยอดค้างทั้งหมด", need: "ultimate", send: "หนี้" },
-      { cmd: "บิล", desc: "บิลที่ต้องจ่ายและวันครบกำหนด", need: "ultimate", send: "บิล" },
       {
+        icon: "✅",
+        cmd: "สมชายคืน 200",
+        desc: "จดเงินที่คืนมา · คืนแม่ 1000 เมื่อคืนเอง",
+        need: "ultimate",
+      },
+      { icon: "📒", cmd: "หนี้", desc: "ยอดค้างทั้งหมด", need: "ultimate", send: "หนี้" },
+      {
+        icon: "🧾",
+        cmd: "บิล",
+        desc: "บิลที่ต้องจ่ายและวันครบกำหนด",
+        need: "ultimate",
+        send: "บิล",
+      },
+      {
+        icon: "🔔",
         cmd: "บิล ใหม่ ค่าไฟ 1250 ทุกวันที่ 15",
         desc: "ตั้งเตือนก่อนครบกำหนด · จ่ายแล้วพิมพ์ จ่ายบิล ค่าไฟ",
         need: "ultimate",
@@ -131,18 +258,71 @@ export const HELP_SECTIONS: HelpSection[] = [
     ],
   },
   {
+    id: "other",
+    chip: "✏️ อื่น ๆ",
     icon: "✏️",
     title: "แก้ไข ตังสะสม ชวนเพื่อน",
     subtitle: "คำสั่งอื่น ๆ ที่ใช้บ่อย",
+    tagline: "จดผิดก็แก้ได้ในพริบตา",
     items: [
-      { cmd: "ลบล่าสุด", desc: "ลบรายการล่าสุด", need: "free" },
-      { cmd: "แก้ล่าสุด 45", desc: "เปลี่ยนจำนวนเงินรายการล่าสุด", need: "free" },
-      { cmd: "ตังสะสม", desc: "ดูแต้มและจดต่อเนื่องกี่วัน", need: "free", send: "ตังสะสม" },
-      { cmd: "รหัสชวน", desc: "รหัสชวนเพื่อน ได้โบนัสทั้งสองฝ่าย", need: "free", send: "รหัสชวน" },
-      { cmd: "ใช้รหัส ABCD1234", desc: "ใส่รหัสของเพื่อน", need: "free" },
+      { icon: "🗑️", cmd: "ลบล่าสุด", desc: "ลบรายการล่าสุด", need: "free" },
+      { icon: "✏️", cmd: "แก้ล่าสุด 45", desc: "เปลี่ยนจำนวนเงินรายการล่าสุด", need: "free" },
+      {
+        icon: "🎁",
+        cmd: "ตังสะสม",
+        desc: "ดูแต้มและจดต่อเนื่องกี่วัน",
+        need: "free",
+        send: "ตังสะสม",
+      },
+      {
+        icon: "📣",
+        cmd: "รหัสชวน",
+        desc: "รหัสชวนเพื่อน ได้โบนัสทั้งสองฝ่าย",
+        need: "free",
+        send: "รหัสชวน",
+      },
+      { icon: "🎟️", cmd: "ใช้รหัส ABCD1234", desc: "ใส่รหัสของเพื่อน", need: "free" },
     ],
   },
+  {
+    id: "shortcuts",
+    chip: "🚀 ทางลัด",
+    icon: "🚀",
+    title: "ทางลัด",
+    subtitle: "เปิดหน้าต่าง ๆ ในแอป",
+    tagline: "ดูภาพรวมได้ละเอียดกว่าในแอป",
+    items: [],
+  },
 ];
+
+const TOPIC_IDS = new Set<string>(HELP_TOPICS.map((t) => t.id));
+export const isHelpTopic = (value: unknown): value is HelpTopicId =>
+  typeof value === "string" && TOPIC_IDS.has(value);
+
+/** The row of topic chips under the question and under every topic card (so it stays on screen). */
+function chips(): unknown {
+  return {
+    items: HELP_TOPICS.map((t) => ({
+      type: "action",
+      action: { type: "postback", label: t.chip, data: `a=help&t=${t.id}`, displayText: t.chip },
+    })),
+  };
+}
+
+/** The question after "วิธีใช้งาน", in the chosen manner of the bot, with the topic chips under it. */
+export function buildHelpPrompt(persona: PersonaId = "polite"): LineMessage {
+  const wording: Record<PersonaId, string> = {
+    polite: "อยากรู้เรื่องไหนเป็นพิเศษคะ แตะหัวข้อด้านล่างเพื่อดูวิธีใช้ได้เลยค่ะ ✨",
+    friendly: "อยากรู้เรื่องไหนบอกได้เลยเพื่อน! จิ้มหัวข้อข้างล่างได้เลย 😎",
+    strict: "ยังไม่รู้จะเริ่มตรงไหนใช่ไหม? เลือกหัวข้อข้างล่าง แล้วอ่านให้จบนะ! 📖",
+    cheer: "ถามไว้ก่อนเก่งมากเลย! เลือกหัวข้อด้านล่าง เดี๋ยวบอกให้ละเอียดเลยนะ 🌟",
+  };
+  return { type: "text", text: wording[persona], quickReply: chips() };
+}
+
+/** Pastel tiles, one colour after another, like a sticker sheet. */
+const TILE_COLORS = ["#FDECEF", "#E8F8EF", "#E8F1FD", "#EFEBFD", "#E3F7F4", "#FFF1E5"];
+const TILE_LOCKED = "#F1F5F9";
 
 const BADGE: Record<Exclude<Need, "free">, { label: string; bg: string; fg: string }> = {
   plus: { label: "Pro", bg: "#FEF3C7", fg: "#92400E" },
@@ -151,105 +331,94 @@ const BADGE: Record<Exclude<Need, "free">, { label: string; bg: string; fg: stri
 
 const LOCKED_TEXT = "#94A3B8";
 
-function row(item: HelpItem, plan: Plan) {
+function row(item: HelpItem, index: number, plan: Plan) {
   const has = RANK[plan] >= NEED_RANK[item.need];
   const tappable = has && item.send !== undefined;
   const badge = item.need === "free" ? null : BADGE[item.need];
-  const top = {
-    type: "box",
-    layout: "horizontal",
-    alignItems: "center",
-    spacing: "sm",
-    contents: [
-      {
-        type: "text",
-        text: item.cmd,
-        size: "sm",
-        weight: "bold",
-        // the tappable ones sit on the soft band and take the theme's accent colour
-        color: !has ? LOCKED_TEXT : tappable ? COLOR.primary : "#14352E",
-        wrap: true,
-        flex: 1,
-      },
-      ...(badge
-        ? [
-            {
-              type: "box",
-              layout: "vertical",
-              backgroundColor: badge.bg,
-              cornerRadius: "10px",
-              paddingTop: "2px",
-              paddingBottom: "2px",
-              paddingStart: "8px",
-              paddingEnd: "8px",
-              flex: 0,
-              contents: [
-                {
-                  type: "text",
-                  text: has ? `${badge.label} ✓` : badge.label,
-                  size: "xxs",
-                  weight: "bold",
-                  color: badge.fg,
-                },
-              ],
-            },
-          ]
-        : []),
-    ],
-  };
   return {
     type: "box",
-    layout: "vertical",
-    spacing: "xs",
+    layout: "horizontal",
+    spacing: "md",
+    alignItems: "center",
     margin: "sm",
-    paddingAll: "8px",
-    cornerRadius: "10px",
-    ...(tappable ? { backgroundColor: COLOR.primarySoft } : {}),
+    paddingAll: "10px",
+    cornerRadius: "14px",
+    backgroundColor: has ? TILE_COLORS[index % TILE_COLORS.length] : TILE_LOCKED,
     ...(tappable
       ? { action: { type: "message", label: item.cmd.slice(0, 20), text: item.send } }
       : {}),
     contents: [
-      top,
       {
-        type: "text",
-        text: tappable ? `${item.desc} · แตะเพื่อดู` : item.desc,
-        size: "xs",
-        color: has ? COLOR.muted : LOCKED_TEXT,
-        wrap: true,
+        type: "box",
+        layout: "vertical",
+        width: "40px",
+        height: "40px",
+        cornerRadius: "20px",
+        backgroundColor: "#FFFFFF",
+        justifyContent: "center",
+        alignItems: "center",
+        flex: 0,
+        contents: [
+          { type: "text", text: item.icon, size: "lg", align: "center", color: "#000000" },
+        ],
+      },
+      {
+        type: "box",
+        layout: "vertical",
+        spacing: "xs",
+        flex: 1,
+        contents: [
+          {
+            type: "box",
+            layout: "horizontal",
+            alignItems: "center",
+            spacing: "sm",
+            contents: [
+              {
+                type: "text",
+                text: item.cmd,
+                size: "sm",
+                weight: "bold",
+                color: has ? "#14352E" : LOCKED_TEXT,
+                wrap: true,
+                flex: 1,
+              },
+              ...(badge
+                ? [
+                    {
+                      type: "box",
+                      layout: "vertical",
+                      backgroundColor: badge.bg,
+                      cornerRadius: "10px",
+                      paddingTop: "2px",
+                      paddingBottom: "2px",
+                      paddingStart: "8px",
+                      paddingEnd: "8px",
+                      flex: 0,
+                      contents: [
+                        {
+                          type: "text",
+                          text: has ? `${badge.label} ✓` : badge.label,
+                          size: "xxs",
+                          weight: "bold",
+                          color: badge.fg,
+                        },
+                      ],
+                    },
+                  ]
+                : []),
+            ],
+          },
+          {
+            type: "text",
+            text: tappable ? `${item.desc} · แตะเพื่อดู` : item.desc,
+            size: "xs",
+            color: has ? COLOR.muted : LOCKED_TEXT,
+            wrap: true,
+          },
+        ],
       },
     ],
-  };
-}
-
-function sectionBubble(section: HelpSection, plan: Plan) {
-  return {
-    type: "bubble",
-    size: "kilo",
-    header: {
-      type: "box",
-      layout: "vertical",
-      backgroundColor: COLOR.primarySoft,
-      paddingAll: "14px",
-      spacing: "xs",
-      contents: [
-        {
-          type: "text",
-          text: `${section.icon} ${section.title}`,
-          weight: "bold",
-          size: "md",
-          color: "#0B5D4F",
-          wrap: true,
-        },
-        { type: "text", text: section.subtitle, size: "xs", color: "#3F6B63", wrap: true },
-      ],
-    },
-    body: {
-      type: "box",
-      layout: "vertical",
-      paddingAll: "10px",
-      spacing: "none",
-      contents: section.items.map((item) => row(item, plan)),
-    },
   };
 }
 
@@ -261,32 +430,26 @@ const SHORTCUTS: { label: string; path: string }[] = [
   { label: "⭐ อัปเกรด", path: "/upgrade" },
 ];
 
-function shortcutsBubble(appUrl: string | undefined) {
-  return {
-    type: "bubble",
-    size: "kilo",
-    header: {
-      type: "box",
-      layout: "vertical",
-      backgroundColor: COLOR.primarySoft,
-      paddingAll: "14px",
-      spacing: "xs",
-      contents: [
-        { type: "text", text: "🚀 ทางลัด", weight: "bold", size: "md", color: "#0B5D4F" },
-        { type: "text", text: "เปิดหน้าต่าง ๆ ในแอป", size: "xs", color: "#3F6B63" },
-      ],
-    },
-    body: {
-      type: "box",
-      layout: "vertical",
-      paddingAll: "12px",
-      spacing: "sm",
-      contents: appUrl
+/**
+ * One topic as a card: a soft header with a big icon, then a coloured tile per thing you can do, with
+ * its plan badge (dimmed when the person's plan lacks it), then a closing line with the app logo.
+ * The topic chips ride along so they stay under the latest message.
+ */
+export function buildHelpTopicCard(input: {
+  topic: HelpTopicId;
+  plan: Plan;
+  appUrl?: string;
+}): LineMessage {
+  const topic = HELP_TOPICS.find((t) => t.id === input.topic) ?? (HELP_TOPICS[0] as HelpTopic);
+  const body =
+    topic.id === "shortcuts"
+      ? input.appUrl
         ? SHORTCUTS.map((s) => ({
             type: "button",
             style: "secondary",
             height: "sm",
-            action: { type: "uri", label: s.label, uri: `${appUrl}${s.path}` },
+            margin: "sm",
+            action: { type: "uri", label: s.label, uri: `${input.appUrl}${s.path}` },
           }))
         : [
             {
@@ -296,26 +459,80 @@ function shortcutsBubble(appUrl: string | undefined) {
               color: COLOR.muted,
               wrap: true,
             },
-          ],
-    },
-  };
-}
-
-/**
- * "ช่วยเหลือ": a swipeable card per kind of thing you can do. What the person's plan does not have is
- * shown dimmed with its plan badge (so they can see what an upgrade adds). Only read-only commands are
- * buttons; examples that record or delete are plain text.
- */
-export function buildHelpCarousel(input: { plan: Plan; appUrl?: string }): LineMessage {
+          ]
+      : topic.items.map((item, i) => row(item, i, input.plan));
+  const logo =
+    input.appUrl?.startsWith("https://") === true
+      ? [
+          {
+            type: "image",
+            url: `${input.appUrl}/logo.png`,
+            size: "36px",
+            aspectMode: "fit",
+            flex: 0,
+          },
+        ]
+      : [];
   return {
     type: "flex",
-    altText: "วิธีใช้จดตังค์: จดรายการ สรุป กระเป๋า งบ หนี้ — ปัดดูได้เลย",
+    altText: `วิธีใช้: ${topic.title}`,
+    quickReply: chips(),
     contents: {
-      type: "carousel",
-      contents: [
-        ...HELP_SECTIONS.map((s) => sectionBubble(s, input.plan)),
-        shortcutsBubble(input.appUrl),
-      ],
+      type: "bubble",
+      size: "mega",
+      header: {
+        type: "box",
+        layout: "horizontal",
+        backgroundColor: COLOR.primarySoft,
+        paddingAll: "16px",
+        spacing: "md",
+        alignItems: "center",
+        contents: [
+          { type: "text", text: topic.icon, size: "4xl", flex: 0 },
+          {
+            type: "box",
+            layout: "vertical",
+            spacing: "xs",
+            flex: 1,
+            contents: [
+              {
+                type: "text",
+                text: topic.title,
+                weight: "bold",
+                size: "xl",
+                color: "#0B5D4F",
+                wrap: true,
+              },
+              { type: "text", text: topic.subtitle, size: "xs", color: "#3F6B63", wrap: true },
+            ],
+          },
+        ],
+      },
+      body: {
+        type: "box",
+        layout: "vertical",
+        paddingAll: "12px",
+        spacing: "none",
+        contents: body,
+      },
+      footer: {
+        type: "box",
+        layout: "horizontal",
+        paddingAll: "12px",
+        spacing: "md",
+        alignItems: "center",
+        contents: [
+          ...logo,
+          {
+            type: "text",
+            text: topic.tagline,
+            size: "xs",
+            color: COLOR.muted,
+            wrap: true,
+            flex: 1,
+          },
+        ],
+      },
     },
   };
 }
@@ -393,7 +610,7 @@ export function buildWelcomeCard(input: { appUrl?: string }): LineMessage {
             style: "primary",
             height: "sm",
             color: COLOR.primary,
-            action: { type: "message", label: "ดูวิธีใช้ทั้งหมด", text: "ช่วยเหลือ" },
+            action: { type: "message", label: "ดูวิธีใช้ทั้งหมด", text: "วิธีใช้งาน" },
           },
           ...(input.appUrl
             ? [

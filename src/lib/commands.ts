@@ -51,7 +51,8 @@ function typedDay(d: string | undefined, m: string | undefined, y: string | unde
 export function parseCommand(input: string): Command | null {
   const text = normalizeThaiDigits(input).trim().replace(/\s+/g, " ").toLowerCase();
 
-  if (["ช่วยเหลือ", "วิธีใช้", "help", "?", "เมนู"].includes(text)) return { kind: "help" };
+  if (["ช่วยเหลือ", "วิธีใช้", "วิธีใช้งาน", "help", "?", "เมนู"].includes(text))
+    return { kind: "help" };
   if (text === "สรุปวันนี้") return { kind: "summary", scope: "today" };
   if (text === "สรุปเดือนนี้") return { kind: "summary", scope: "month" };
   if (["ล่าสุด", "รายการล่าสุด", "5 รายการล่าสุด"].includes(text)) return { kind: "recent" };

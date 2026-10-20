@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { handleEvent, type HandlerDeps, type LineEvent } from "./handlers";
 
 let plan = "free";
+let persona = "polite";
 
 vi.mock("@/lib/slip-repo", () => ({
   getUserPlanRow: async () => ({ plan, plan_expires_at: null }),
@@ -20,10 +21,18 @@ vi.mock("@/lib/repo", async (original) => ({
     confirm_style: "full",
     budget_cycle: "monthly",
     cycle_start_day: 1,
+    card_theme: "mint",
+    bot_persona: persona,
   }),
 }));
 
 const source = { type: "user" as const, userId: "U" + "a".repeat(32) };
+const tap = (data: string): LineEvent => ({
+  type: "postback",
+  replyToken: "rt",
+  source,
+  postback: { data },
+});
 const say = (t: string): LineEvent => ({
   type: "message",
   replyToken: "rt",
@@ -54,22 +63,53 @@ const first = (reply: ReturnType<typeof setup>["reply"]) =>
 
 beforeEach(() => {
   plan = "free";
+  persona = "polite";
 });
 
-describe("the help cards in the chat", () => {
-  it.each(["ช่วยเหลือ", "เมนู", "help", "?"])("%s opens the help carousel", async (word) => {
+describe("the help flow in the chat", () => {
+  it.each(["วิธีใช้งาน", "ช่วยเหลือ", "เมนู", "help", "?"])(
+    "%s asks what they want to know",
+    async (word) => {
+      const { deps, reply } = setup();
+      await handleEvent(say(word), deps);
+      const m = first(reply);
+      expect(m.type).toBe("text");
+      expect(m.text).not.toContain("สงสัยตรงไหน");
+      const chips = JSON.stringify(m.quickReply);
+      expect(chips).toContain("a=help&t=record");
+      expect(chips).toContain("a=help&t=shortcuts");
+    },
+  );
+
+  it("the question follows the bot's manner when the person has set one (Professional)", async () => {
+    plan = "plus";
+    persona = "friendly";
     const { deps, reply } = setup();
-    await handleEvent(say(word), deps);
-    const m = first(reply);
-    expect(m.type).toBe("flex");
-    expect(m.contents?.type).toBe("carousel");
+    await handleEvent(say("วิธีใช้งาน"), deps);
+    expect(first(reply).text).toContain("เพื่อน");
+    plan = "free";
+    const free = setup();
+    await handleEvent(say("วิธีใช้งาน"), free.deps);
+    expect(first(free.reply).text).toContain("ค่ะ"); // Free always gets the polite default
   });
 
-  it("the carousel follows the person's plan", async () => {
+  it("choosing a topic shows its card, with the chips still under it", async () => {
+    const { deps, reply } = setup();
+    await handleEvent(tap("a=help&t=summary"), deps);
+    const m = first(reply);
+    expect(m.type).toBe("flex");
+    expect(JSON.stringify(m)).toContain("สรุปวันนี้");
+    expect(JSON.stringify(m.quickReply)).toContain("a=help&t=wallet");
+  });
+
+  it("the card follows the plan, and an unknown topic just asks again", async () => {
     plan = "ultimate";
     const { deps, reply } = setup();
-    await handleEvent(say("ช่วยเหลือ"), deps);
+    await handleEvent(tap("a=help&t=debt"), deps);
     expect(JSON.stringify(first(reply))).toContain("Ultimate ✓");
+    const again = setup();
+    await handleEvent(tap("a=help&t=whatever"), again.deps);
+    expect(first(again.reply).type).toBe("text");
   });
 
   it("a new friend gets the welcome card", async () => {
@@ -86,6 +126,6 @@ describe("the help cards in the chat", () => {
     const m = first(reply);
     expect(m.type).toBe("text");
     expect(m.text).toContain("ยังไม่เข้าใจ");
-    expect(JSON.stringify(m.quickReply)).toContain('"text":"ช่วยเหลือ"');
+    expect(JSON.stringify(m.quickReply)).toContain('"text":"วิธีใช้งาน"');
   });
 });
