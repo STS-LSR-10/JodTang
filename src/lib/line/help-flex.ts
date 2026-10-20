@@ -481,7 +481,7 @@ export function buildHelpTopicCard(input: {
  * with a big icon, a body of coloured tiles, and a foot with the app logo and a closing line (or, for
  * the welcome, its own buttons).
  */
-function topicBubble(input: {
+export function topicBubble(input: {
   icon: string;
   title: string;
   subtitle: string;
@@ -670,8 +670,18 @@ const GROUP_ITEMS: HelpItem[] = [
     need: "free",
   },
   { icon: "📊", cmd: "สรุป · สรุปวันนี้", desc: "ยอดรวมกลุ่มและใครจ่ายไปเท่าไร", need: "free" },
-  { icon: "🕘", cmd: "ล่าสุด", desc: "5 รายการล่าสุดของกลุ่ม", need: "free" },
-  { icon: "🗑️", cmd: "ลบล่าสุด", desc: "ลบรายการล่าสุดของตัวเอง", need: "free" },
+  {
+    icon: "🕘",
+    cmd: "ล่าสุด · ลบล่าสุด",
+    desc: "ดู 5 รายการล่าสุด · ลบรายการล่าสุดของตัวเอง",
+    need: "free",
+  },
+  {
+    icon: "🍽️",
+    cmd: "หารบิล หมูกระทะ 1200",
+    desc: "คนจ่ายก่อนพิมพ์ เพื่อนกด “ร่วมหาร” แล้วกด “ปิดรายชื่อ” · ตามเงิน ดูว่าใครยังค้าง พร้อม QR พร้อมเพย์รายคน",
+    need: "free",
+  },
   {
     icon: "✈️",
     cmd: "เริ่มทริป · สรุปทริป · จบทริป",

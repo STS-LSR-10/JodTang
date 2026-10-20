@@ -2341,3 +2341,193 @@ describe("usage counters (0034)", () => {
     expect(await take("teaser_voice", "2000-01-01")).toBe(false);
   });
 });
+
+describe("split bills (0035)", () => {
+  async function seedBill(amount = 90_000) {
+    const owner = await newUser(db, `sb-${Math.random()}`);
+    const group = (
+      await one<{ id: string }>(
+        db,
+        "insert into bot_groups (line_group_id, owner_user_id) values ($1,$2) returning id",
+        [`C${Math.random().toString(16).slice(2)}`, owner],
+      )
+    ).id;
+    const bill = (
+      await one<{ id: string }>(
+        db,
+        "insert into split_bills (group_id, payer_line_user_id, title, amount_satang) values ($1,'Uanna','หมูกระทะ',$2) returning id",
+        [group, amount],
+      )
+    ).id;
+    const join = async (user: string) =>
+      (await one<{ r: string }>(db, "select split_bill_join($1,$2) as r", [bill, user])).r;
+    const close = async (shares: { user: string; share: number }[]) =>
+      (
+        await one<{ r: boolean }>(db, "select split_bill_close($1,$2::jsonb) as r", [
+          bill,
+          JSON.stringify(shares),
+        ])
+      ).r;
+    const paid = async (user: string) =>
+      (await one<{ r: string }>(db, "select split_bill_mark_paid($1,$2) as r", [bill, user])).r;
+    const status = async () =>
+      (await one<{ s: string }>(db, "select status as s from split_bills where id = $1", [bill])).s;
+    return { owner, group, bill, join, close, paid, status };
+  }
+
+  it("joining is idempotent, and only while the list is open", async () => {
+    const { join, close, status } = await seedBill();
+    expect(await join("Uanna")).toBe("ok");
+    expect(await join("Ubob")).toBe("ok");
+    expect(await join("Ubob")).toBe("ok");
+    const n = await one<{ n: number }>(db, "select count(*)::int as n from split_bill_members");
+    expect(n.n).toBeGreaterThanOrEqual(2);
+    expect(
+      await close([
+        { user: "Uanna", share: 45_000 },
+        { user: "Ubob", share: 45_000 },
+      ]),
+    ).toBe(true);
+    expect(await join("Uchom")).toBe("closed");
+    expect(await status()).toBe("collecting");
+  });
+
+  it("a list holds at most 30 people", async () => {
+    const { join } = await seedBill();
+    for (let i = 0; i < 30; i++) expect(await join(`U${i}`)).toBe("ok");
+    expect(await join("U30")).toBe("full");
+    expect(await join("U5")).toBe("ok"); // someone already in is still fine
+  });
+
+  it("closing needs shares that add up to the bill to the satang, and for every member", async () => {
+    const { join, close, status } = await seedBill(10_000);
+    await join("Uanna");
+    await join("Ubob");
+    await join("Uchom");
+    await expect(
+      close([
+        { user: "Uanna", share: 3334 },
+        { user: "Ubob", share: 3333 },
+        { user: "Uchom", share: 3334 },
+      ]),
+    ).rejects.toThrow(/add up/);
+    await expect(
+      close([
+        { user: "Uanna", share: 5000 },
+        { user: "Ubob", share: 5000 },
+      ]),
+    ).rejects.toThrow(/no share/);
+    expect(await status()).toBe("joining"); // nothing changed
+    expect(
+      await close([
+        { user: "Uanna", share: 3334 },
+        { user: "Ubob", share: 3333 },
+        { user: "Uchom", share: 3333 },
+      ]),
+    ).toBe(true);
+    expect(
+      await close([
+        { user: "Uanna", share: 3334 },
+        { user: "Ubob", share: 3333 },
+        { user: "Uchom", share: 3333 },
+      ]),
+    ).toBe(false); // a double tap
+  });
+
+  it("the payer's own share is paid at once, the others are not; the last payment settles the bill", async () => {
+    const { bill, join, close, paid, status } = await seedBill(90_000);
+    for (const u of ["Uanna", "Ubob", "Uchom"]) await join(u);
+    await close([
+      { user: "Uanna", share: 30_000 },
+      { user: "Ubob", share: 30_000 },
+      { user: "Uchom", share: 30_000 },
+    ]);
+    const flags = await rows<{ line_user_id: string; paid: boolean }>(
+      db,
+      "select line_user_id, paid from split_bill_members where bill_id = $1 order by line_user_id",
+      [bill],
+    );
+    expect(flags.map((f) => [f.line_user_id, f.paid])).toEqual([
+      ["Uanna", true],
+      ["Ubob", false],
+      ["Uchom", false],
+    ]);
+    expect(await paid("Ubob")).toBe("ok");
+    expect(await paid("Ubob")).toBe("already");
+    expect(await paid("Unobody")).toBe("none");
+    expect(await status()).toBe("collecting");
+    expect(await paid("Uchom")).toBe("ok");
+    expect(await status()).toBe("settled");
+    expect(await paid("Uchom")).toBe("none"); // a settled bill takes no more ticks
+  });
+
+  it("marking paid before the list is closed does nothing", async () => {
+    const { join, paid } = await seedBill();
+    await join("Uanna");
+    await join("Ubob");
+    expect(await paid("Ubob")).toBe("none");
+  });
+
+  it("if only the payer is on the bill it settles straight away", async () => {
+    const { join, close, status } = await seedBill(5000);
+    await join("Uanna");
+    expect(await close([{ user: "Uanna", share: 5000 }])).toBe(true);
+    expect(await status()).toBe("settled");
+  });
+
+  it("a bill needs a sensible title and amount, and a status from the list", async () => {
+    const { group } = await seedBill();
+    const insert = (title: string, amount: number, status = "joining") =>
+      db.query(
+        "insert into split_bills (group_id, payer_line_user_id, title, amount_satang, status) values ($1,'U',$2,$3,$4)",
+        [group, title, amount, status],
+      );
+    await expect(insert("", 100)).rejects.toThrow();
+    await expect(insert("x".repeat(41), 100)).rejects.toThrow();
+    await expect(insert("ok", 0)).rejects.toThrow();
+    await expect(insert("ok", 100_000_001)).rejects.toThrow();
+    await expect(insert("ok", 100, "weird")).rejects.toThrow();
+    await insert("ok", 100);
+  });
+
+  it("every share has its own unguessable QR token, and they are unique", async () => {
+    const { bill, join } = await seedBill();
+    for (const u of ["Uanna", "Ubob"]) await join(u);
+    const tokens = await rows<{ qr_token: string }>(
+      db,
+      "select qr_token from split_bill_members where bill_id = $1",
+      [bill],
+    );
+    expect(new Set(tokens.map((t) => t.qr_token)).size).toBe(2);
+    for (const t of tokens) expect(t.qr_token).toMatch(/^[0-9a-f-]{36}$/);
+  });
+
+  it("payment accounts accept PromptPay of 10, 13 or 15 digits and a plain account number, nothing else", async () => {
+    const u = await newUser(db, `pa-${Math.random()}`);
+    const set = (col: string, value: string) =>
+      db.query(
+        `insert into payment_accounts (user_id, ${col}) values ($1,$2) on conflict (user_id) do update set ${col} = excluded.${col}`,
+        [u, value],
+      );
+    for (const ok of ["0812345678", "1234567890123", "123456789012345"])
+      await set("promptpay_id", ok);
+    for (const bad of ["12345", "081-234-5678", "abcdefghij", "12345678901"]) {
+      await expect(set("promptpay_id", bad), bad).rejects.toThrow();
+    }
+    await set("bank_account", "123-4-56789-0");
+    await expect(set("bank_account", "12")).rejects.toThrow();
+    await expect(set("bank_account", "abc-123456")).rejects.toThrow();
+  });
+
+  it("deleting the group (or the user) takes its bills and shares with it", async () => {
+    const { group, bill, join } = await seedBill();
+    await join("Uanna");
+    await db.query("delete from bot_groups where id = $1", [group]);
+    const left = await one<{ n: number }>(
+      db,
+      "select (select count(*) from split_bills where id = $1)::int + (select count(*) from split_bill_members where bill_id = $1)::int as n",
+      [bill],
+    );
+    expect(left.n).toBe(0);
+  });
+});

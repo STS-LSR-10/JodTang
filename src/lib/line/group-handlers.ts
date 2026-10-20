@@ -51,6 +51,7 @@ import {
   resolveNames,
   splitAmount,
 } from "@/lib/trip";
+import { BILL_POSTBACKS, handleBillPostback, runBillCommand } from "./split-bill-handlers";
 import type { HandlerDeps, LineEvent } from "./handlers";
 import {
   GROUP_ALREADY_OPEN_TEXT,
@@ -234,6 +235,24 @@ async function runGroupCommand(
 
     case "record":
       return recordInGroup(command.body, userId, group, writable, deps, reply);
+
+    case "bill-new":
+    case "bill-usage":
+    case "bill-chase":
+    case "bill-open":
+    case "bill-close":
+    case "bill-cancel":
+    case "bill-paid":
+      return runBillCommand(command, {
+        db,
+        group,
+        userId,
+        writable,
+        isOwner,
+        knownName: (id) => knownName(db, group, id, deps),
+        appUrl: appBaseUrl(),
+        reply,
+      });
 
     case "trip-start":
     case "trip-join":
@@ -546,10 +565,27 @@ async function handleGroupPostback(
 ): Promise<void> {
   const params = new URLSearchParams(event.postback?.data ?? "");
   const action = params.get("a");
-  if (action !== "gdx" && action !== "gtj") return;
+  if (action !== "gdx" && action !== "gtj" && !(action && BILL_POSTBACKS.has(action))) return;
   const userId = event.source?.userId;
   if (!userId) return reply([text(GROUP_NO_USER_TEXT)]);
   const { db } = deps;
+
+  // the buttons on a split bill: join, close the list, cancel, my QR, got the money from …
+  if (action && BILL_POSTBACKS.has(action)) {
+    const group = await getGroup(db, groupId);
+    if (!group || !group.isActive) return reply([text(GROUP_NOT_OPEN_TEXT)]);
+    const { owner, writable } = await ownerState(db, group, deps.now());
+    return handleBillPostback(action, params, {
+      db,
+      group,
+      userId,
+      writable,
+      isOwner: owner !== null && owner.lineUserId === userId,
+      knownName: (id) => knownName(db, group, id, deps),
+      appUrl: appBaseUrl(),
+      reply,
+    });
+  }
 
   // "🙋 ร่วมทริป" under the start of a trip
   if (action === "gtj") {

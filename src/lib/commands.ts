@@ -4,6 +4,7 @@ import { parseBillText, type BillCommand } from "@/lib/bill";
 import { parseGoalText, type GoalCommand } from "@/lib/goal";
 import { parseTransferText } from "@/lib/transfer";
 import { normalizeThaiDigits, parseAmountToSatang } from "@/lib/parse/thai-number";
+import { parsePromptPayId } from "@/lib/promptpay";
 
 export type Command =
   | { kind: "help" }
@@ -35,7 +36,12 @@ export type Command =
   | { kind: "points" }
   | { kind: "my-code" }
   | { kind: "use-code"; code: string }
-  | { kind: "use-code-usage" };
+  | { kind: "use-code-usage" }
+  | { kind: "payment-show" }
+  | { kind: "payment-usage" }
+  | { kind: "payment-promptpay"; id: string }
+  | { kind: "payment-bank"; bank: string; account: string; name: string | null }
+  | { kind: "payment-clear"; what: "promptpay" | "bank" };
 
 const DAY = String.raw`(\d{1,2})/(\d{1,2})(?:/(\d{2,4}))?`;
 // "สรุป 1/10 ถึง 15/10", "สรุป 25/9 - 24/10/2569", "สรุปวันที่ 1/10 ถึงวันนี้"
@@ -133,6 +139,26 @@ export function parseCommand(input: string): Command | null {
   if (text.startsWith("ใช้รหัส")) {
     const code = /^ใช้รหัส\s+([a-z0-9]{4,16})$/.exec(text)?.[1];
     return code ? { kind: "use-code", code: code.toUpperCase() } : { kind: "use-code-usage" };
+  }
+
+  // where to be paid when splitting a bill in a group (set here in the private chat, never in the group)
+  if (text === "พร้อมเพย์") return { kind: "payment-show" };
+  if (text === "พร้อมเพย์ ลบ" || text === "ลบพร้อมเพย์") {
+    return { kind: "payment-clear", what: "promptpay" };
+  }
+  if (text.startsWith("พร้อมเพย์ ")) {
+    const pp = parsePromptPayId(text.slice("พร้อมเพย์ ".length));
+    return pp ? { kind: "payment-promptpay", id: pp.id } : { kind: "payment-usage" };
+  }
+  if (text === "บัญชี ลบ" || text === "ลบบัญชี") return { kind: "payment-clear", what: "bank" };
+  if (text.startsWith("บัญชี ")) {
+    // "บัญชี กสิกร 123-4-56789-0 สมชาย ใจดี": the bank, the number, then the name on the account
+    const m = /^บัญชี\s+(\S{1,30})\s+([0-9][0-9-]{5,19})(?:\s+(.{1,60}))?$/.exec(
+      input.trim().replace(/\s+/g, " "),
+    );
+    return m?.[1] && m[2]
+      ? { kind: "payment-bank", bank: m[1], account: m[2], name: m[3]?.trim() || null }
+      : { kind: "payment-usage" };
   }
 
   if (text.startsWith("แก้ล่าสุด")) {

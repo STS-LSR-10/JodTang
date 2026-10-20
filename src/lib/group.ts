@@ -1,3 +1,4 @@
+import { parseBillCommand, type BillCommand } from "@/lib/split-bill";
 import { parseTripCommand, type TripCommand } from "@/lib/trip";
 
 export const MAX_GROUPS_PER_OWNER = 5;
@@ -47,7 +48,8 @@ export type GroupCommand =
   | { kind: "recent" }
   | { kind: "delete-last" }
   | { kind: "help" }
-  | TripCommand;
+  | TripCommand
+  | BillCommand;
 
 /**
  * What a message in a group means. Only explicit commands count: an entry needs the word "จด" in
@@ -69,6 +71,8 @@ export function parseGroupCommand(input: string): GroupCommand | null {
 
   const trip = parseTripCommand(text);
   if (trip) return trip;
+  const bill = parseBillCommand(text);
+  if (bill) return bill;
 
   const m = /^จด\s+([\s\S]+)$/.exec(text);
   if (m?.[1]?.trim()) return { kind: "record", body: m[1].trim() };

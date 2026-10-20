@@ -32,6 +32,43 @@ describe("parseCommand", () => {
     expect(parseCommand(input)).toEqual(expected);
   });
 
+  it("where to be paid (PromptPay / bank), set in the private chat", () => {
+    expect(parseCommand("พร้อมเพย์")).toEqual({ kind: "payment-show" });
+    expect(parseCommand("พร้อมเพย์ 0812345678")).toEqual({
+      kind: "payment-promptpay",
+      id: "0812345678",
+    });
+    expect(parseCommand("พร้อมเพย์ 081-234-5678")).toEqual({
+      kind: "payment-promptpay",
+      id: "0812345678",
+    });
+    expect(parseCommand("พร้อมเพย์ ๐๘๑๒๓๔๕๖๗๘")).toEqual({
+      kind: "payment-promptpay",
+      id: "0812345678",
+    });
+    expect(parseCommand("พร้อมเพย์ 12345")).toEqual({ kind: "payment-usage" });
+    expect(parseCommand("พร้อมเพย์ ลบ")).toEqual({ kind: "payment-clear", what: "promptpay" });
+    expect(parseCommand("บัญชี กสิกร 123-4-56789-0 สมชาย ใจดี")).toEqual({
+      kind: "payment-bank",
+      bank: "กสิกร",
+      account: "123-4-56789-0",
+      name: "สมชาย ใจดี",
+    });
+    expect(parseCommand("บัญชี ไทยพาณิชย์ 1234567890")).toEqual({
+      kind: "payment-bank",
+      bank: "ไทยพาณิชย์",
+      account: "1234567890",
+      name: null,
+    });
+    expect(parseCommand("บัญชี กสิกร")).toEqual({ kind: "payment-usage" });
+    expect(parseCommand("บัญชี กสิกร 12")).toEqual({ kind: "payment-usage" });
+    expect(parseCommand("บัญชี ลบ")).toEqual({ kind: "payment-clear", what: "bank" });
+  });
+
+  it("วิธีใช้งาน is the help word", () => {
+    expect(parseCommand("วิธีใช้งาน")).toEqual({ kind: "help" });
+  });
+
   it("returns null for transactions", () => {
     expect(parseCommand("กาแฟ 30")).toBeNull();
     expect(parseCommand("สรุปวันนี้ 30")).toBeNull();

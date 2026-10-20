@@ -151,6 +151,7 @@ import {
 } from "./flex";
 import { buildCategoryChooser } from "./slip-flex";
 import { startTrialFromChat, upsellReply } from "./upsell-reply";
+import { runPaymentCommand } from "./payment-handlers";
 import { buildHelpPrompt, buildHelpTopicCard, buildWelcomeCard, isHelpTopic } from "./help-flex";
 import { notUnderstood } from "./not-understood";
 import {
@@ -1788,6 +1789,13 @@ async function runCommand(
 
     case "edit-latest-usage":
       return [text(EDIT_USAGE_TEXT)];
+
+    case "payment-show":
+    case "payment-usage":
+    case "payment-promptpay":
+    case "payment-bank":
+    case "payment-clear":
+      return runPaymentCommand(command, user, deps);
 
     case "points":
       return [text(await pointsSummaryText(db, user.id, deps.now()))];

@@ -27,6 +27,8 @@ const NOT_SESSION_ROUTES: Record<string, string> = {
   "cron/reminders/route.ts": "the scheduler calls it; checked by CRON_SECRET",
   "cron/recurring/route.ts": "the scheduler calls it; checked by CRON_SECRET",
   "auth/liff/route.ts": "signs in with a LINE ID token (issues the session)",
+  "split-bill/qr/[token]/route.ts":
+    "LINE fetches the picture for the chat; the only key is the random token of one share (a 404 otherwise)",
   "export/download/route.ts":
     "a signed, short-lived link token made by /api/export/link (which is locked)",
 };

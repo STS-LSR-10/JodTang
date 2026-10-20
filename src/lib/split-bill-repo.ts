@@ -1,0 +1,283 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
+import {
+  MAX_OPEN_BILLS,
+  type BillMemberRow,
+  type BillRow,
+  type BillShare,
+  type BillStatus,
+} from "@/lib/split-bill";
+
+function fail(context: string, error: { message: string }): never {
+  throw new Error(`${context}: ${error.message}`);
+}
+
+interface BillDb {
+  id: string;
+  group_id: string;
+  payer_line_user_id: string;
+  title: string;
+  amount_satang: number | string;
+  status: BillStatus;
+  created_at: string;
+}
+const BILL_COLUMNS = "id,group_id,payer_line_user_id,title,amount_satang,status,created_at";
+const toBill = (r: BillDb): BillRow => ({
+  id: r.id,
+  groupId: r.group_id,
+  payerLineUserId: r.payer_line_user_id,
+  title: r.title,
+  amountSatang: Number(r.amount_satang),
+  status: r.status,
+  createdAt: r.created_at,
+});
+
+/** A new bill (the payer is its first member). "too_many" when the group already has ten going. */
+export async function createBill(
+  db: SupabaseClient,
+  input: { groupId: string; payerLineUserId: string; title: string; amountSatang: number },
+): Promise<BillRow | "too_many"> {
+  const open = await db
+    .from("split_bills")
+    .select("id", { count: "exact", head: true })
+    .eq("group_id", input.groupId)
+    .in("status", ["joining", "collecting"]);
+  if (open.error) fail("count open bills", open.error);
+  if ((open.count ?? 0) >= MAX_OPEN_BILLS) return "too_many";
+
+  const { data, error } = await db
+    .from("split_bills")
+    .insert({
+      group_id: input.groupId,
+      payer_line_user_id: input.payerLineUserId,
+      title: input.title,
+      amount_satang: input.amountSatang,
+    })
+    .select(BILL_COLUMNS)
+    .single();
+  if (error) fail("create bill", error);
+  return toBill(data as BillDb);
+}
+
+export async function getBill(
+  db: SupabaseClient,
+  groupId: string,
+  billId: string,
+): Promise<BillRow | null> {
+  const { data, error } = await db
+    .from("split_bills")
+    .select(BILL_COLUMNS)
+    .eq("group_id", groupId)
+    .eq("id", billId)
+    .maybeSingle();
+  if (error) fail("load bill", error);
+  return data ? toBill(data as BillDb) : null;
+}
+
+export async function listBills(
+  db: SupabaseClient,
+  groupId: string,
+  statuses: BillStatus[],
+  limit = 20,
+): Promise<BillRow[]> {
+  const { data, error } = await db
+    .from("split_bills")
+    .select(BILL_COLUMNS)
+    .eq("group_id", groupId)
+    .in("status", statuses)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  if (error) fail("list bills", error);
+  return ((data ?? []) as BillDb[]).map(toBill);
+}
+
+/** The newest bill this person paid for that is in one of these states. */
+export async function latestBillBy(
+  db: SupabaseClient,
+  groupId: string,
+  payerLineUserId: string,
+  statuses: BillStatus[],
+): Promise<BillRow | null> {
+  const { data, error } = await db
+    .from("split_bills")
+    .select(BILL_COLUMNS)
+    .eq("group_id", groupId)
+    .eq("payer_line_user_id", payerLineUserId)
+    .in("status", statuses)
+    .order("created_at", { ascending: false })
+    .limit(1);
+  if (error) fail("load latest bill", error);
+  const row = ((data ?? []) as BillDb[])[0];
+  return row ? toBill(row) : null;
+}
+
+interface MemberDb {
+  line_user_id: string;
+  share_satang: number | string | null;
+  paid: boolean;
+  qr_token: string;
+}
+
+export async function billMembers(db: SupabaseClient, billId: string): Promise<BillMemberRow[]> {
+  const { data, error } = await db
+    .from("split_bill_members")
+    .select("line_user_id,share_satang,paid,qr_token")
+    .eq("bill_id", billId)
+    .order("joined_at", { ascending: true });
+  if (error) fail("load bill members", error);
+  return ((data ?? []) as MemberDb[]).map((r) => ({
+    lineUserId: r.line_user_id,
+    shareSatang: r.share_satang === null ? null : Number(r.share_satang),
+    paid: r.paid,
+    qrToken: r.qr_token,
+  }));
+}
+
+export type JoinResult = "ok" | "closed" | "full";
+
+export async function joinBill(
+  db: SupabaseClient,
+  billId: string,
+  lineUserId: string,
+): Promise<JoinResult> {
+  const { data, error } = await db.rpc("split_bill_join", { p_bill: billId, p_user: lineUserId });
+  if (error) fail("join bill", error);
+  return data === "ok" || data === "full" ? data : "closed";
+}
+
+/** Fix the shares and start collecting. False when the list was no longer open (a double tap). */
+export async function closeBill(
+  db: SupabaseClient,
+  billId: string,
+  shares: BillShare[],
+): Promise<boolean> {
+  const { data, error } = await db.rpc("split_bill_close", {
+    p_bill: billId,
+    p_shares: shares.map((s) => ({ user: s.lineUserId, share: s.shareSatang })),
+  });
+  if (error) fail("close bill", error);
+  return data === true;
+}
+
+export type PaidResult = "ok" | "already" | "none";
+
+export async function markPaid(
+  db: SupabaseClient,
+  billId: string,
+  lineUserId: string,
+): Promise<PaidResult> {
+  const { data, error } = await db.rpc("split_bill_mark_paid", {
+    p_bill: billId,
+    p_user: lineUserId,
+  });
+  if (error) fail("mark paid", error);
+  return data === "ok" || data === "already" ? data : "none";
+}
+
+export async function cancelBill(db: SupabaseClient, billId: string): Promise<boolean> {
+  const { data, error } = await db
+    .from("split_bills")
+    .update({ status: "cancelled" })
+    .eq("id", billId)
+    .in("status", ["joining", "collecting"])
+    .select("id");
+  if (error) fail("cancel bill", error);
+  return (data ?? []).length > 0;
+}
+
+export interface PaymentAccount {
+  promptpayId: string | null;
+  bankName: string | null;
+  bankAccount: string | null;
+  accountName: string | null;
+}
+
+interface PaymentDb {
+  promptpay_id: string | null;
+  bank_name: string | null;
+  bank_account: string | null;
+  account_name: string | null;
+}
+const toPayment = (r: PaymentDb): PaymentAccount => ({
+  promptpayId: r.promptpay_id,
+  bankName: r.bank_name,
+  bankAccount: r.bank_account,
+  accountName: r.account_name,
+});
+
+const PAYMENT_COLUMNS = "promptpay_id,bank_name,bank_account,account_name";
+
+export async function getPayment(
+  db: SupabaseClient,
+  userId: string,
+): Promise<PaymentAccount | null> {
+  const { data, error } = await db
+    .from("payment_accounts")
+    .select(PAYMENT_COLUMNS)
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (error) fail("load payment account", error);
+  return data ? toPayment(data as PaymentDb) : null;
+}
+
+/** Where a group member (by LINE id) wants to be paid; null when they never said or never added the bot. */
+export async function getPaymentByLine(
+  db: SupabaseClient,
+  lineUserId: string,
+): Promise<PaymentAccount | null> {
+  const user = await db.from("users").select("id").eq("line_user_id", lineUserId).maybeSingle();
+  if (user.error) fail("find payee", user.error);
+  const id = (user.data as { id: string } | null)?.id;
+  return id ? getPayment(db, id) : null;
+}
+
+export async function savePayment(
+  db: SupabaseClient,
+  userId: string,
+  patch: Partial<PaymentAccount>,
+): Promise<void> {
+  const row: Record<string, unknown> = { user_id: userId, updated_at: new Date().toISOString() };
+  if (patch.promptpayId !== undefined) row.promptpay_id = patch.promptpayId;
+  if (patch.bankName !== undefined) row.bank_name = patch.bankName;
+  if (patch.bankAccount !== undefined) row.bank_account = patch.bankAccount;
+  if (patch.accountName !== undefined) row.account_name = patch.accountName;
+  const { error } = await db.from("payment_accounts").upsert(row, { onConflict: "user_id" });
+  if (error) fail("save payment account", error);
+}
+
+export interface ShareByToken {
+  billId: string;
+  title: string;
+  payerLineUserId: string;
+  shareSatang: number;
+  status: BillStatus;
+}
+
+/** The share behind a QR image link. Null for an unknown token. */
+export async function shareByToken(
+  db: SupabaseClient,
+  token: string,
+): Promise<ShareByToken | null> {
+  const member = await db
+    .from("split_bill_members")
+    .select("bill_id,share_satang")
+    .eq("qr_token", token)
+    .maybeSingle();
+  if (member.error) fail("load share", member.error);
+  const m = member.data as { bill_id: string; share_satang: number | string | null } | null;
+  if (!m || m.share_satang === null) return null;
+  const bill = await db
+    .from("split_bills")
+    .select("title,payer_line_user_id,status")
+    .eq("id", m.bill_id)
+    .maybeSingle();
+  if (bill.error) fail("load share bill", bill.error);
+  const b = bill.data as { title: string; payer_line_user_id: string; status: BillStatus } | null;
+  if (!b) return null;
+  return {
+    billId: m.bill_id,
+    title: b.title,
+    payerLineUserId: b.payer_line_user_id,
+    shareSatang: Number(m.share_satang),
+    status: b.status,
+  };
+}
