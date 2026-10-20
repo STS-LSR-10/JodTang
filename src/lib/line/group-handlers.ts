@@ -92,6 +92,11 @@ const NAME_REFRESH_MS = 7 * 86_400_000;
  * Events from a LINE group. The bot answers only the explicit group commands (see
  * parseGroupCommand): ordinary chat is never recorded, and nothing personal is ever shown here.
  */
+/** The public app URL without a trailing slash, when it is configured. */
+function appBaseUrl(): string | undefined {
+  return process.env.APP_BASE_URL?.replace(/\/$/, "") || undefined;
+}
+
 export async function handleGroupEvent(event: LineEvent, deps: HandlerDeps): Promise<void> {
   const groupId = event.source?.groupId;
   if (!groupId) return;
@@ -101,9 +106,7 @@ export async function handleGroupEvent(event: LineEvent, deps: HandlerDeps): Pro
 
   switch (event.type) {
     case "join":
-      await reply([
-        buildGroupWelcomeCard({ appUrl: process.env.APP_BASE_URL?.replace(/\/$/, "") }),
-      ]);
+      await reply([buildGroupWelcomeCard({ appUrl: appBaseUrl() })]);
       return;
     case "leave":
       await closeGroup(deps.db, groupId);
@@ -152,7 +155,7 @@ async function runGroupCommand(
   const userId = event.source?.userId;
   const now = deps.now();
 
-  if (command.kind === "help") return reply([buildGroupHelpCard()]);
+  if (command.kind === "help") return reply([buildGroupHelpCard({ appUrl: appBaseUrl() })]);
 
   if (command.kind === "open") {
     if (!userId) return reply([text(GROUP_NO_USER_TEXT)]);

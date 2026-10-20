@@ -171,8 +171,11 @@ describe("welcome and group cards", () => {
     expect(json(buildWelcomeCard({}))).not.toContain("undefined");
   });
 
-  it("the group card lists the commands and has no buttons that talk in the group", () => {
-    const card = json(buildGroupHelpCard());
+  it("the group card lists the commands in the same look as the private ones, with no buttons that talk in the group", () => {
+    const card = json(buildGroupHelpCard({ appUrl: "https://x.test" }));
+    expect(card).toContain("https://x.test/logo.png");
+    expect(card).toContain("👥"); // the same big-icon header
+    expect(card).toContain("เริ่มทริป");
     expect(card).toContain("จด ข้าวเที่ยง 350");
     expect(card).toContain("ปิดสมุดกลุ่ม");
     expect(card).not.toContain('"type":"message"');
@@ -185,7 +188,7 @@ describe("group welcome card", () => {
     expect(card).toContain("ครอบครัว");
     expect(card).toContain("เริ่มใช้ใน 3 ขั้น");
     expect(card).toContain('"label":"📒 เปิดสมุดกลุ่ม","text":"เปิดสมุดกลุ่ม"');
-    expect(card).toContain('"label":"📖 วิธีใช้","text":"วิธีใช้งาน"');
+    expect(card).toContain('"label":"📖 วิธีใช้งาน","text":"วิธีใช้งาน"');
     expect(card).toContain("https://x.test/logo.png");
     expect(card).toContain("Ultimate"); // the opener must be Ultimate; the rest are free
     expect(card.length).toBeLessThan(50_000);

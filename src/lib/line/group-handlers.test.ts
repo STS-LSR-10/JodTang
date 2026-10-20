@@ -208,7 +208,7 @@ describe("the bot joining and leaving", () => {
     expect(card).toContain('"type":"flex"');
     // two buttons: open the ledger, and how to use it (each types the command for the person who taps)
     expect(card).toContain('"label":"📒 เปิดสมุดกลุ่ม","text":"เปิดสมุดกลุ่ม"');
-    expect(card).toContain('"label":"📖 วิธีใช้","text":"วิธีใช้งาน"');
+    expect(card).toContain('"label":"📖 วิธีใช้งาน","text":"วิธีใช้งาน"');
     expect(card).toContain("Ultimate");
 
     ({ deps, reply } = setup());

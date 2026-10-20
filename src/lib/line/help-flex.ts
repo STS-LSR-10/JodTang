@@ -461,6 +461,35 @@ export function buildHelpTopicCard(input: {
             },
           ]
       : topic.items.map((item, i) => row(item, i, input.plan));
+  return {
+    type: "flex",
+    altText: `วิธีใช้: ${topic.title}`,
+    quickReply: chips(),
+    contents: topicBubble({
+      icon: topic.icon,
+      title: topic.title,
+      subtitle: topic.subtitle,
+      tagline: topic.tagline,
+      body,
+      appUrl: input.appUrl,
+    }),
+  };
+}
+
+/**
+ * The look every how-to card shares (private topics, the group guide, the group welcome): a soft header
+ * with a big icon, a body of coloured tiles, and a foot with the app logo and a closing line (or, for
+ * the welcome, its own buttons).
+ */
+function topicBubble(input: {
+  icon: string;
+  title: string;
+  subtitle: string;
+  tagline?: string;
+  body: unknown[];
+  appUrl?: string;
+  footer?: unknown[];
+}) {
   const logo =
     input.appUrl?.startsWith("https://") === true
       ? [
@@ -474,66 +503,71 @@ export function buildHelpTopicCard(input: {
         ]
       : [];
   return {
-    type: "flex",
-    altText: `วิธีใช้: ${topic.title}`,
-    quickReply: chips(),
-    contents: {
-      type: "bubble",
-      size: "mega",
-      header: {
-        type: "box",
-        layout: "horizontal",
-        backgroundColor: COLOR.primarySoft,
-        paddingAll: "16px",
-        spacing: "md",
-        alignItems: "center",
-        contents: [
-          { type: "text", text: topic.icon, size: "4xl", flex: 0 },
-          {
-            type: "box",
-            layout: "vertical",
-            spacing: "xs",
-            flex: 1,
-            contents: [
-              {
-                type: "text",
-                text: topic.title,
-                weight: "bold",
-                size: "xl",
-                color: "#0B5D4F",
-                wrap: true,
-              },
-              { type: "text", text: topic.subtitle, size: "xs", color: "#3F6B63", wrap: true },
-            ],
-          },
-        ],
-      },
-      body: {
-        type: "box",
-        layout: "vertical",
-        paddingAll: "12px",
-        spacing: "none",
-        contents: body,
-      },
-      footer: {
-        type: "box",
-        layout: "horizontal",
-        paddingAll: "12px",
-        spacing: "md",
-        alignItems: "center",
-        contents: [
-          ...logo,
-          {
-            type: "text",
-            text: topic.tagline,
-            size: "xs",
-            color: COLOR.muted,
-            wrap: true,
-            flex: 1,
-          },
-        ],
-      },
+    type: "bubble",
+    size: "mega",
+    header: {
+      type: "box",
+      layout: "horizontal",
+      backgroundColor: COLOR.primarySoft,
+      paddingAll: "16px",
+      spacing: "md",
+      alignItems: "center",
+      contents: [
+        { type: "text", text: input.icon, size: "4xl", flex: 0 },
+        {
+          type: "box",
+          layout: "vertical",
+          spacing: "xs",
+          flex: 1,
+          contents: [
+            {
+              type: "text",
+              text: input.title,
+              weight: "bold",
+              size: "xl",
+              color: "#0B5D4F",
+              wrap: true,
+            },
+            { type: "text", text: input.subtitle, size: "xs", color: "#3F6B63", wrap: true },
+          ],
+        },
+        // a card with its own buttons has no logo line at the foot, so the logo rides in the header
+        ...(input.footer ? logo : []),
+      ],
     },
+    body: {
+      type: "box",
+      layout: "vertical",
+      paddingAll: "12px",
+      spacing: "none",
+      contents: input.body,
+    },
+    footer: input.footer
+      ? {
+          type: "box",
+          layout: "vertical",
+          paddingAll: "12px",
+          spacing: "sm",
+          contents: input.footer,
+        }
+      : {
+          type: "box",
+          layout: "horizontal",
+          paddingAll: "12px",
+          spacing: "md",
+          alignItems: "center",
+          contents: [
+            ...logo,
+            {
+              type: "text",
+              text: input.tagline ?? "",
+              size: "xs",
+              color: COLOR.muted,
+              wrap: true,
+              flex: 1,
+            },
+          ],
+        },
   };
 }
 
@@ -628,70 +662,41 @@ export function buildWelcomeCard(input: { appUrl?: string }): LineMessage {
   };
 }
 
-/** How to use the group ledger (read by everyone in the group, so no buttons that send messages). */
-export function buildGroupHelpCard(): LineMessage {
-  const line = (cmd: string, desc: string) => ({
-    type: "box",
-    layout: "vertical",
-    margin: "sm",
-    spacing: "xs",
-    contents: [
-      { type: "text", text: cmd, size: "sm", weight: "bold", color: "#14352E", wrap: true },
-      { type: "text", text: desc, size: "xs", color: COLOR.muted, wrap: true },
-    ],
-  });
+const GROUP_ITEMS: HelpItem[] = [
+  {
+    icon: "🧾",
+    cmd: "จด ข้าวเที่ยง 350",
+    desc: "จดรายจ่าย ต้องขึ้นต้นด้วย “จด” (ข้อความคุยทั่วไปบอทไม่จด) · หลายรายการ: จด กาแฟ 90, ขนม 40 (สูงสุด 5)",
+    need: "free",
+  },
+  { icon: "📊", cmd: "สรุป · สรุปวันนี้", desc: "ยอดรวมกลุ่มและใครจ่ายไปเท่าไร", need: "free" },
+  { icon: "🕘", cmd: "ล่าสุด", desc: "5 รายการล่าสุดของกลุ่ม", need: "free" },
+  { icon: "🗑️", cmd: "ลบล่าสุด", desc: "ลบรายการล่าสุดของตัวเอง", need: "free" },
+  {
+    icon: "✈️",
+    cmd: "เริ่มทริป · สรุปทริป · จบทริป",
+    desc: "หารค่าใช้จ่ายทริป ดูว่าใครโอนคืนใคร",
+    need: "free",
+  },
+  { icon: "🔒", cmd: "ปิดสมุดกลุ่ม", desc: "เฉพาะเจ้าของสมุด", need: "free" },
+];
+
+/**
+ * How to use the group ledger, in the same look as the private how-to cards. Everyone in the group
+ * reads it, so there are no buttons that send messages.
+ */
+export function buildGroupHelpCard(input: { appUrl?: string } = {}): LineMessage {
   return {
     type: "flex",
     altText: "วิธีใช้สมุดกลุ่ม: จด ข้าวเที่ยง 350 · สรุป · ล่าสุด · ลบล่าสุด",
-    contents: {
-      type: "bubble",
-      size: "mega",
-      header: {
-        type: "box",
-        layout: "vertical",
-        backgroundColor: COLOR.primarySoft,
-        paddingAll: "16px",
-        spacing: "xs",
-        contents: [
-          {
-            type: "text",
-            text: "👥 วิธีใช้สมุดกลุ่ม",
-            weight: "bold",
-            size: "md",
-            color: "#0B5D4F",
-          },
-          {
-            type: "text",
-            text: "ช่วยกันจด ดูว่าใครจ่ายไปเท่าไร",
-            size: "xs",
-            color: "#3F6B63",
-            wrap: true,
-          },
-        ],
-      },
-      body: {
-        type: "box",
-        layout: "vertical",
-        paddingAll: "14px",
-        contents: [
-          line("จด ข้าวเที่ยง 350", "จดรายจ่าย ต้องขึ้นต้นด้วย “จด” (ข้อความคุยทั่วไปบอทไม่จด)"),
-          line("จด กาแฟ 90, ขนม 40", "จดหลายรายการได้ (สูงสุด 5)"),
-          line("สรุป · สรุปวันนี้", "ยอดรวมกลุ่มและใครจ่ายไปเท่าไร"),
-          line("ล่าสุด", "5 รายการล่าสุดของกลุ่ม"),
-          line("ลบล่าสุด", "ลบรายการล่าสุดของตัวเอง"),
-          line("เริ่มทริป · สรุปทริป · จบทริป", "หารค่าใช้จ่ายทริป ดูว่าใครโอนคืนใคร"),
-          line("ปิดสมุดกลุ่ม", "เฉพาะเจ้าของสมุด"),
-          {
-            type: "text",
-            text: "บอทรู้ว่าใครจ่ายจากบัญชี LINE ของคนที่พิมพ์ (ต้องเพิ่มบอทเป็นเพื่อนไว้ก่อน)",
-            size: "xxs",
-            color: COLOR.muted,
-            wrap: true,
-            margin: "lg",
-          },
-        ],
-      },
-    },
+    contents: topicBubble({
+      icon: "👥",
+      title: "วิธีใช้สมุดกลุ่ม",
+      subtitle: "ช่วยกันจด ดูว่าใครจ่ายไปเท่าไร",
+      tagline: "บอทรู้ว่าใครจ่ายจากบัญชี LINE ของคนที่พิมพ์ (ต้องเพิ่มบอทเป็นเพื่อนไว้ก่อน)",
+      body: GROUP_ITEMS.map((item, i) => row(item, i, "free")),
+      appUrl: input.appUrl,
+    }),
   };
 }
 
@@ -701,29 +706,22 @@ export function buildGroupHelpCard(): LineMessage {
  * so by the bot). Groups have no single person's theme, so it keeps the default colours.
  */
 export function buildGroupWelcomeCard(input: { appUrl?: string }): LineMessage {
-  const pill = (icon: string, label: string, bg: string) => ({
-    type: "box",
-    layout: "horizontal",
-    spacing: "sm",
-    alignItems: "center",
-    margin: "sm",
-    paddingAll: "8px",
-    cornerRadius: "12px",
-    backgroundColor: bg,
-    contents: [
-      { type: "text", text: icon, size: "lg", flex: 0, color: "#000000" },
-      {
-        type: "text",
-        text: label,
-        size: "sm",
-        weight: "bold",
-        color: "#14352E",
-        flex: 1,
-        wrap: true,
-      },
-    ],
-  });
-  const step = (n: string, text: string, hint?: string) => ({
+  const who: HelpItem[] = [
+    { icon: "👨‍👩‍👧", cmd: "ครอบครัว · คู่รัก", desc: "ดูว่าเงินกองกลางไปไหนบ้าง", need: "free" },
+    {
+      icon: "✈️",
+      cmd: "กลุ่มเพื่อนไปเที่ยว",
+      desc: "หารค่าทริปและสรุปว่าใครโอนคืนใคร",
+      need: "free",
+    },
+    {
+      icon: "🏠",
+      cmd: "เพื่อนร่วมบ้าน · ร่วมห้อง",
+      desc: "จดค่าส่วนกลางและของใช้ร่วมกัน",
+      need: "free",
+    },
+  ];
+  const step = (n: string, text: string, hint: string) => ({
     type: "box",
     layout: "horizontal",
     spacing: "md",
@@ -750,117 +748,65 @@ export function buildGroupWelcomeCard(input: { appUrl?: string }): LineMessage {
         flex: 1,
         contents: [
           { type: "text", text, size: "sm", weight: "bold", color: "#14352E", wrap: true },
-          ...(hint
-            ? [{ type: "text", text: hint, size: "xs", color: COLOR.muted, wrap: true }]
-            : []),
+          { type: "text", text: hint, size: "xs", color: COLOR.muted, wrap: true },
         ],
       },
     ],
   });
-  const logo =
-    input.appUrl?.startsWith("https://") === true
-      ? [
-          {
-            type: "image",
-            url: `${input.appUrl}/logo.png`,
-            size: "48px",
-            aspectMode: "fit",
-            flex: 0,
-          },
-        ]
-      : [];
   return {
     type: "flex",
-    altText: 'จดตังค์มาแล้ว! ช่วยกันจดรายจ่ายในกลุ่ม พิมพ์ "เปิดสมุดกลุ่ม" เพื่อเริ่ม',
-    contents: {
-      type: "bubble",
-      size: "mega",
-      header: {
-        type: "box",
-        layout: "horizontal",
-        backgroundColor: COLOR.primarySoft,
-        paddingAll: "16px",
-        spacing: "md",
-        alignItems: "center",
-        contents: [
-          ...logo,
-          {
-            type: "box",
-            layout: "vertical",
-            spacing: "xs",
-            flex: 1,
-            contents: [
-              {
-                type: "text",
-                text: "จดตังค์ มาช่วยจดแล้ว 👋",
-                weight: "bold",
-                size: "lg",
-                color: "#0B5D4F",
-                wrap: true,
-              },
-              {
-                type: "text",
-                text: "ช่วยกันจดรายจ่ายของกลุ่ม ดูว่าใครจ่ายไปเท่าไร",
-                size: "xs",
-                color: "#3F6B63",
-                wrap: true,
-              },
-            ],
-          },
-        ],
-      },
-      body: {
-        type: "box",
-        layout: "vertical",
-        paddingAll: "16px",
-        contents: [
-          { type: "text", text: "เหมาะกับ", size: "xs", weight: "bold", color: COLOR.muted },
-          pill("👨‍👩‍👧", "ครอบครัว · คู่รัก", "#FDECEF"),
-          pill("✈️", "กลุ่มเพื่อนไปเที่ยว (หารค่าทริปได้)", "#E8F1FD"),
-          pill("🏠", "เพื่อนร่วมบ้าน · ร่วมห้อง", "#E8F8EF"),
-          { type: "separator", margin: "lg" },
-          {
-            type: "text",
-            text: "เริ่มใช้ใน 3 ขั้น",
-            size: "xs",
-            weight: "bold",
-            color: COLOR.muted,
-            margin: "lg",
-          },
-          step(
-            "1",
-            "กดปุ่ม “เปิดสมุดกลุ่ม”",
-            "ผู้เปิดสมุดต้องเป็น Ultimate (ทดลองฟรี 7 วันได้) เพื่อน ๆ จดได้ฟรี",
-          ),
-          step(
-            "2",
-            "จดรายจ่าย พิมพ์ จด ข้าวเที่ยง 350",
-            "ต้องขึ้นต้นด้วย “จด” ข้อความคุยทั่วไปบอทไม่จด",
-          ),
-          step("3", "พิมพ์ สรุป", "ดูยอดรวมและใครจ่ายไปเท่าไร"),
-        ],
-      },
-      footer: {
-        type: "box",
-        layout: "vertical",
-        paddingAll: "12px",
-        spacing: "sm",
-        contents: [
-          {
-            type: "button",
-            style: "primary",
-            height: "sm",
-            color: COLOR.primary,
-            action: { type: "message", label: "📒 เปิดสมุดกลุ่ม", text: "เปิดสมุดกลุ่ม" },
-          },
-          {
-            type: "button",
-            style: "secondary",
-            height: "sm",
-            action: { type: "message", label: "📖 วิธีใช้", text: "วิธีใช้งาน" },
-          },
-        ],
-      },
-    },
+    altText: 'จดตังค์มาแล้ว! ช่วยกันจดรายจ่ายในกลุ่ม แตะ "เปิดสมุดกลุ่ม" เพื่อเริ่ม',
+    contents: topicBubble({
+      icon: "👋",
+      title: "จดตังค์ มาช่วยจดแล้ว",
+      subtitle: "ช่วยกันจดรายจ่ายของกลุ่ม ดูว่าใครจ่ายไปเท่าไร",
+      appUrl: input.appUrl,
+      body: [
+        {
+          type: "text",
+          text: "เหมาะกับ",
+          size: "xs",
+          weight: "bold",
+          color: COLOR.muted,
+          margin: "sm",
+        },
+        ...who.map((item, i) => row(item, i, "free")),
+        { type: "separator", margin: "lg" },
+        {
+          type: "text",
+          text: "เริ่มใช้ใน 3 ขั้น",
+          size: "xs",
+          weight: "bold",
+          color: COLOR.muted,
+          margin: "lg",
+        },
+        step(
+          "1",
+          "กดปุ่ม “เปิดสมุดกลุ่ม”",
+          "ผู้เปิดสมุดต้องเป็น Ultimate (ทดลองฟรี 7 วันได้) เพื่อน ๆ จดได้ฟรี",
+        ),
+        step(
+          "2",
+          "จดรายจ่าย พิมพ์ จด ข้าวเที่ยง 350",
+          "ต้องขึ้นต้นด้วย “จด” ข้อความคุยทั่วไปบอทไม่จด",
+        ),
+        step("3", "พิมพ์ สรุป", "ดูยอดรวมและใครจ่ายไปเท่าไร"),
+      ],
+      footer: [
+        {
+          type: "button",
+          style: "primary",
+          height: "sm",
+          color: COLOR.primary,
+          action: { type: "message", label: "📒 เปิดสมุดกลุ่ม", text: "เปิดสมุดกลุ่ม" },
+        },
+        {
+          type: "button",
+          style: "secondary",
+          height: "sm",
+          action: { type: "message", label: "📖 วิธีใช้งาน", text: "วิธีใช้งาน" },
+        },
+      ],
+    }),
   };
 }
