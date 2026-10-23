@@ -5,7 +5,14 @@ import { formatBaht } from "@/lib/money";
 import { sanitizeSlip } from "@/lib/ocr/slip-schema";
 import { LIMITS } from "@/lib/rate-limit";
 import { evaluateSlip, type PayeeDigits } from "@/lib/split-bill";
-import { getPaymentByLine, openSharesOf, payBySlip, slipUsed } from "@/lib/split-bill-repo";
+import {
+  claimPaid,
+  getPaymentByLine,
+  openSharesOf,
+  payBySlip,
+  slipUsed,
+} from "@/lib/split-bill-repo";
+import { qrKey, readQrText } from "@/lib/slip-qr";
 import { monthKey, refundUsage, takeUsage } from "@/lib/usage";
 import type { LineMessage } from "@/lib/types";
 import type { HandlerDeps } from "./handlers";
@@ -86,7 +93,10 @@ export async function checkGroupSlip(
     return ctx.reply([text("โหลดรูปไม่สำเร็จ ลองส่งใหม่อีกครั้งนะ")]);
   }
   const sha256 = createHash("sha256").update(image.bytes).digest("hex");
-  if (await slipUsed(db, sha256, null)) {
+  // the QR printed on a slip names the transaction: the same slip gives the same one however it was photographed
+  const qrText = readQrText(image.bytes, image.mimeType);
+  const qrHash = qrText ? qrKey(qrText) : null;
+  if (await slipUsed(db, { sha256 })) {
     await giveBack();
     return ctx.reply([text("สลิปนี้เคยใช้จ่ายไปแล้วนะ")]);
   }
@@ -112,7 +122,7 @@ export async function checkGroupSlip(
     await giveBack();
     return;
   }
-  if (slip.reference && (await slipUsed(db, null, slip.reference))) {
+  if (await slipUsed(db, { qrHash, reference: slip.reference })) {
     return ctx.reply([text("สลิปนี้เคยใช้จ่ายไปแล้วนะ")]);
   }
 
@@ -153,6 +163,32 @@ export async function checkGroupSlip(
     ]);
   }
 
+  // nothing to tell this slip from another one (no QR we can read, no reference): it cannot be kept from
+  // being used twice, so it only says "โอนแล้ว" and the payer confirms by hand
+  if (!qrHash && !slip.reference) {
+    const claim = await claimPaid(db, verdict.share.bill.id, userId);
+    if (claim === "already") return;
+    return ctx.reply([
+      {
+        type: "text",
+        text: `🕒 ${who} ส่งสลิป ${baht(slip.amountSatang)} แล้ว แต่บอทอ่านรหัสบนสลิป (QR หรือเลขอ้างอิง) ไม่ได้ เลยตรวจกันสลิปซ้ำไม่ได้ ${payerName} ช่วยดูแล้วกดยืนยันด้วยนะ`,
+        quickReply: {
+          items: [
+            {
+              type: "action",
+              action: {
+                type: "postback",
+                label: `✅ ได้รับจาก ${who}`.slice(0, 20),
+                data: `a=gbp&b=${verdict.share.bill.id}&u=${userId}`,
+                displayText: `ได้รับเงินจาก ${who}`,
+              },
+            },
+          ],
+        },
+      },
+    ]);
+  }
+
   const paid = await payBySlip(db, {
     billId: verdict.share.bill.id,
     lineUserId: userId,
@@ -160,6 +196,7 @@ export async function checkGroupSlip(
     reference: slip.reference,
     amountSatang: slip.amountSatang,
     receiverVerified: verdict.receiver === "verified",
+    qrHash,
   });
   if (paid === "duplicate") return ctx.reply([text("สลิปนี้เคยใช้จ่ายไปแล้วนะ")]);
   if (paid !== "ok") return; // paid in the meantime, or the bill closed

@@ -2695,3 +2695,198 @@ describe("split bills round 2: claim, slips, unpay (0036)", () => {
     expect(n.n).toBe(0);
   });
 });
+
+describe("split bills round 3: setup, confirm, reminder, QR key (0037)", () => {
+  async function seed(status = "setup", amount = 90_000) {
+    const owner = await newUser(db, `sb3-${Math.random()}`);
+    const group = (
+      await one<{ id: string }>(
+        db,
+        "insert into bot_groups (line_group_id, owner_user_id) values ($1,$2) returning id",
+        [`C${Math.random().toString(16).slice(2)}`, owner],
+      )
+    ).id;
+    const bill = (
+      await one<{ id: string }>(
+        db,
+        "insert into split_bills (group_id, payer_line_user_id, title, amount_satang, status) values ($1,'Uanna','หมูกระทะ',$2,$3) returning id",
+        [group, amount, status],
+      )
+    ).id;
+    const confirm = async (shares: { user: string; share: number }[]) =>
+      (
+        await one<{ r: boolean }>(db, "select split_bill_confirm($1,$2::jsonb) as r", [
+          bill,
+          JSON.stringify(shares),
+        ])
+      ).r;
+    const status_ = async () =>
+      (await one<{ s: string }>(db, "select status as s from split_bills where id = $1", [bill])).s;
+    const members = () =>
+      rows<{ line_user_id: string; share_satang: string; paid: boolean; paid_via: string | null }>(
+        db,
+        "select line_user_id, share_satang::text, paid, paid_via from split_bill_members where bill_id = $1 order by line_user_id",
+        [bill],
+      );
+    return { bill, group, confirm, status: status_, members };
+  }
+
+  it("a bill can wait in 'setup'; unknown statuses are still refused", async () => {
+    const { group } = await seed();
+    await expect(
+      db.query(
+        "insert into split_bills (group_id, payer_line_user_id, title, amount_satang, status) values ($1,'U','x',100,'weird')",
+        [group],
+      ),
+    ).rejects.toThrow();
+  });
+
+  it("confirm: fixes every share, makes the payer's paid, and starts collecting - once", async () => {
+    const { confirm, status, members } = await seed();
+    const shares = [
+      { user: "Uanna", share: 30_000 },
+      { user: "Ubob", share: 30_000 },
+      { user: "Uchom", share: 30_000 },
+    ];
+    expect(await confirm(shares)).toBe(true);
+    expect(await status()).toBe("collecting");
+    expect(
+      (await members()).map((m) => [m.line_user_id, m.share_satang, m.paid, m.paid_via]),
+    ).toEqual([
+      ["Uanna", "30000", true, "payer"],
+      ["Ubob", "30000", false, null],
+      ["Uchom", "30000", false, null],
+    ]);
+    expect(await confirm(shares)).toBe(false); // a double tap
+  });
+
+  it("confirm refuses shares that do not add up, a list without the payer, and more than 30 people", async () => {
+    const { confirm, status } = await seed();
+    await expect(
+      confirm([
+        { user: "Uanna", share: 50_000 },
+        { user: "Ubob", share: 30_000 },
+      ]),
+    ).rejects.toThrow(/add up/);
+    await expect(
+      confirm([
+        { user: "Ubob", share: 45_000 },
+        { user: "Uchom", share: 45_000 },
+      ]),
+    ).rejects.toThrow(/payer/);
+    const crowd = Array.from({ length: 31 }, (_, i) => ({
+      user: i === 0 ? "Uanna" : `U${i}`,
+      share: 90_000 / 31,
+    }));
+    await expect(confirm(crowd)).rejects.toThrow(/too many/);
+    expect(await status()).toBe("setup");
+  });
+
+  it("confirm on its own payer alone settles the bill straight away", async () => {
+    const { confirm, status } = await seed("setup", 5000);
+    expect(await confirm([{ user: "Uanna", share: 5000 }])).toBe(true);
+    expect(await status()).toBe("settled");
+  });
+
+  it("confirm also finishes an older 'joining' bill, taking off people who are not on the list", async () => {
+    const { bill, confirm, members } = await seed("joining");
+    for (const u of ["Uanna", "Ubob", "Ustale"])
+      await db.query("select split_bill_join($1,$2)", [bill, u]);
+    expect(
+      await confirm([
+        { user: "Uanna", share: 45_000 },
+        { user: "Ubob", share: 45_000 },
+      ]),
+    ).toBe(true);
+    expect((await members()).map((m) => m.line_user_id)).toEqual(["Uanna", "Ubob"]);
+  });
+
+  it("confirm does nothing to a bill that is collecting, settled or cancelled", async () => {
+    for (const st of ["collecting", "settled", "cancelled"]) {
+      const { confirm } = await seed(st);
+      expect(
+        await confirm([
+          { user: "Uanna", share: 45_000 },
+          { user: "Ubob", share: 45_000 },
+        ]),
+      ).toBe(false);
+    }
+  });
+
+  it("announced: true once, only for a bill that is collecting or settled", async () => {
+    const setup = await seed("setup");
+    const announce = async (bill: string) =>
+      (await one<{ r: boolean }>(db, "select split_bill_mark_announced($1) as r", [bill])).r;
+    expect(await announce(setup.bill)).toBe(false); // not chosen yet
+    await setup.confirm([
+      { user: "Uanna", share: 45_000 },
+      { user: "Ubob", share: 45_000 },
+    ]);
+    expect(await announce(setup.bill)).toBe(true);
+    expect(await announce(setup.bill)).toBe(false);
+  });
+
+  it("reminded: true once per day per bill, again the next day, never for a bill that is not collecting", async () => {
+    const { bill, confirm } = await seed("setup");
+    const remind = async (day: string) =>
+      (
+        await one<{ r: boolean }>(db, "select split_bill_mark_reminded($1,$2::date) as r", [
+          bill,
+          day,
+        ])
+      ).r;
+    expect(await remind("2026-10-18")).toBe(false); // still in setup
+    await confirm([
+      { user: "Uanna", share: 45_000 },
+      { user: "Ubob", share: 45_000 },
+    ]);
+    expect(await remind("2026-10-18")).toBe(true);
+    expect(await remind("2026-10-18")).toBe(false);
+    expect(await remind("2026-10-17")).toBe(false); // an earlier date never goes back
+    expect(await remind("2026-10-19")).toBe(true);
+    await db.query("update split_bills set status = 'settled' where id = $1", [bill]);
+    expect(await remind("2026-10-20")).toBe(false);
+  });
+
+  it("the QR on a slip is a key of its own: the same QR cannot pay twice, even with another picture and reference", async () => {
+    const { bill, confirm } = await seed("setup");
+    await confirm([
+      { user: "Uanna", share: 30_000 },
+      { user: "Ubob", share: 30_000 },
+      { user: "Uchom", share: 30_000 },
+    ]);
+    const tag = Math.random().toString(16).slice(2);
+    const pay = async (user: string, sha: string, ref: string | null, qr: string | null) =>
+      (
+        await one<{ r: string }>(
+          db,
+          "select split_bill_pay_by_slip($1,$2,$3,$4,30000,true,$5) as r",
+          [bill, user, `${sha}-${tag}`, ref ? `${ref}-${tag}` : null, qr ? `${qr}-${tag}` : null],
+        )
+      ).r;
+    expect(await pay("Ubob", "s1", "r1", "q1")).toBe("ok");
+    expect(await pay("Uchom", "s2", "r2", "q1")).toBe("duplicate"); // same QR
+    expect(await pay("Uchom", "s2", "r2", "q2")).toBe("ok");
+  });
+
+  it("slips without a QR still work and do not clash with each other", async () => {
+    const { bill, confirm } = await seed("setup");
+    await confirm([
+      { user: "Uanna", share: 30_000 },
+      { user: "Ubob", share: 30_000 },
+      { user: "Uchom", share: 30_000 },
+    ]);
+    const tag = Math.random().toString(16).slice(2);
+    for (const [u, i] of [
+      ["Ubob", 1],
+      ["Uchom", 2],
+    ] as const) {
+      const r = await one<{ r: string }>(
+        db,
+        "select split_bill_pay_by_slip($1,$2,$3,$4,30000,false) as r",
+        [bill, u, `plain-${tag}-${i}`, `ref-${tag}-${i}`],
+      );
+      expect(r.r).toBe("ok");
+    }
+  });
+});

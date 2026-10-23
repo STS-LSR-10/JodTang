@@ -51,7 +51,12 @@ import {
   resolveNames,
   splitAmount,
 } from "@/lib/trip";
-import { BILL_POSTBACKS, handleBillPostback, runBillCommand } from "./split-bill-handlers";
+import {
+  BILL_POSTBACKS,
+  handleBillPostback,
+  runBillCommand,
+  runDailyReminder,
+} from "./split-bill-handlers";
 import { checkGroupSlip } from "./split-bill-slip";
 import type { HandlerDeps, LineEvent } from "./handlers";
 import {
@@ -124,7 +129,11 @@ export async function handleGroupEvent(event: LineEvent, deps: HandlerDeps): Pro
       }
       if (event.message?.type !== "text" || event.message.text === undefined) return;
       const command = parseGroupCommand(event.message.text);
-      if (!command) return; // ordinary chat: stay quiet
+      if (!command) {
+        // ordinary chat: stay quiet, except for the once-a-day reminder of unpaid bills
+        await remindIfDue(groupId, deps, reply);
+        return;
+      }
       if (deps.limit) {
         const result = await deps.limit("group", groupId, LIMITS.chat);
         if (!result.allowed) return;
@@ -138,6 +147,30 @@ export async function handleGroupEvent(event: LineEvent, deps: HandlerDeps): Pro
 }
 
 type Reply = (messages: LineMessage[]) => Promise<void>;
+
+/** Ordinary chat in a group: if a bill still has people who have not paid, the day's reminder rides on it. */
+async function remindIfDue(groupId: string, deps: HandlerDeps, reply: Reply): Promise<void> {
+  try {
+    const group = await getGroup(deps.db, groupId);
+    if (!group || !group.isActive) return;
+    const { writable } = await ownerState(deps.db, group, deps.now());
+    await runDailyReminder(
+      {
+        db: deps.db,
+        group,
+        userId: undefined,
+        writable,
+        isOwner: false,
+        knownName: (id) => knownName(deps.db, group, id, deps),
+        appUrl: appBaseUrl(),
+        reply,
+      },
+      deps.now(),
+    );
+  } catch (error) {
+    log.error("bill_reminder_failed", error);
+  }
+}
 
 /** A picture in a group: only looked at when the sender still owes on a bill of this ledger. */
 async function handleGroupImage(
@@ -280,6 +313,7 @@ async function runGroupCommand(
     case "bill-paid":
     case "bill-unpaid":
     case "bill-claim":
+    case "bill-announce":
       return runBillCommand(command, {
         db,
         group,

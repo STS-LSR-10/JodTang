@@ -10,7 +10,7 @@ export const MAX_BILL_SATANG = 100_000_000;
 /** Buttons "ได้รับจาก …" on the collecting card: more people than this use the typed command. */
 export const MAX_PAID_BUTTONS = 8;
 
-export type BillStatus = "joining" | "collecting" | "settled" | "cancelled";
+export type BillStatus = "setup" | "joining" | "collecting" | "settled" | "cancelled";
 
 export interface BillRow {
   id: string;
@@ -35,7 +35,15 @@ export interface BillMemberRow {
 }
 
 export type BillCommand =
-  | { kind: "bill-new"; title: string; amountSatang: number; names: string[] }
+  | {
+      kind: "bill-new";
+      title: string;
+      amountSatang: number;
+      names: string[];
+      /** "ทั้งหมด" / "ทุกคน": everyone the bot knows in the group, no choosing step. */
+      all: boolean;
+    }
+  | { kind: "bill-announce"; shortId: string }
   | { kind: "bill-usage" }
   | { kind: "bill-chase" }
   | { kind: "bill-open" }
@@ -53,7 +61,13 @@ const AMOUNT_RE = /\d[\d,]*(?:\.\d{1,2})?/;
  * "ปิดรายชื่อ", "ยกเลิกบิล" and "ได้รับแล้ว แอน".
  */
 export function parseBillCommand(input: string): BillCommand | null {
-  const text = normalizeThaiDigits(input).trim().replace(/\s+/g, " ");
+  // "หารบิล", "หาร บิล" and "แบ่งบิล" are the same words
+  const text = normalizeThaiDigits(input)
+    .trim()
+    .replace(/\s+/g, " ")
+    .replace(/^(?:หาร|แบ่ง) ?บิล(?=$| )/, "หารบิล");
+  const announce = /^✅ เลือกคนหารบิล .+ #([0-9a-f]{8})$/.exec(text);
+  if (announce?.[1]) return { kind: "bill-announce", shortId: announce[1] };
   if (text === "ตามเงิน") return { kind: "bill-chase" };
   if (text === "บิลค้าง") return { kind: "bill-open" };
   if (text === "ปิดรายชื่อ") return { kind: "bill-close" };
@@ -92,14 +106,21 @@ export function parseBillCommand(input: string): BillCommand | null {
   if (before === "") {
     // amount first: what follows is the name of the bill
     const title = after || "บิล";
-    return title.length <= MAX_BILL_TITLE
-      ? { kind: "bill-new", title, amountSatang, names: [] }
-      : { kind: "bill-usage" };
+    if (title.length > MAX_BILL_TITLE) return { kind: "bill-usage" };
+    // "หารบิล 1200 หมูกระทะ ทั้งหมด": the last word can still say everyone
+    const everyone = /^(.*?)\s*(?:ทั้งหมด|ทุกคน)$/.exec(title);
+    if (everyone) {
+      const rest = everyone[1]?.trim() || "บิล";
+      return { kind: "bill-new", title: rest, amountSatang, names: [], all: true };
+    }
+    return { kind: "bill-new", title, amountSatang, names: [], all: false };
   }
-  const names = after.split(/[\s,]+/).filter(Boolean);
+  const typed = after.split(/[\s,]+/).filter(Boolean);
+  const all = typed.some((n) => n === "ทั้งหมด" || n === "ทุกคน");
+  const names = typed.filter((n) => n !== "ทั้งหมด" && n !== "ทุกคน");
   if (before.length > MAX_BILL_TITLE || names.length > MAX_SPLIT_NAMES)
     return { kind: "bill-usage" };
-  return { kind: "bill-new", title: before, amountSatang, names };
+  return { kind: "bill-new", title: before, amountSatang, names, all };
 }
 
 export interface BillShare {

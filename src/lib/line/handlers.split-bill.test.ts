@@ -20,6 +20,8 @@ let bills: BillRow[] = [];
 let billMembers: Record<string, (BillMemberRow & { joinedAt: number })[]> = {};
 const payments = new Map<string, PaymentAccount>();
 const usedSlips = new Set<string>();
+const announced = new Set<string>();
+const reminded = new Map<string, string>();
 const usage = new Map<string, number>();
 let seq = 0;
 const slipImages: number[] = [];
@@ -27,6 +29,7 @@ let slipLimited = false;
 let fetchFails = false;
 let ocrFails = false;
 let slipRaw: Record<string, unknown> = {};
+let slipQr: string | null = null;
 
 vi.mock("@/lib/repo", async (original) => ({
   ...(await original<typeof import("@/lib/repo")>()),
@@ -47,12 +50,23 @@ vi.mock("@/lib/group-repo", () => ({
   },
   closeGroup: async () => undefined,
 }));
+vi.mock("@/lib/slip-qr", async (original) => ({
+  ...(await original<typeof import("@/lib/slip-qr")>()),
+  // the pictures in these tests are not real images: the QR on the slip is whatever the test says
+  readQrText: () => slipQr,
+}));
 vi.mock("@/lib/split-bill-repo", () => ({
   createBill: async (
     _db: unknown,
-    input: { groupId: string; payerLineUserId: string; title: string; amountSatang: number },
+    input: {
+      groupId: string;
+      payerLineUserId: string;
+      title: string;
+      amountSatang: number;
+      status?: BillRow["status"];
+    },
   ) => {
-    if (bills.filter((b) => b.status === "joining" || b.status === "collecting").length >= 10) {
+    if (bills.filter((b) => ["setup", "joining", "collecting"].includes(b.status)).length >= 10) {
       return "too_many";
     }
     const bill: BillRow = {
@@ -61,7 +75,7 @@ vi.mock("@/lib/split-bill-repo", () => ({
       payerLineUserId: input.payerLineUserId,
       title: input.title,
       amountSatang: input.amountSatang,
-      status: "joining",
+      status: input.status ?? "joining",
       createdAt: NOW.toISOString(),
     };
     bills.push(bill);
@@ -90,6 +104,38 @@ vi.mock("@/lib/split-bill-repo", () => ({
     }
     return "ok";
   },
+  confirmBill: async (
+    _db: unknown,
+    id: string,
+    shares: { lineUserId: string; shareSatang: number; paid: boolean }[],
+  ) => {
+    const bill = bills.find((b) => b.id === id);
+    if (!bill || (bill.status !== "setup" && bill.status !== "joining")) return false;
+    expect(shares.reduce((s, x) => s + x.shareSatang, 0)).toBe(bill.amountSatang);
+    billMembers[id] = shares.map((x, i) => ({
+      lineUserId: x.lineUserId,
+      shareSatang: x.shareSatang,
+      paid: x.paid,
+      qrToken: `tok-${id}-${x.lineUserId}`,
+      joinedAt: i,
+    }));
+    bill.status = billMembers[id].every((m) => m.paid) ? "settled" : "collecting";
+    return true;
+  },
+  markAnnounced: async (_db: unknown, id: string) => {
+    const bill = bills.find((b) => b.id === id);
+    if (!bill || !["collecting", "settled"].includes(bill.status) || announced.has(id))
+      return false;
+    announced.add(id);
+    return true;
+  },
+  markReminded: async (_db: unknown, id: string, day: string) => {
+    if (reminded.get(id) === day) return false;
+    reminded.set(id, day);
+    return true;
+  },
+  findBillByShortId: async (_db: unknown, _g: string, short: string) =>
+    bills.find((b) => b.id.startsWith(short)) ?? null,
   closeBill: async (
     _db: unknown,
     id: string,
@@ -119,7 +165,7 @@ vi.mock("@/lib/split-bill-repo", () => ({
   },
   cancelBill: async (_db: unknown, id: string) => {
     const bill = bills.find((b) => b.id === id);
-    if (!bill || (bill.status !== "joining" && bill.status !== "collecting")) return false;
+    if (!bill || !["setup", "joining", "collecting"].includes(bill.status)) return false;
     bill.status = "cancelled";
     return true;
   },
@@ -141,8 +187,13 @@ vi.mock("@/lib/split-bill-repo", () => ({
     bill.status = "collecting";
     return "ok";
   },
-  slipUsed: async (_db: unknown, sha: string | null, ref: string | null) =>
-    (sha !== null && usedSlips.has(`sha:${sha}`)) || (ref !== null && usedSlips.has(`ref:${ref}`)),
+  slipUsed: async (
+    _db: unknown,
+    keys: { sha256?: string | null; qrHash?: string | null; reference?: string | null },
+  ) =>
+    (!!keys.sha256 && usedSlips.has(`sha:${keys.sha256}`)) ||
+    (!!keys.qrHash && usedSlips.has(`qr:${keys.qrHash}`)) ||
+    (!!keys.reference && usedSlips.has(`ref:${keys.reference}`)),
   openSharesOf: async (_db: unknown, _g: string, user: string) =>
     bills
       .filter((b) => b.status === "collecting")
@@ -158,6 +209,7 @@ vi.mock("@/lib/split-bill-repo", () => ({
       sha256: string;
       reference: string | null;
       receiverVerified: boolean;
+      qrHash?: string | null;
     },
   ) => {
     const bill = bills.find((b) => b.id === input.billId);
@@ -166,11 +218,13 @@ vi.mock("@/lib/split-bill-repo", () => ({
     if (m.paid) return "already";
     if (
       usedSlips.has(`sha:${input.sha256}`) ||
-      (input.reference && usedSlips.has(`ref:${input.reference}`))
+      (input.reference && usedSlips.has(`ref:${input.reference}`)) ||
+      (input.qrHash && usedSlips.has(`qr:${input.qrHash}`))
     ) {
       return "duplicate";
     }
     usedSlips.add(`sha:${input.sha256}`);
+    if (input.qrHash) usedSlips.add(`qr:${input.qrHash}`);
     if (input.reference) usedSlips.add(`ref:${input.reference}`);
     m.paid = true;
     m.claimed = false;
@@ -265,37 +319,83 @@ beforeEach(() => {
   billMembers = {};
   payments.clear();
   usedSlips.clear();
+  announced.clear();
+  reminded.clear();
   usage.clear();
   slipImages.length = 0;
   slipLimited = false;
   fetchFails = false;
   ocrFails = false;
   slipRaw = {};
+  slipQr = null;
   seq = 0;
 });
 
-/** A bill that Anna paid for, with Bob and Chom in, list still open. */
+/** A bill that Anna paid for, shared with Bob and Chom: names typed after the amount are the list. */
 async function openBill(amount = 1200) {
-  await run(inGroup("Uanna", `หารบิล หมูกระทะ ${amount}`));
-  await run(tap("Ubob", "a=gbj&b=b1"));
-  await run(tap("Uchom", "a=gbj&b=b1"));
+  await run(inGroup("Uanna", `หารบิล หมูกระทะ ${amount} บ๊อบ ชมพู`));
 }
 
 describe("opening a bill", () => {
-  it("posts a card with the join button, and the payer is in already", async () => {
-    const out = await run(inGroup("Uanna", "หารบิล หมูกระทะ 1200"));
+  it("'หารบิล 1200' posts a setup card (no join button): pick the people on the LIFF page, or everyone", async () => {
+    process.env.NEXT_PUBLIC_LIFF_ID = "1234567890-abcdefgh";
+    const out = await run(inGroup("Uanna", "หารบิล 1200 หมูกระทะ"));
     expect(out).toContain('"type":"flex"');
     expect(out).toContain("หมูกระทะ");
     expect(out).toContain("฿1,200");
-    expect(out).toContain("a=gbj&b=b1");
-    expect(out).toContain("a=gbc&b=b1");
-    expect(billMembers.b1?.map((m) => m.lineUserId)).toEqual(["Uanna"]);
-    expect(bills[0]).toMatchObject({ payerLineUserId: "Uanna", amountSatang: 120_000 });
+    expect(out).toContain("https://liff.line.me/1234567890-abcdefgh/split-bill/b1"); // the people picker
+    expect(out).toContain("a=gba&b=b1"); // ทั้งหมดเลย
+    expect(out).toContain("a=gbn&b=b1"); // send the QR codes (the fallback after the LIFF page)
+    expect(out).not.toContain("a=gbj"); // nobody taps "ร่วมหาร" any more
+    expect(bills[0]).toMatchObject({
+      payerLineUserId: "Uanna",
+      amountSatang: 120_000,
+      status: "setup",
+    });
+    expect(billMembers.b1).toEqual([]);
   });
 
-  it("people typed after the amount are in straight away", async () => {
-    await run(inGroup("Uanna", "หารบิล หมูกระทะ 1200 บ๊อบ ชมพู"));
+  it("'หาร บิล' with a space and 'แบ่งบิล' mean the same", async () => {
+    await run(inGroup("Uanna", "หาร บิล ชาบู 600"));
+    await run(inGroup("Uanna", "แบ่งบิล ขนม 100"));
+    expect(bills.map((b) => b.title)).toEqual(["ชาบู", "ขนม"]);
+  });
+
+  it("without a LIFF id the card still works through the 'everyone' button", async () => {
+    delete process.env.NEXT_PUBLIC_LIFF_ID;
+    const out = await run(inGroup("Uanna", "หารบิล 1200 หมูกระทะ"));
+    expect(out).not.toContain("liff.line.me");
+    expect(out).toContain("a=gba&b=b1");
+  });
+
+  it("names typed after the amount are the list at once: shares are fixed and the QR codes go out", async () => {
+    payments.set("Uanna", {
+      promptpayId: "0812345678",
+      bankName: null,
+      bankAccount: null,
+      accountName: null,
+    });
+    const out = await run(inGroup("Uanna", "หารบิล หมูกระทะ 1200 บ๊อบ ชมพู"));
+    expect(bills[0]?.status).toBe("collecting");
     expect(billMembers.b1?.map((m) => m.lineUserId).sort()).toEqual(["Uanna", "Ubob", "Uchom"]);
+    expect(out).toContain("📣 หารบิล"); // the header
+    expect(out).toContain('"type":"carousel"'); // one QR per person who owes
+    expect(out).toContain("/api/split-bill/qr/tok-b1-Ubob.png");
+    expect(out).toContain("/api/split-bill/qr/tok-b1-Uchom.png");
+    expect(out).not.toContain("tok-b1-Uanna"); // the payer owes nobody
+    expect(out).toContain("฿400");
+  });
+
+  it("'ทั้งหมด' (or 'ทุกคน') means everyone the bot knows in the group", async () => {
+    await run(inGroup("Uanna", "หารบิล หมูกระทะ 1200 ทั้งหมด"));
+    expect(billMembers.b1?.map((m) => m.lineUserId).sort()).toEqual([
+      "Uanna",
+      "Ubob",
+      "Uchom",
+      "Uowner",
+    ]);
+    await run(inGroup("Uanna", "หารบิล 400 ขนม ทุกคน"));
+    expect(billMembers.b2).toHaveLength(4);
   });
 
   it("a name the bot does not know opens nothing and says so", async () => {
@@ -325,60 +425,126 @@ describe("opening a bill", () => {
   });
 });
 
-describe("joining and closing the list", () => {
-  it("each tap joins once and says how many are in", async () => {
-    await run(inGroup("Uanna", "หารบิล หมูกระทะ 1200"));
-    expect(await run(tap("Ubob", "a=gbj&b=b1"))).toContain("บ๊อบ ร่วมหาร");
-    expect(await run(tap("Ubob", "a=gbj&b=b1"))).toContain("ตอนนี้ 2 คน"); // a second tap does not add him again
-    expect(billMembers.b1).toHaveLength(2);
+describe("choosing the people", () => {
+  beforeEach(async () => {
+    await run(inGroup("Uanna", "หารบิล หมูกระทะ 900"));
   });
 
-  it("only the payer (or the owner) closes it; the shares are equal and add up", async () => {
-    await openBill(1000);
-    expect(await run(tap("Ubob", "a=gbc&b=b1"))).toContain("เฉพาะคนที่จ่ายบิลนี้");
-    expect(bills[0]?.status).toBe("joining");
-
-    const out = await run(tap("Uanna", "a=gbc&b=b1"));
+  it("'ทั้งหมดเลย' (payer only) fixes the shares among everyone known and sends the QR codes", async () => {
+    expect(await run(tap("Ubob", "a=gba&b=b1"))).toContain("เฉพาะคนที่จ่ายบิลนี้");
+    expect(bills[0]?.status).toBe("setup");
+    const out = await run(tap("Uanna", "a=gba&b=b1"));
     expect(bills[0]?.status).toBe("collecting");
-    const shares = billMembers.b1?.map((m) => m.shareSatang) ?? [];
-    expect(shares.reduce((s, x) => (s ?? 0) + (x ?? 0), 0)).toBe(100_000);
-    expect(
-      Math.max(...(shares as number[])) - Math.min(...(shares as number[])),
-    ).toBeLessThanOrEqual(1);
-    expect(out).toContain("💸 จ่ายส่วนของฉัน");
-    expect(out).toContain("a=gbp&b=b1&u=Ubob");
-    expect(out).not.toContain("a=gbp&b=b1&u=Uanna"); // the payer owes nobody
-    expect(billMembers.b1?.find((m) => m.lineUserId === "Uanna")?.paid).toBe(true);
+    expect(billMembers.b1).toHaveLength(4);
+    const shares = billMembers.b1?.map((m) => m.shareSatang as number) ?? [];
+    expect(shares.reduce((x, y) => x + y, 0)).toBe(90_000);
+    expect(out).toContain("📣 หารบิล");
   });
 
-  it("a bill that does not divide still adds up to the satang, the payer taking the odd one", () => {
+  it("with only the payer known there is nobody to share with, and it says what to do", async () => {
+    members = new Map([["Uanna", { name: "แอน", updatedAt: NOW.toISOString() }]]);
+    const out = await run(tap("Uanna", "a=gba&b=b1"));
+    expect(out).toContain("พิมพ์อะไรสักอย่างในกลุ่มก่อน");
+    expect(bills[0]?.status).toBe("setup");
+  });
+
+  it("the LIFF page's message ('✅ เลือกคนหารบิล … #id') makes the bot send the QR codes: payer only, once", async () => {
+    // the page's API has fixed the shares already, so the bill is collecting but not announced
+    bills[0]!.id = "abcdef12-0000-0000-0000-000000000000";
+    billMembers[bills[0]!.id] = [
+      { lineUserId: "Uanna", shareSatang: 30_000, paid: true, qrToken: "tA", joinedAt: 0 },
+      { lineUserId: "Ubob", shareSatang: 30_000, paid: false, qrToken: "tB", joinedAt: 1 },
+      { lineUserId: "Uchom", shareSatang: 30_000, paid: false, qrToken: "tC", joinedAt: 2 },
+    ];
+    bills[0]!.status = "collecting";
+    const message = "✅ เลือกคนหารบิล หมูกระทะ แล้ว #abcdef12";
+    expect(await run(inGroup("Ubob", message))).toBe("[]"); // not the payer: quiet
+    const out = await run(inGroup("Uanna", message));
+    expect(out).toContain("📣 หารบิล");
+    expect(await run(inGroup("Uanna", message))).toBe("[]"); // already sent: quiet
+  });
+
+  it("the 'ส่ง QR เข้ากลุ่ม' button works as the fallback, and before choosing it says to choose first", async () => {
+    expect(await run(tap("Uanna", "a=gbn&b=b1"))).toContain("ยังไม่ได้เลือกคนหาร");
+    await run(tap("Uanna", "a=gba&b=b1"));
+    expect(await run(tap("Uanna", "a=gbn&b=b1"))).toContain("ส่ง QR เข้ากลุ่มไปแล้ว");
+  });
+
+  it("the payer can cancel; others cannot", async () => {
+    expect(await run(tap("Ubob", "a=gbx&b=b1"))).toContain("เฉพาะคนที่จ่ายบิลนี้");
+    expect(await run(tap("Uanna", "a=gbx&b=b1"))).toContain("ยกเลิกบิล");
+    expect(bills[0]?.status).toBe("cancelled");
+  });
+
+  it("when the payer has set no account the QR step asks them to instead of sending empty cards", async () => {
+    const out = await run(tap("Uanna", "a=gba&b=b1"));
+    expect(out).toContain("พร้อมเพย์ 0812345678");
+    expect(out).not.toContain('"type":"carousel"');
+  });
+
+  it("billShares: a bill that does not divide still adds up to the satang, the payer taking the odd one", () => {
     const shares = billShares(10_000, ["Ubob", "Uchom", "Uanna"], "Uanna");
     expect(shares.map((s) => s.shareSatang)).toEqual([3334, 3333, 3333]);
     expect(shares.reduce((s, x) => s + x.shareSatang, 0)).toBe(10_000);
     expect(shares[0]).toMatchObject({ lineUserId: "Uanna", paid: true });
   });
+});
 
-  it("the payer alone cannot close; the typed command works too", async () => {
-    await run(inGroup("Uanna", "หารบิล หมูกระทะ 1200"));
-    expect(await run(inGroup("Uanna", "ปิดรายชื่อ"))).toContain("ยังไม่มีใครร่วมหาร");
-    await run(tap("Ubob", "a=gbj&b=b1"));
-    await run(inGroup("Uanna", "ปิดรายชื่อ"));
-    expect(bills[0]?.status).toBe("collecting");
+describe("the daily reminder (free: it rides on ordinary chat)", () => {
+  const AT_ELEVEN = new Date("2026-10-18T04:00:00Z"); // 11:00 in Bangkok
+  const AT_EIGHT = new Date("2026-10-18T01:00:00Z"); // 08:00 in Bangkok
+
+  async function chat(userId: string, now: Date, textIn = "หิวจัง") {
+    const s = setup();
+    s.deps.now = () => now;
+    await handleEvent(inGroup(userId, textIn), s.deps);
+    return said(s.reply);
+  }
+
+  beforeEach(async () => {
+    await openBill(900);
   });
 
-  it("nobody can join once the list is closed (a double tap closes once)", async () => {
-    await openBill();
-    await run(tap("Uanna", "a=gbc&b=b1"));
-    expect(await run(tap("Uanna", "a=gbc&b=b1"))).toContain("ปิดรายชื่อไปแล้ว");
-    expect(await run(tap("Uowner", "a=gbj&b=b1"))).toContain("ปิดรายชื่อแล้ว");
-    expect(billMembers.b1).toHaveLength(3);
+  it("the first ordinary message of the day after 10:00 gets the card of who has not paid", async () => {
+    const out = await chat("Ubob", AT_ELEVEN);
+    expect(out).toContain("เตือนประจำวัน");
+    expect(out).toContain("บ๊อบ");
+    expect(out).toContain("ชมพู");
+    expect(out).toContain('"text":"บ๊อบ"');
+    expect(out).not.toContain('"text":"แอน"'); // the payer owes nothing, so there is no row for them
   });
 
-  it("the payer can cancel; others cannot", async () => {
-    await openBill();
-    expect(await run(tap("Ubob", "a=gbx&b=b1"))).toContain("เฉพาะคนที่จ่ายบิลนี้");
-    expect(await run(tap("Uanna", "a=gbx&b=b1"))).toContain("ยกเลิกบิล");
-    expect(bills[0]?.status).toBe("cancelled");
+  it("only once a day: the next messages are left alone, tomorrow it is due again", async () => {
+    expect(await chat("Ubob", AT_ELEVEN)).toContain("เตือนประจำวัน");
+    expect(await chat("Uchom", AT_ELEVEN)).toBe("[]");
+    const tomorrow = new Date(AT_ELEVEN.getTime() + 86_400_000);
+    expect(await chat("Uchom", tomorrow)).toContain("เตือนประจำวัน");
+  });
+
+  it("not before 10:00", async () => {
+    expect(await chat("Ubob", AT_EIGHT)).toBe("[]");
+    expect(await chat("Ubob", AT_ELEVEN)).toContain("เตือนประจำวัน"); // and then it still comes, later that day
+  });
+
+  it("only people who have not paid are listed; nothing at all once everybody has", async () => {
+    await run(tap("Uanna", "a=gbp&b=b1&u=Ubob"));
+    const one = await chat("Ubob", AT_ELEVEN);
+    expect(one).toContain("ชมพู");
+    expect(one).not.toContain("บ๊อบ");
+    reminded.clear();
+    await run(tap("Uanna", "a=gbp&b=b1&u=Uchom"));
+    expect(await chat("Ubob", AT_ELEVEN)).toBe("[]");
+  });
+
+  it("a command is answered as a command (no reminder on top), and a bill nobody settles stops after 30 days", async () => {
+    expect(await chat("Ubob", AT_ELEVEN, "บิลค้าง")).not.toContain("เตือนประจำวัน");
+    const old = new Date(AT_ELEVEN.getTime() + 31 * 86_400_000);
+    expect(await chat("Ubob", old)).toBe("[]");
+  });
+
+  it("a read-only ledger (the owner's plan ended) sends no reminders", async () => {
+    ownerPlan = "free";
+    expect(await chat("Ubob", AT_ELEVEN)).toBe("[]");
   });
 });
 
@@ -396,7 +562,6 @@ const slipOf = (over: Record<string, unknown> = {}) => ({
 describe("paying", () => {
   beforeEach(async () => {
     await openBill(900);
-    await run(tap("Uanna", "a=gbc&b=b1"));
   });
 
   it("gives each person a QR with their own amount, from the payer's PromptPay", async () => {
@@ -478,7 +643,6 @@ describe("paying", () => {
 describe("chasing", () => {
   it("lists who still owes how much, bill by bill, and keeps working when the ledger is read-only", async () => {
     await openBill(900);
-    await run(tap("Uanna", "a=gbc&b=b1"));
     await run(tap("Uanna", "a=gbp&b=b1&u=Ubob"));
     ownerPlan = "free";
     const out = await run(inGroup("Ubob", "ตามเงิน"));
@@ -493,9 +657,12 @@ describe("chasing", () => {
 
   it("บิลค้าง lists the unfinished bills in plain words", async () => {
     await openBill();
+    await run(inGroup("Uanna", "หารบิล ขนม 100"));
     const out = await run(inGroup("Uanna", "บิลค้าง"));
     expect(out).toContain("หมูกระทะ");
-    expect(out).toContain("รอปิดรายชื่อ");
+    expect(out).toContain("ค้าง 2 คน"); // collecting: Bob and Chom have not paid
+    expect(out).toContain("ขนม");
+    expect(out).toContain("รอเลือกคนหาร"); // the one still being set up
   });
 });
 
@@ -508,7 +675,6 @@ describe("private commands never answer in a group", () => {
 describe("โอนแล้ว (a friend says they paid)", () => {
   beforeEach(async () => {
     await openBill(900);
-    await run(tap("Uanna", "a=gbc&b=b1"));
   });
 
   it("the button marks it waiting, asks the payer to confirm, and the card shows it", async () => {
@@ -533,10 +699,7 @@ describe("โอนแล้ว (a friend says they paid)", () => {
 
   it("the typed 'โอนแล้ว' works when there is one open bill; with two it points at the buttons", async () => {
     expect(await run(inGroup("Ubob", "โอนแล้ว"))).toContain("บ๊อบ แจ้งว่าโอน");
-    await run(inGroup("Uanna", "หารบิล ขนม 600"));
-    await run(tap("Uchom", "a=gbj&b=b2"));
-    await run(tap("Ubob", "a=gbj&b=b2"));
-    await run(tap("Uanna", "a=gbc&b=b2"));
+    await run(inGroup("Uanna", "หารบิล ขนม 600 บ๊อบ ชมพู"));
     expect(await run(inGroup("Uchom", "โอนแล้ว"))).toContain("หลายบิล");
   });
 
@@ -569,7 +732,6 @@ describe("a slip sent into the group", () => {
       accountName: null,
     });
     await openBill(900);
-    await run(tap("Uanna", "a=gbc&b=b1"));
     slipRaw = slipOf();
   });
 
@@ -660,6 +822,36 @@ describe("a slip sent into the group", () => {
     usage.set("group_slip|2026-10-01", 300);
     expect(await run(photo("Ubob"))).toContain("ครบเกณฑ์แล้ว");
     expect(slipImages).toHaveLength(0);
+  });
+
+  it("the same slip cannot pay twice by the QR printed on it, even with another picture and another reference", async () => {
+    slipQr = "000600000101030040220123456789ABCDEF5102TH9104E2D8";
+    await run(photo("Ubob"));
+    slipRaw = slipOf({ reference: "OTHER-REF-1" }); // a retyped / re-photographed copy reads differently
+    expect(await run(photo("Uchom"))).toContain("เคยใช้จ่ายไปแล้ว");
+    expect(billMembers.b1?.find((m) => m.lineUserId === "Uchom")?.paid).toBe(false);
+    slipQr = "a-different-slip-qr";
+    slipRaw = slipOf({ reference: "OTHER-REF-2" });
+    expect(await run(photo("Uchom"))).toContain("ตรวจสลิปแล้ว");
+  });
+
+  it("a slip with no QR we can read and no reference cannot be told from another: the payer confirms it", async () => {
+    slipRaw = slipOf({ reference: null });
+    slipQr = null;
+    const out = await run(photo("Ubob"));
+    expect(out).toContain("ตรวจกันสลิปซ้ำไม่ได้");
+    expect(out).toContain("a=gbp&b=b1&u=Ubob"); // one tap for the payer
+    expect(billMembers.b1?.find((m) => m.lineUserId === "Ubob")).toMatchObject({
+      paid: false,
+      claimed: true,
+    });
+    expect(usedSlips.size).toBe(0); // and nothing was recorded as a used slip
+  });
+
+  it("a slip with a QR but no reference is fine: the QR is the key", async () => {
+    slipRaw = slipOf({ reference: null });
+    slipQr = "qr-only-slip";
+    expect(await run(photo("Ubob"))).toContain("ตรวจสลิปแล้ว");
   });
 
   it("the last share to be paid settles the bill", async () => {

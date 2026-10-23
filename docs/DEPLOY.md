@@ -4,6 +4,8 @@
 
 > วางแผนย้ายโฮสต์ไป Cloudflare ไว้แล้ว (ยังไม่ย้าย): ดู [CLOUDFLARE-MIGRATION.md](CLOUDFLARE-MIGRATION.md)
 
+> หารบิลในกลุ่มต้องใช้หน้า LIFF ส่งข้อความเข้ากลุ่มในนามผู้ใช้: ที่ LINE Developers Console → LIFF app → เปิด scope **`chat_message.write`** (ถ้ายังไม่เปิด ปุ่ม "📣 ส่ง QR เข้ากลุ่ม" บนการ์ดบิลเป็นทางสำรอง) · เมื่อ OA ได้รับ verified รายชื่อสมาชิกกลุ่มจะครบเองโดยไม่ต้องแก้โค้ด
+
 ## 1) ภาพรวมระบบ
 
 ```

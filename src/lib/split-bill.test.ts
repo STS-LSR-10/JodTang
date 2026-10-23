@@ -18,6 +18,7 @@ describe("parseBillCommand", () => {
       title: "หมูกระทะ",
       amountSatang: 120_000,
       names: [],
+      all: false,
     });
   });
 
@@ -27,6 +28,7 @@ describe("parseBillCommand", () => {
       title: "ข้าวเย็น",
       amountSatang: 125_050,
       names: ["แอน", "บ๊อบ", "ชมพู"],
+      all: false,
     });
   });
 
@@ -37,6 +39,49 @@ describe("parseBillCommand", () => {
       names: [],
     });
     expect(parseBillCommand("หารบิล 450")).toMatchObject({ title: "บิล", amountSatang: 45_000 });
+  });
+
+  it("'หาร บิล' with a space and 'แบ่งบิล' are the same words", () => {
+    expect(parseBillCommand("หาร บิล หมูกระทะ 1200")).toMatchObject({
+      kind: "bill-new",
+      title: "หมูกระทะ",
+    });
+    expect(parseBillCommand("แบ่งบิล 450 ชาบู")).toMatchObject({
+      kind: "bill-new",
+      title: "ชาบู",
+      amountSatang: 45_000,
+    });
+    expect(parseBillCommand("แบ่ง บิล 450")).toMatchObject({ kind: "bill-new", title: "บิล" });
+    expect(parseBillCommand("หาร")).toBeNull();
+    expect(parseBillCommand("หารกัน 100")).toBeNull();
+    expect(parseBillCommand("หารบิลไหม")).toBeNull();
+  });
+
+  it("'ทั้งหมด' / 'ทุกคน' means everyone, in either place", () => {
+    expect(parseBillCommand("หารบิล หมูกระทะ 1200 ทั้งหมด")).toMatchObject({
+      all: true,
+      names: [],
+    });
+    expect(parseBillCommand("หารบิล หมูกระทะ 1200 ทุกคน")).toMatchObject({ all: true, names: [] });
+    expect(parseBillCommand("หารบิล 1200 หมูกระทะ ทั้งหมด")).toMatchObject({
+      all: true,
+      title: "หมูกระทะ",
+      amountSatang: 120_000,
+    });
+    expect(parseBillCommand("หารบิล 1200 ทั้งหมด")).toMatchObject({ all: true, title: "บิล" });
+    expect(parseBillCommand("หารบิล 1200 หมูกระทะ")).toMatchObject({ all: false });
+  });
+
+  it("the message the people-picker page writes in the group is recognised", () => {
+    expect(parseBillCommand("✅ เลือกคนหารบิล หมูกระทะ แล้ว #abcdef12")).toEqual({
+      kind: "bill-announce",
+      shortId: "abcdef12",
+    });
+    expect(parseBillCommand("✅ เลือกคนหารบิล ชาบู ร้านดัง แล้ว #0123abcd")).toMatchObject({
+      kind: "bill-announce",
+    });
+    expect(parseBillCommand("✅ เลือกคนหารบิล หมูกระทะ แล้ว #xyz")).toBeNull();
+    expect(parseBillCommand("เลือกคนหารบิล หมูกระทะ แล้ว #abcdef12")).toBeNull(); // typed by hand without the tick
   });
 
   it("Thai digits work", () => {

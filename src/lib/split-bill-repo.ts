@@ -36,13 +36,20 @@ const toBill = (r: BillDb): BillRow => ({
 /** A new bill (the payer is its first member). "too_many" when the group already has ten going. */
 export async function createBill(
   db: SupabaseClient,
-  input: { groupId: string; payerLineUserId: string; title: string; amountSatang: number },
+  input: {
+    groupId: string;
+    payerLineUserId: string;
+    title: string;
+    amountSatang: number;
+    /** A new bill waits in "setup" until the payer has chosen the people. */
+    status?: BillStatus;
+  },
 ): Promise<BillRow | "too_many"> {
   const open = await db
     .from("split_bills")
     .select("id", { count: "exact", head: true })
     .eq("group_id", input.groupId)
-    .in("status", ["joining", "collecting"]);
+    .in("status", ["setup", "joining", "collecting"]);
   if (open.error) fail("count open bills", open.error);
   if ((open.count ?? 0) >= MAX_OPEN_BILLS) return "too_many";
 
@@ -53,6 +60,7 @@ export async function createBill(
       payer_line_user_id: input.payerLineUserId,
       title: input.title,
       amount_satang: input.amountSatang,
+      status: input.status ?? "joining",
     })
     .select(BILL_COLUMNS)
     .single();
@@ -164,6 +172,48 @@ export async function closeBill(
   return data === true;
 }
 
+/** Choose the people and start collecting (see split_bill_confirm). False when it was already done. */
+export async function confirmBill(
+  db: SupabaseClient,
+  billId: string,
+  shares: BillShare[],
+): Promise<boolean> {
+  const { data, error } = await db.rpc("split_bill_confirm", {
+    p_bill: billId,
+    p_shares: shares.map((s) => ({ user: s.lineUserId, share: s.shareSatang })),
+  });
+  if (error) fail("confirm bill", error);
+  return data === true;
+}
+
+/** True the first time only: the QR codes go into the group once. */
+export async function markAnnounced(db: SupabaseClient, billId: string): Promise<boolean> {
+  const { data, error } = await db.rpc("split_bill_mark_announced", { p_bill: billId });
+  if (error) fail("mark announced", error);
+  return data === true;
+}
+
+/** True the first time on each day: this bill's reminder is due. */
+export async function markReminded(
+  db: SupabaseClient,
+  billId: string,
+  day: string,
+): Promise<boolean> {
+  const { data, error } = await db.rpc("split_bill_mark_reminded", { p_bill: billId, p_day: day });
+  if (error) fail("mark reminded", error);
+  return data === true;
+}
+
+/** A bill of this group by the first 8 characters of its id (what the LIFF page writes in the chat). */
+export async function findBillByShortId(
+  db: SupabaseClient,
+  groupId: string,
+  shortId: string,
+): Promise<BillRow | null> {
+  const bills = await listBills(db, groupId, ["setup", "joining", "collecting", "settled"], 50);
+  return bills.find((b) => b.id.startsWith(shortId)) ?? null;
+}
+
 export type PaidResult = "ok" | "already" | "none";
 
 export async function markPaid(
@@ -184,7 +234,7 @@ export async function cancelBill(db: SupabaseClient, billId: string): Promise<bo
     .from("split_bills")
     .update({ status: "cancelled" })
     .eq("id", billId)
-    .in("status", ["joining", "collecting"])
+    .in("status", ["setup", "joining", "collecting"])
     .select("id");
   if (error) fail("cancel bill", error);
   return (data ?? []).length > 0;
@@ -324,6 +374,8 @@ export async function payBySlip(
     reference: string | null;
     amountSatang: number;
     receiverVerified: boolean;
+    /** Hash of the QR printed on the slip, when it could be read. */
+    qrHash?: string | null;
   },
 ): Promise<SlipPayResult> {
   const { data, error } = await db.rpc("split_bill_pay_by_slip", {
@@ -333,26 +385,29 @@ export async function payBySlip(
     p_ref: input.reference,
     p_amount: input.amountSatang,
     p_verified: input.receiverVerified,
+    p_qr_hash: input.qrHash ?? null,
   });
   if (error) fail("pay by slip", error);
   return data === "ok" || data === "duplicate" || data === "already" ? data : "none";
 }
 
-/** Has this slip (by picture or by the bank's reference) been used on a bill already? */
+/** Has this slip (by picture, by the QR on it, or by the bank's reference) been used on a bill already? */
 export async function slipUsed(
   db: SupabaseClient,
-  sha256: string | null,
-  reference: string | null,
+  keys: { sha256?: string | null; qrHash?: string | null; reference?: string | null },
 ): Promise<boolean> {
-  if (sha256) {
-    const bySha = await db.from("split_bill_slips").select("id").eq("sha256", sha256).limit(1);
-    if (bySha.error) fail("check slip", bySha.error);
-    if ((bySha.data ?? []).length > 0) return true;
+  const checks: [string, string | null | undefined][] = [
+    ["sha256", keys.sha256],
+    ["qr_hash", keys.qrHash],
+    ["reference", keys.reference],
+  ];
+  for (const [column, value] of checks) {
+    if (!value) continue;
+    const found = await db.from("split_bill_slips").select("id").eq(column, value).limit(1);
+    if (found.error) fail("check slip", found.error);
+    if ((found.data ?? []).length > 0) return true;
   }
-  if (!reference) return false;
-  const byRef = await db.from("split_bill_slips").select("id").eq("reference", reference).limit(1);
-  if (byRef.error) fail("check slip reference", byRef.error);
-  return (byRef.data ?? []).length > 0;
+  return false;
 }
 
 /** The shares this person has not paid yet, on bills in this group that are collecting. */
@@ -386,4 +441,40 @@ export async function openSharesOf(
     bill: toBill(r),
     shareSatang: shares.get(r.id) ?? 0,
   }));
+}
+
+/** A bill and the group it belongs to, found by the bill's id alone (the LIFF page only knows that). */
+export async function getBillAndGroup(
+  db: SupabaseClient,
+  billId: string,
+): Promise<{
+  bill: BillRow;
+  group: { id: string; lineGroupId: string; ownerUserId: string; isActive: boolean };
+} | null> {
+  const found = await db.from("split_bills").select(BILL_COLUMNS).eq("id", billId).maybeSingle();
+  if (found.error) fail("load bill", found.error);
+  if (!found.data) return null;
+  const bill = toBill(found.data as BillDb);
+  const group = await db
+    .from("bot_groups")
+    .select("id,line_group_id,owner_user_id,is_active")
+    .eq("id", bill.groupId)
+    .maybeSingle();
+  if (group.error) fail("load bill group", group.error);
+  const g = group.data as {
+    id: string;
+    line_group_id: string;
+    owner_user_id: string;
+    is_active: boolean;
+  } | null;
+  if (!g) return null;
+  return {
+    bill,
+    group: {
+      id: g.id,
+      lineGroupId: g.line_group_id,
+      ownerUserId: g.owner_user_id,
+      isActive: g.is_active,
+    },
+  };
 }

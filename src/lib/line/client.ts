@@ -44,6 +44,27 @@ export function createLineClient(accessToken: string) {
       return (await res.json()) as LineProfile;
     },
 
+    /**
+     * Every member id of a group. LINE allows this only for verified / premium accounts: for any other
+     * (or when the call fails) it returns null and the caller carries on with the members it knows.
+     */
+    async listGroupMemberIds(groupId: string): Promise<string[] | null> {
+      const ids: string[] = [];
+      let start: string | undefined;
+      for (let page = 0; page < 10; page++) {
+        const res = await fetch(
+          `${API}/group/${encodeURIComponent(groupId)}/members/ids${start ? `?start=${encodeURIComponent(start)}` : ""}`,
+          { headers },
+        );
+        if (!res.ok) return null;
+        const body = (await res.json()) as { memberIds?: string[]; next?: string };
+        ids.push(...(body.memberIds ?? []));
+        if (!body.next) break;
+        start = body.next;
+      }
+      return ids;
+    },
+
     async getProfile(lineUserId: string): Promise<LineProfile | null> {
       const res = await fetch(`${API}/profile/${encodeURIComponent(lineUserId)}`, { headers });
       if (!res.ok) return null;

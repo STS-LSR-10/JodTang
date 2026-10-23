@@ -3,11 +3,20 @@ import type { GroupRow } from "@/lib/group";
 import { memberNames } from "@/lib/group-repo";
 import { formatBaht } from "@/lib/money";
 import { resolveNames } from "@/lib/trip";
-import { billShares, totalOwed, unpaid, type BillCommand, type BillRow } from "@/lib/split-bill";
+import {
+  MAX_BILL_MEMBERS,
+  billShares,
+  totalOwed,
+  unpaid,
+  type BillCommand,
+  type BillRow,
+} from "@/lib/split-bill";
 import {
   billMembers,
   cancelBill,
   closeBill,
+  confirmBill,
+  findBillByShortId,
   createBill,
   getBill,
   getPaymentByLine,
@@ -15,15 +24,21 @@ import {
   latestBillBy,
   listBills,
   claimPaid,
+  markAnnounced,
+  markReminded,
   markPaid,
   openSharesOf,
   unpay,
 } from "@/lib/split-bill-repo";
+import { bangkokDateKey } from "@/lib/points";
+import { bangkokParts } from "@/lib/thai-date";
 import type { LineMessage } from "@/lib/types";
 import {
+  billQrBubble,
   buildBillCollectingCard,
-  buildBillJoiningCard,
   buildBillQrCard,
+  buildBillQrCarousels,
+  buildBillSetupCard,
   buildChaseCard,
 } from "./split-bill-flex";
 import { text } from "./messages";
@@ -244,21 +259,118 @@ async function chaseFlow(ctx: BillContext): Promise<void> {
 }
 
 async function openListFlow(ctx: BillContext): Promise<void> {
-  const bills = await listBills(ctx.db, ctx.group.id, ["joining", "collecting"], 10);
+  const bills = await listBills(ctx.db, ctx.group.id, ["setup", "joining", "collecting"], 10);
   if (bills.length === 0) return ctx.reply([text("ตอนนี้ไม่มีบิลที่ค้างอยู่ 🎉")]);
   const nameOf = await names(ctx.db, ctx.group.id);
   const lines = await Promise.all(
     bills.map(async (b) => {
       const members = await billMembers(ctx.db, b.id);
       const state =
-        b.status === "joining"
-          ? `รอปิดรายชื่อ (${members.length} คน)`
-          : `ค้าง ${unpaid(members, b.payerLineUserId).length} คน ฿${formatBaht(totalOwed(members, b.payerLineUserId))}`;
+        b.status === "setup"
+          ? "รอเลือกคนหาร"
+          : b.status === "joining"
+            ? `รอปิดรายชื่อ (${members.length} คน)`
+            : `ค้าง ${unpaid(members, b.payerLineUserId).length} คน ฿${formatBaht(totalOwed(members, b.payerLineUserId))}`;
       return `• ${b.title} ฿${formatBaht(b.amountSatang)} · จ่ายโดย ${nameOf(b.payerLineUserId)} · ${state}`;
     }),
   );
   return ctx.reply([
     text(["บิลที่ยังไม่เสร็จ", ...lines, 'พิมพ์ "ตามเงิน" ดูว่าใครยังค้าง'].join("\n")),
+  ]);
+}
+
+/** The page where the payer ticks the people (opens in LINE; needs the LIFF id). */
+function pickUrlFor(bill: BillRow): string | undefined {
+  const liffId = process.env.NEXT_PUBLIC_LIFF_ID;
+  return liffId ? `https://liff.line.me/${liffId}/split-bill/${bill.id}` : undefined;
+}
+
+/**
+ * The people are chosen: fix the shares (equal, to the satang), start collecting and put everybody's QR
+ * into the group. Used when names or "ทั้งหมด" were typed and by the "ทั้งหมดเลย" button; the LIFF page
+ * does the first half itself and then asks for the second with a short message in the chat.
+ */
+async function confirmFlow(ctx: BillContext, bill: BillRow, people: string[]): Promise<void> {
+  if (!ctx.writable) return ctx.reply([text(PAUSED_TEXT)]);
+  if (!mayManage(ctx, bill)) return ctx.reply([text(NOT_PAYER_TEXT)]);
+  if (bill.status !== "setup" && bill.status !== "joining") {
+    return ctx.reply([text("บิลนี้เลือกคนหารไปแล้วนะ")]);
+  }
+  const ids = [...new Set([bill.payerLineUserId, ...people])];
+  if (ids.length < 2) {
+    return ctx.reply([
+      text(
+        "บอทรู้จักสมาชิกในกลุ่มนี้แค่คุณคนเดียวตอนนี้ ให้เพื่อนพิมพ์อะไรสักอย่างในกลุ่มก่อน แล้วลองใหม่ (หรือพิมพ์ชื่อเพื่อนต่อท้าย เช่น หารบิล 1200 แอน บ๊อบ)",
+      ),
+    ]);
+  }
+  if (ids.length > MAX_BILL_MEMBERS) return ctx.reply([text("หารได้ไม่เกิน 30 คนต่อบิลนะ")]);
+  const shares = billShares(bill.amountSatang, ids, bill.payerLineUserId);
+  if (!(await confirmBill(ctx.db, bill.id, shares))) {
+    return ctx.reply([text("บิลนี้เลือกคนหารไปแล้วนะ")]);
+  }
+  const fresh = (await getBill(ctx.db, ctx.group.id, bill.id)) ?? bill;
+  return announceFlow(ctx, fresh, {});
+}
+
+/** The QR codes (and the card of who owes what) into the group, once. */
+async function announceFlow(
+  ctx: BillContext,
+  bill: BillRow,
+  options: { quietIfDone?: boolean },
+): Promise<void> {
+  if (!mayManage(ctx, bill)) {
+    return options.quietIfDone ? undefined : ctx.reply([text(NOT_PAYER_TEXT)]);
+  }
+  if (bill.status !== "collecting" && bill.status !== "settled") {
+    return options.quietIfDone
+      ? undefined
+      : ctx.reply([text("ยังไม่ได้เลือกคนหาร กด “👥 เลือกคนหาร” ก่อนนะ")]);
+  }
+  if (!(await markAnnounced(ctx.db, bill.id))) {
+    return options.quietIfDone ? undefined : ctx.reply([text("ส่ง QR เข้ากลุ่มไปแล้วนะ")]);
+  }
+  const [members, nameOf, payment] = await Promise.all([
+    billMembers(ctx.db, bill.id),
+    names(ctx.db, ctx.group.id),
+    getPaymentByLine(ctx.db, bill.payerLineUserId),
+  ]);
+  const payerName = nameOf(bill.payerLineUserId);
+  const card = await collectingCardFor(ctx, bill);
+  const owing = unpaid(members, bill.payerLineUserId);
+  const header = text(
+    `📣 หารบิล "${bill.title}" ${baht(bill.amountSatang)} · หาร ${members.length} คน คนจ่าย ${payerName}\n${owing.length > 0 ? "สแกน QR ของตัวเองด้านล่างจ่ายได้เลย (ยอดอยู่ใน QR แล้ว) โอนเสร็จส่งรูปสลิปเข้ากลุ่ม บอทตรวจให้" : "ทุกคนจ่ายครบแล้ว"}`,
+  );
+  const hasPayment = Boolean(payment?.promptpayId || payment?.bankAccount);
+  if (owing.length === 0) return ctx.reply([header, card]);
+  if (!hasPayment) {
+    return ctx.reply([
+      header,
+      text(
+        `${payerName} ยังไม่ได้ตั้งพร้อมเพย์หรือบัญชี ให้พิมพ์ “พร้อมเพย์ 0812345678” ในแชทส่วนตัวกับบอท แล้วทุกคนกด “💸 จ่ายส่วนของฉัน” ที่การ์ดด้านล่างเพื่อรับ QR`,
+      ),
+      card,
+    ]);
+  }
+  const bubbles = owing.map((m) => ({
+    who: nameOf(m.lineUserId),
+    shareSatang: m.shareSatang ?? 0,
+    bubble: billQrBubble({
+      title: bill.title,
+      who: nameOf(m.lineUserId),
+      payerName,
+      shareSatang: m.shareSatang ?? 0,
+      payment,
+      qrUrl:
+        payment?.promptpayId && ctx.appUrl?.startsWith("https://")
+          ? `${ctx.appUrl}/api/split-bill/qr/${m.qrToken}.png`
+          : undefined,
+    }),
+  }));
+  return ctx.reply([
+    header,
+    ...buildBillQrCarousels(bubbles, bill.title, payerName).slice(0, 3),
+    card,
   ]);
 }
 
@@ -282,7 +394,7 @@ export async function runBillCommand(command: BillCommand, ctx: BillContext): Pr
       const payerName = await ctx.knownName(userId);
       known.set(userId, { name: payerName, updatedAt: new Date().toISOString() });
 
-      // people typed after the amount are in straight away; the payer always is
+      // people typed after the amount are the list; so is "ทั้งหมด" (everyone the bot knows here)
       let named: string[] = [];
       if (command.names.length > 0) {
         const people = [...known].map(([id, v]) => ({ id, name: v.name }));
@@ -305,20 +417,23 @@ export async function runBillCommand(command: BillCommand, ctx: BillContext): Pr
         payerLineUserId: userId,
         title: command.title,
         amountSatang: command.amountSatang,
+        status: "setup",
       });
       if (bill === "too_many") return ctx.reply([text(TOO_MANY_TEXT)]);
-      await joinBill(db, bill.id, userId);
-      for (const id of named) if (id !== userId) await joinBill(db, bill.id, id);
-      const members = await billMembers(db, bill.id);
-      const nameOf = (id: string) => known.get(id)?.name ?? NAME_FALLBACK;
+
+      if (command.all || named.length > 0) {
+        const ids = command.all ? [...known.keys()] : named;
+        return confirmFlow(ctx, bill, ids);
+      }
       return ctx.reply([
-        buildBillJoiningCard({
-          bill,
-          payerName,
-          names: members.map((m) => nameOf(m.lineUserId)),
-          appUrl: ctx.appUrl,
-        }),
+        buildBillSetupCard({ bill, payerName, pickUrl: pickUrlFor(bill), appUrl: ctx.appUrl }),
       ]);
+    }
+
+    case "bill-announce": {
+      const bill = await findBillByShortId(db, group.id, command.shortId);
+      if (!bill) return;
+      return announceFlow(ctx, bill, { quietIfDone: true });
     }
 
     case "bill-close": {
@@ -410,6 +525,13 @@ export async function handleBillPostback(
       const count = (await billMembers(ctx.db, bill.id)).length;
       return ctx.reply([text(joinedText(who, bill.title, count))]);
     }
+    case "gba": {
+      // "ทั้งหมดเลย": everyone the bot knows in this group
+      const known = await memberNames(ctx.db, ctx.group.id);
+      return confirmFlow(ctx, bill, [...known.keys()]);
+    }
+    case "gbn":
+      return announceFlow(ctx, bill, {});
     case "gbc":
       return closeFlow(ctx, bill);
     case "gbx":
@@ -431,4 +553,53 @@ export async function handleBillPostback(
   }
 }
 
-export const BILL_POSTBACKS = new Set(["gbj", "gbc", "gbx", "gbq", "gbp", "gbm", "gbu"]);
+export const BILL_POSTBACKS = new Set([
+  "gbj",
+  "gbc",
+  "gbx",
+  "gbq",
+  "gbp",
+  "gbm",
+  "gbu",
+  "gba",
+  "gbn",
+]);
+
+/** The reminder goes out from this hour (Bangkok) on, so nobody is poked at night. */
+export const REMINDER_HOUR = 10;
+/** A bill nobody settles stops being reminded about after this many days. */
+export const REMINDER_DAYS = 30;
+
+/**
+ * The once-a-day reminder, for free: it rides on the first ordinary message anybody writes in the group
+ * that day (after 10:00), as a reply (replies cost nothing; a push to a group is billed per member). One
+ * card for every bill that still has people who have not paid. Nothing is sent on days nobody writes.
+ */
+export async function runDailyReminder(ctx: BillContext, now: Date): Promise<void> {
+  if (!ctx.writable) return;
+  if (bangkokParts(now).hour < REMINDER_HOUR) return;
+  const day = bangkokDateKey(now);
+  const bills = await listBills(ctx.db, ctx.group.id, ["collecting"], 10);
+  const recent = bills.filter(
+    (b) => now.getTime() - new Date(b.createdAt).getTime() < REMINDER_DAYS * 86_400_000,
+  );
+  if (recent.length === 0) return;
+  const nameOf = await names(ctx.db, ctx.group.id);
+  const due: {
+    bill: BillRow;
+    members: Awaited<ReturnType<typeof billMembers>>;
+    payerName: string;
+  }[] = [];
+  for (const bill of recent) {
+    const members = await billMembers(ctx.db, bill.id);
+    if (unpaid(members, bill.payerLineUserId).length === 0) continue;
+    // one reminder per bill per day, even when two messages arrive together
+    if (!(await markReminded(ctx.db, bill.id, day))) continue;
+    due.push({ bill, members, payerName: nameOf(bill.payerLineUserId) });
+  }
+  if (due.length === 0) return;
+  return ctx.reply([
+    text("⏰ เตือนประจำวัน: ยังมีคนที่ยังไม่ได้จ่ายบิลนะ"),
+    buildChaseCard({ bills: due, nameOf, appUrl: ctx.appUrl }),
+  ]);
+}

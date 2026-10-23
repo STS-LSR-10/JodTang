@@ -65,57 +65,6 @@ const tile = (bg: string, left: string, right: string, sub?: string) => ({
   ],
 });
 
-/** The card that opens a bill: who paid, how much, who is in, and the buttons to join / close. */
-export function buildBillJoiningCard(input: {
-  bill: BillRow;
-  payerName: string;
-  names: string[];
-  appUrl?: string;
-}): LineMessage {
-  const { bill } = input;
-  return {
-    type: "flex",
-    altText: `หารบิล ${bill.title} ${baht(bill.amountSatang)} · กด "ร่วมหาร"`,
-    contents: topicBubble({
-      icon: "🍽️",
-      title: bill.title,
-      subtitle: `${baht(bill.amountSatang)} · จ่ายโดย ${input.payerName}`,
-      appUrl: input.appUrl,
-      body: [
-        {
-          type: "text",
-          text: `ร่วมหารแล้ว ${input.names.length} คน`,
-          size: "xs",
-          weight: "bold",
-          color: COLOR.muted,
-          margin: "sm",
-        },
-        {
-          type: "text",
-          text: input.names.join(" · "),
-          size: "sm",
-          color: "#14352E",
-          wrap: true,
-          margin: "sm",
-        },
-        {
-          type: "text",
-          text: "ไปกินด้วยกัน กด “ร่วมหาร” เมื่อครบแล้วคนจ่ายกด “ปิดรายชื่อ” บอทจะหารเท่ากันให้",
-          size: "xs",
-          color: COLOR.muted,
-          wrap: true,
-          margin: "lg",
-        },
-      ],
-      footer: [
-        button("primary", postback("🙋 ร่วมหาร", `a=gbj&b=${bill.id}`, "ร่วมหาร")),
-        button("secondary", postback("✅ ปิดรายชื่อ", `a=gbc&b=${bill.id}`, "ปิดรายชื่อ")),
-        button("link", postback("✖ ยกเลิกบิล", `a=gbx&b=${bill.id}`, "ยกเลิกบิล")),
-      ],
-    }),
-  };
-}
-
 /** The line under a name on the collecting card: how this share stands. */
 function statusOf(m: BillMemberRow, payer: string): string {
   if (m.lineUserId === payer) return "คนจ่าย";
@@ -219,14 +168,14 @@ export function buildBillCollectingCard(input: {
 }
 
 /** One person's QR: the amount is inside the code, so the banking app fills it in. */
-export function buildBillQrCard(input: {
+export function billQrBubble(input: {
   title: string;
   who: string;
   payerName: string;
   shareSatang: number;
   payment: PaymentAccount | null;
   qrUrl?: string;
-}): LineMessage {
+}) {
   const { payment } = input;
   const hasPromptPay = Boolean(payment?.promptpayId) && Boolean(input.qrUrl);
   const hasBank = Boolean(payment?.bankAccount);
@@ -270,74 +219,154 @@ export function buildBillQrCard(input: {
     });
   }
   const missing = !hasPromptPay && !hasBank;
+  return topicBubble({
+    icon: "💸",
+    title: `ส่วนของ ${input.who}`,
+    subtitle: `${input.title} · โอนให้ ${input.payerName}`,
+    tagline: "สแกนในแอปธนาคาร ยอดเงินจะขึ้นให้เอง",
+    body: [
+      {
+        type: "text",
+        text: baht(input.shareSatang),
+        size: "3xl",
+        weight: "bold",
+        color: COLOR.primary,
+        align: "center",
+        margin: "md",
+      },
+      ...(hasPromptPay && input.qrUrl
+        ? [
+            {
+              type: "image",
+              url: input.qrUrl,
+              size: "full",
+              aspectMode: "fit",
+              aspectRatio: "1:1",
+              margin: "md",
+            },
+          ]
+        : []),
+      ...lines,
+      ...(missing
+        ? [
+            {
+              type: "text",
+              text: `${input.payerName} ยังไม่ได้ตั้งพร้อมเพย์หรือบัญชี ให้พิมพ์ “พร้อมเพย์ 0812345678” ในแชทส่วนตัวกับบอทก่อน แล้วกด “จ่ายส่วนของฉัน” อีกครั้ง`,
+              size: "xs",
+              color: COLOR.muted,
+              wrap: true,
+              margin: "md",
+            },
+          ]
+        : []),
+      ...(hasPromptPay
+        ? [
+            {
+              type: "text",
+              text: "กดรูป QR ค้างเพื่อบันทึก แล้วในแอปธนาคารเลือก “สแกนจากรูป/อัลบั้ม”",
+              size: "xxs",
+              color: COLOR.muted,
+              wrap: true,
+              align: "center",
+              margin: "md",
+            },
+          ]
+        : []),
+    ],
+    ...(hasPromptPay && input.qrUrl
+      ? {
+          footer: [
+            button("secondary", {
+              type: "uri",
+              label: "🔍 เปิดรูป QR ขนาดใหญ่",
+              uri: input.qrUrl,
+            }),
+          ],
+        }
+      : {}),
+  });
+}
+
+/** One person's QR as a message of its own. */
+export function buildBillQrCard(input: Parameters<typeof billQrBubble>[0]): LineMessage {
   return {
     type: "flex",
     altText: `${input.who} โอน ${baht(input.shareSatang)} ให้ ${input.payerName} (${input.title})`,
+    contents: billQrBubble(input),
+  };
+}
+
+/**
+ * Everyone's QR at once, as swipeable cards (LINE shows up to 12 bubbles in one carousel, so a long list
+ * is cut into several messages).
+ */
+export function buildBillQrCarousels(
+  bubbles: { who: string; shareSatang: number; bubble: ReturnType<typeof billQrBubble> }[],
+  title: string,
+  payerName: string,
+): LineMessage[] {
+  const out: LineMessage[] = [];
+  for (let i = 0; i < bubbles.length; i += 12) {
+    const part = bubbles.slice(i, i + 12);
+    out.push({
+      type: "flex",
+      altText: `QR จ่ายบิล ${title} ให้ ${payerName}: ${part.map((b) => `${b.who} ${baht(b.shareSatang)}`).join(", ")}`,
+      contents: { type: "carousel", contents: part.map((b) => b.bubble) },
+    });
+  }
+  return out;
+}
+
+/** The card a new bill starts with: pick who shares it (on the LIFF page), or everyone at once. */
+export function buildBillSetupCard(input: {
+  bill: BillRow;
+  payerName: string;
+  /** The LIFF page that lets the payer tick the people; absent when LIFF is not set up. */
+  pickUrl?: string;
+  appUrl?: string;
+}): LineMessage {
+  const { bill } = input;
+  return {
+    type: "flex",
+    altText: `หารบิล ${bill.title} ${baht(bill.amountSatang)} · เลือกคนหาร`,
     contents: topicBubble({
-      icon: "💸",
-      title: `ส่วนของ ${input.who}`,
-      subtitle: `${input.title} · โอนให้ ${input.payerName}`,
-      tagline: "สแกนในแอปธนาคาร ยอดเงินจะขึ้นให้เอง",
+      icon: "🍽️",
+      title: bill.title,
+      subtitle: `${baht(bill.amountSatang)} · จ่ายโดย ${input.payerName}`,
+      appUrl: input.appUrl,
       body: [
         {
           type: "text",
-          text: baht(input.shareSatang),
-          size: "3xl",
+          text: "ขั้นต่อไป: เลือกคนที่หารบิลนี้",
+          size: "sm",
           weight: "bold",
-          color: COLOR.primary,
-          align: "center",
+          color: "#14352E",
+          margin: "sm",
+          wrap: true,
+        },
+        {
+          type: "text",
+          text: "เลือกเสร็จ บอทจะหารเท่ากัน แล้วส่ง QR พร้อมเพย์ของแต่ละคนเข้ากลุ่มให้สแกนจ่ายได้เลย (เฉพาะคนจ่ายกดได้)",
+          size: "xs",
+          color: COLOR.muted,
+          wrap: true,
           margin: "md",
         },
-        ...(hasPromptPay && input.qrUrl
-          ? [
-              {
-                type: "image",
-                url: input.qrUrl,
-                size: "full",
-                aspectMode: "fit",
-                aspectRatio: "1:1",
-                margin: "md",
-              },
-            ]
-          : []),
-        ...lines,
-        ...(missing
-          ? [
-              {
-                type: "text",
-                text: `${input.payerName} ยังไม่ได้ตั้งพร้อมเพย์หรือบัญชี ให้พิมพ์ “พร้อมเพย์ 0812345678” ในแชทส่วนตัวกับบอทก่อน แล้วกด “จ่ายส่วนของฉัน” อีกครั้ง`,
-                size: "xs",
-                color: COLOR.muted,
-                wrap: true,
-                margin: "md",
-              },
-            ]
-          : []),
-        ...(hasPromptPay
-          ? [
-              {
-                type: "text",
-                text: "กดรูป QR ค้างเพื่อบันทึก แล้วในแอปธนาคารเลือก “สแกนจากรูป/อัลบั้ม”",
-                size: "xxs",
-                color: COLOR.muted,
-                wrap: true,
-                align: "center",
-                margin: "md",
-              },
-            ]
-          : []),
       ],
-      ...(hasPromptPay && input.qrUrl
-        ? {
-            footer: [
-              button("secondary", {
-                type: "uri",
-                label: "🔍 เปิดรูป QR ขนาดใหญ่",
-                uri: input.qrUrl,
-              }),
-            ],
-          }
-        : {}),
+      footer: [
+        ...(input.pickUrl
+          ? [button("primary", { type: "uri", label: "👥 เลือกคนหาร", uri: input.pickUrl })]
+          : []),
+        button(
+          input.pickUrl ? "secondary" : "primary",
+          postback("ทั้งหมดเลย", `a=gba&b=${bill.id}`, "ทั้งหมดเลย"),
+        ),
+        button(
+          "secondary",
+          postback("📣 ส่ง QR เข้ากลุ่ม", `a=gbn&b=${bill.id}`, "ส่ง QR เข้ากลุ่ม"),
+        ),
+        button("link", postback("✖ ยกเลิกบิล", `a=gbx&b=${bill.id}`, "ยกเลิกบิล")),
+      ],
     }),
   };
 }
