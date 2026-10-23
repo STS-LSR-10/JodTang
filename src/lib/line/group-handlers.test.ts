@@ -268,6 +268,31 @@ describe("เปิดสมุดกลุ่ม", () => {
   });
 });
 
+describe("จด anywhere in the message", () => {
+  beforeEach(openBook);
+
+  it.each([
+    ["จดค่าน้ำ 200", "ค่าน้ำ", 20_000],
+    ["เครื่องเล่น 500 จด", "เครื่องเล่น", 50_000],
+    ["ข้าว จด 300", "ข้าว", 30_000],
+    ["จด ข้าว 300", "ข้าว", 30_000],
+  ])("'%s' is recorded as %s", async (input, title, amount) => {
+    const { deps, reply } = setup();
+    await handleEvent(inGroup("Uanna", input), deps);
+    expect(entries[0]).toMatchObject({ title, amountSatang: amount, payerLineUserId: "Uanna" });
+    expect(said(reply)).toContain("จดแล้ว");
+  });
+
+  it("chat that merely contains the word, without an amount, is left alone", async () => {
+    for (const chat of ["เดี๋ยวจดไว้นะ", "จดทะเบียนเสร็จแล้ว", "ข้าว จด ค่ะ"]) {
+      const { deps, reply } = setup();
+      await handleEvent(inGroup("Uanna", chat), deps);
+      expect(said(reply), chat).toBe("[]");
+    }
+    expect(entries).toHaveLength(0);
+  });
+});
+
 describe("จด", () => {
   beforeEach(openBook);
 

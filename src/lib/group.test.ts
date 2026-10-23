@@ -18,7 +18,35 @@ describe("parseGroupCommand", () => {
     expect(parseGroupCommand(input)).toEqual(expected);
   });
 
-  it("an entry needs the word จด in front", () => {
+  it("the word จด can stand anywhere in the entry", () => {
+    const body = (input: string) => parseGroupCommand(input);
+    expect(body("จด ข้าว 300")).toEqual({ kind: "record", body: "ข้าว 300" });
+    expect(body("จดค่าน้ำ 200")).toEqual({ kind: "record", body: "ค่าน้ำ 200" });
+    expect(body("เครื่องเล่น 500 จด")).toEqual({ kind: "record", body: "เครื่องเล่น 500" });
+    expect(body("เครื่องเล่น 500จด")).toEqual({ kind: "record", body: "เครื่องเล่น 500" });
+    expect(body("ข้าว 300 , จด")).toEqual({ kind: "record", body: "ข้าว 300" });
+    expect(body("ข้าว จด 300")).toEqual({ kind: "record", body: "ข้าว 300" });
+    expect(body("จดข้าว ๓๐๐")).toEqual({ kind: "record", body: "ข้าว ๓๐๐" }); // Thai digits
+    expect(body("จดข้าว 300, น้ำ 50")).toEqual({ kind: "record", body: "ข้าว 300, น้ำ 50" });
+  });
+
+  it("only 'จด ' in front is a command by itself; the loose forms need an amount", () => {
+    expect(parseGroupCommand("จด ข้าวเที่ยง")).toEqual({ kind: "record", body: "ข้าวเที่ยง" }); // the bot explains
+    expect(parseGroupCommand("จดไว้ก่อน")).toBeNull();
+    expect(parseGroupCommand("เดี๋ยวจด")).toBeNull();
+    expect(parseGroupCommand("จดทะเบียนเสร็จแล้ว")).toBeNull();
+    expect(parseGroupCommand("ข้าว จด ค่ะ")).toBeNull();
+  });
+
+  it("the bot's own name is not the word, and other commands win", () => {
+    expect(parseGroupCommand("จดตังค์ 100")).toBeNull();
+    expect(parseGroupCommand("จดตังค์")).toBeNull();
+    expect(parseGroupCommand("หารบิล หมูกระทะ 1200")?.kind).toBe("bill-new");
+    expect(parseGroupCommand("สรุป")?.kind).toBe("summary");
+    expect(parseGroupCommand("เริ่มทริป เที่ยวจดหมาย")?.kind).toBe("trip-start");
+  });
+
+  it("an entry with the word จด in front", () => {
     expect(parseGroupCommand("จด ข้าวเที่ยง 350")).toEqual({
       kind: "record",
       body: "ข้าวเที่ยง 350",
@@ -33,7 +61,6 @@ describe("parseGroupCommand", () => {
     "กินข้าว 100 ไหม", // ordinary chat with a number
     "ข้าวเที่ยง 350",
     "จด", // nothing to record
-    "จดไว้นะ 55", // not "จด " + entry
     "สวัสดีทุกคน",
     "",
     "บิล ใหม่ ค่าไฟ 1250 ทุกวันที่ 15", // a personal command is not a group command
