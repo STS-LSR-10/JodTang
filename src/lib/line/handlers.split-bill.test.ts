@@ -90,7 +90,7 @@ vi.mock("@/lib/split-bill-repo", () => ({
   billMembers: async (_db: unknown, id: string) => billMembers[id] ?? [],
   joinBill: async (_db: unknown, id: string, user: string) => {
     const bill = bills.find((b) => b.id === id);
-    if (bill?.status !== "joining") return "closed";
+    if (bill?.status !== "joining" && bill?.status !== "setup") return "closed";
     const list = billMembers[id] ?? (billMembers[id] = []);
     if (!list.some((m) => m.lineUserId === user)) {
       if (list.length >= 30) return "full";
@@ -337,7 +337,7 @@ async function openBill(amount = 1200) {
 }
 
 describe("opening a bill", () => {
-  it("'หารบิล 1200' posts a setup card (no join button): pick the people on the LIFF page, or everyone", async () => {
+  it("'หารบิล 1200' posts a setup card: pick the people on the LIFF page, everyone, or let friends join themselves", async () => {
     process.env.NEXT_PUBLIC_LIFF_ID = "1234567890-abcdefgh";
     const out = await run(inGroup("Uanna", "หารบิล 1200 หมูกระทะ"));
     expect(out).toContain('"type":"flex"');
@@ -346,7 +346,7 @@ describe("opening a bill", () => {
     expect(out).toContain("https://liff.line.me/1234567890-abcdefgh/split-bill/b1"); // the people picker
     expect(out).toContain("a=gba&b=b1"); // ทั้งหมดเลย
     expect(out).toContain("a=gbn&b=b1"); // send the QR codes (the fallback after the LIFF page)
-    expect(out).not.toContain("a=gbj"); // nobody taps "ร่วมหาร" any more
+    expect(out).toContain("a=gbj&b=b1"); // 🙋 ร่วมหารด้วย: friends can add themselves while the payer chooses
     expect(bills[0]).toMatchObject({
       payerLineUserId: "Uanna",
       amountSatang: 120_000,
@@ -428,6 +428,29 @@ describe("opening a bill", () => {
 describe("choosing the people", () => {
   beforeEach(async () => {
     await run(inGroup("Uanna", "หารบิล หมูกระทะ 900"));
+  });
+
+  it("friends can tap 'ร่วมหารด้วย' while the payer is choosing: counted once each, payer included in the count", async () => {
+    expect(await run(tap("Ubob", "a=gbj&b=b1"))).toContain("บ๊อบ ร่วมหาร");
+    const again = await run(tap("Ubob", "a=gbj&b=b1"));
+    expect(again).toContain("ตอนนี้ 2 คน"); // Bob and the payer; a second tap adds nobody
+    expect(await run(tap("Uchom", "a=gbj&b=b1"))).toContain("ตอนนี้ 3 คน");
+    expect(billMembers.b1?.map((m) => m.lineUserId).sort()).toEqual(["Ubob", "Uchom"]);
+    expect(bills[0]?.status).toBe("setup");
+  });
+
+  it("the payer's choice wins: those who tapped but were left out are off the bill", async () => {
+    await run(tap("Ubob", "a=gbj&b=b1"));
+    await run(tap("Uchom", "a=gbj&b=b1"));
+    // the payer's page confirms with only Chom and the payer
+    const { confirmBill } = await import("@/lib/split-bill-repo");
+    await confirmBill({} as never, "b1", billShares(90_000, ["Uchom"], "Uanna") as never);
+    expect(billMembers.b1?.map((m) => m.lineUserId).sort()).toEqual(["Uanna", "Uchom"]);
+  });
+
+  it("once the payer has chosen, nobody can join any more", async () => {
+    await run(tap("Uanna", "a=gba&b=b1"));
+    expect(await run(tap("Ubob", "a=gbj&b=b1"))).toContain("ล็อกรายชื่อแล้ว");
   });
 
   it("'ทั้งหมดเลย' (payer only) fixes the shares among everyone known and sends the QR codes", async () => {

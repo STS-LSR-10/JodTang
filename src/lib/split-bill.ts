@@ -54,18 +54,122 @@ export type BillCommand =
   | { kind: "bill-claim" };
 
 const AMOUNT_RE = /\d[\d,]*(?:\.\d{1,2})?/;
+const HAS_DIGIT = /[0-9๐-๙]/;
+/** Items are cut at a newline or at a comma not stuck to a digit (so 1,200 stays one number). */
+const SEGMENT_SPLIT = /\s*(?:\n|,(?!\d))\s*/;
+const isEveryone = (word: string) => word === "ทั้งหมด" || word === "ทุกคน";
 
 /**
- * "หารบิล หมูกระทะ 1200" · "หารบิล หมูกระทะ 1200 แอน บ๊อบ" (those two are added straight away) ·
- * "หารบิล 1200 หมูกระทะ" (the amount first: the rest is the name). Also "ตามเงิน", "บิลค้าง",
- * "ปิดรายชื่อ", "ยกเลิกบิล" and "ได้รับแล้ว แอน".
+ * The entry in a message that says "หารบิล" somewhere: "หารบิล ข้าว 100", "หารบิลข้าว 100",
+ * "ข้าว 100, น้ำ 200 หารบิล" and "ข้าว หารบิล 100" all mean the same. "หารบิล " in front is an explicit
+ * command and always counts (with no amount the bot explains how); every other place needs an amount
+ * in the message, so ordinary chat that merely contains the word stays unanswered. "" = the bare word.
+ */
+function billBody(text: string): string | null {
+  if (text === "หารบิล") return "";
+  const spaced = /^หารบิล ([\s\S]+)$/.exec(text);
+  if (spaced?.[1]) return spaced[1];
+  const withAmount = (body: string) => (body.trim() && HAS_DIGIT.test(body) ? body.trim() : null);
+  if (text.startsWith("หารบิล")) return withAmount(text.slice("หารบิล".length));
+  const trailing = /^([\s\S]*?)[\s,]*หารบิล$/.exec(text);
+  if (trailing) return withAmount(trailing[1] ?? "");
+  const middle = /^([\s\S]*?\S)[ \n]หารบิล[ \n](\S[\s\S]*)$/.exec(text);
+  if (middle) return withAmount(`${middle[1]} ${middle[2]}`);
+  return null;
+}
+
+interface BillPart {
+  title: string;
+  amountSatang: number;
+  /** What follows the amount (people's names, or "ทั้งหมด"). */
+  tail: string;
+  amountFirst: boolean;
+}
+
+/** One item: "ข้าว 100", "ข้าว 100 แอน บ๊อบ" or "100 ข้าว". Null when there is no usable amount. */
+function parseBillPart(segment: string): BillPart | null {
+  const found = AMOUNT_RE.exec(segment);
+  if (!found) return null;
+  let amountSatang: number;
+  try {
+    amountSatang = toSatang(found[0]);
+  } catch {
+    return null;
+  }
+  if (amountSatang <= 0 || amountSatang > MAX_BILL_SATANG) return null;
+  const before = segment.slice(0, found.index).trim();
+  const after = segment.slice(found.index + found[0].length).trim();
+  return before === ""
+    ? { title: after, amountSatang, tail: "", amountFirst: true }
+    : { title: before, amountSatang, tail: after, amountFirst: false };
+}
+
+/** "หมูกระทะ ทั้งหมด" -> the name without the last word, and whether it said everyone. */
+function peelEveryone(title: string): { rest: string; all: boolean } {
+  const m = /^(.*?)\s*(?:ทั้งหมด|ทุกคน)$/.exec(title);
+  return m ? { rest: m[1]?.trim() ?? "", all: true } : { rest: title, all: false };
+}
+
+/** The body of a "หารบิล" message: one item, or several (their amounts add up to one bill). */
+function parseBillBody(body: string): BillCommand {
+  const parts: BillPart[] = [];
+  const segments = body
+    .split(SEGMENT_SPLIT)
+    .map((x) => x.trim())
+    .filter(Boolean);
+  for (const segment of segments) {
+    const part = parseBillPart(segment);
+    if (part) {
+      parts.push(part);
+      continue;
+    }
+    // words with no amount after an item are more names ("... 1250 แอน, บ๊อบ ชมพู")
+    const previous = parts[parts.length - 1];
+    if (!previous || HAS_DIGIT.test(segment)) return { kind: "bill-usage" };
+    previous.tail = `${previous.tail} ${segment}`.trim();
+  }
+  const last = parts[parts.length - 1];
+  if (!last) return { kind: "bill-usage" };
+
+  const titles = parts.map((p) => p.title);
+  let all = false;
+  let names: string[] = [];
+  if (last.amountFirst) {
+    const peeled = peelEveryone(last.title);
+    all = peeled.all;
+    titles[titles.length - 1] = peeled.rest;
+  } else {
+    const typed = last.tail.split(/[\s,]+/).filter(Boolean);
+    all = typed.some(isEveryone);
+    names = typed.filter((w) => !isEveryone(w));
+  }
+  const amountSatang = parts.reduce((sum, p) => sum + p.amountSatang, 0);
+  if (amountSatang > MAX_BILL_SATANG || names.length > MAX_SPLIT_NAMES)
+    return { kind: "bill-usage" };
+
+  let title = titles.filter(Boolean).join(", ") || "บิล";
+  if (title.length > MAX_BILL_TITLE) {
+    // one long name is a mistake; a long list of items is just shortened
+    if (parts.length === 1) return { kind: "bill-usage" };
+    title = `${title.slice(0, MAX_BILL_TITLE - 1)}…`;
+  }
+  return { kind: "bill-new", title, amountSatang, names, all };
+}
+
+/**
+ * "หารบิล หมูกระทะ 1200" · "หารบิล หมูกระทะ 1200 แอน บ๊อบ" · "หารบิล 1200 หมูกระทะ" · "หารบิล ข้าว 100,
+ * น้ำ 200" (one bill of ฿300) · "ข้าว 100 หารบิล"; names or "ทั้งหมด" at the end choose the people at
+ * once. Also "ตามเงิน", "บิลค้าง", "ปิดรายชื่อ", "ยกเลิกบิล" and "ได้รับแล้ว แอน".
  */
 export function parseBillCommand(input: string): BillCommand | null {
-  // "หารบิล", "หาร บิล" and "แบ่งบิล" are the same words
+  // "หารบิล", "หาร บิล" and "แบ่งบิล" are the same words, wherever they stand
   const text = normalizeThaiDigits(input)
     .trim()
-    .replace(/\s+/g, " ")
-    .replace(/^(?:หาร|แบ่ง) ?บิล(?=$| )/, "หารบิล");
+    // spaces are squeezed but lines stay lines (one item per line is a way to write several)
+    .replace(/[ \t\u00a0]+/g, " ")
+    .replace(/ ?\n[ \n]*/g, "\n")
+    .replace(/^(?:หาร|แบ่ง) ?บิล/, "หารบิล")
+    .replace(/(^|[ \n])(?:หาร|แบ่ง) ?บิล(?=[ \n]|$)/g, "$1หารบิล");
   const announce = /^✅ เลือกคนหารบิล .+ #([0-9a-f]{8})$/.exec(text);
   if (announce?.[1]) return { kind: "bill-announce", shortId: announce[1] };
   if (text === "ตามเงิน") return { kind: "bill-chase" };
@@ -88,39 +192,9 @@ export function parseBillCommand(input: string): BillCommand | null {
       : null;
   }
 
-  if (text === "หารบิล") return { kind: "bill-usage" };
-  const m = /^หารบิล\s+(.+)$/.exec(text);
-  if (!m?.[1]) return null;
-  const body = m[1];
-  const found = AMOUNT_RE.exec(body);
-  if (!found) return { kind: "bill-usage" };
-  let amountSatang: number;
-  try {
-    amountSatang = toSatang(found[0]);
-  } catch {
-    return { kind: "bill-usage" };
-  }
-  if (amountSatang <= 0 || amountSatang > MAX_BILL_SATANG) return { kind: "bill-usage" };
-  const before = body.slice(0, found.index).trim();
-  const after = body.slice(found.index + found[0].length).trim();
-  if (before === "") {
-    // amount first: what follows is the name of the bill
-    const title = after || "บิล";
-    if (title.length > MAX_BILL_TITLE) return { kind: "bill-usage" };
-    // "หารบิล 1200 หมูกระทะ ทั้งหมด": the last word can still say everyone
-    const everyone = /^(.*?)\s*(?:ทั้งหมด|ทุกคน)$/.exec(title);
-    if (everyone) {
-      const rest = everyone[1]?.trim() || "บิล";
-      return { kind: "bill-new", title: rest, amountSatang, names: [], all: true };
-    }
-    return { kind: "bill-new", title, amountSatang, names: [], all: false };
-  }
-  const typed = after.split(/[\s,]+/).filter(Boolean);
-  const all = typed.some((n) => n === "ทั้งหมด" || n === "ทุกคน");
-  const names = typed.filter((n) => n !== "ทั้งหมด" && n !== "ทุกคน");
-  if (before.length > MAX_BILL_TITLE || names.length > MAX_SPLIT_NAMES)
-    return { kind: "bill-usage" };
-  return { kind: "bill-new", title: before, amountSatang, names, all };
+  const body = billBody(text);
+  if (body === null) return null;
+  return body === "" ? { kind: "bill-usage" } : parseBillBody(body);
 }
 
 export interface BillShare {

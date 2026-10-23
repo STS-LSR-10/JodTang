@@ -113,7 +113,13 @@ export async function handleGroupEvent(event: LineEvent, deps: HandlerDeps): Pro
 
   switch (event.type) {
     case "join":
-      await reply([buildGroupWelcomeCard({ appUrl: appBaseUrl() })]);
+      const liffId = process.env.NEXT_PUBLIC_LIFF_ID;
+      await reply([
+        buildGroupWelcomeCard({
+          appUrl: appBaseUrl(),
+          openUrl: liffId ? `https://liff.line.me/${liffId}/group-open` : undefined,
+        }),
+      ]);
       return;
     case "leave":
       await closeGroup(deps.db, groupId);

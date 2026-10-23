@@ -182,12 +182,63 @@ describe("welcome and group cards", () => {
   });
 });
 
+describe("group welcome card, small and swipeable", () => {
+  const bubbles = (m: unknown) =>
+    (m as { contents: { type: string; contents: { size: string }[] } }).contents.contents;
+
+  it("is three small cards in a carousel (not one tall one)", () => {
+    const card = buildGroupWelcomeCard({
+      appUrl: "https://x.test",
+      openUrl: "https://liff.line.me/1/group-open",
+    });
+    expect((card.contents as { type: string }).type).toBe("carousel");
+    expect(bubbles(card)).toHaveLength(3);
+    for (const b of bubbles(card)) expect(b.size).toBe("kilo");
+  });
+
+  it("the buttons are on the first card, so they show without swiping", () => {
+    const first = json(
+      bubbles(buildGroupWelcomeCard({ openUrl: "https://liff.line.me/1/group-open" }))[0],
+    );
+    expect(first).toContain("เปิดสมุดกลุ่ม");
+    expect(first).toContain('"text":"วิธีใช้งาน"');
+    const others = bubbles(buildGroupWelcomeCard({}))
+      .slice(1)
+      .map((b) => json(b))
+      .join("");
+    expect(others).not.toContain('"type":"button"');
+  });
+
+  it("'เปิดสมุดกลุ่ม' opens the LIFF page (which checks the friend) instead of typing in the group", () => {
+    const card = json(buildGroupWelcomeCard({ openUrl: "https://liff.line.me/1/group-open" }));
+    expect(card).toContain('"uri":"https://liff.line.me/1/group-open"');
+    expect(card).not.toContain('"text":"เปิดสมุดกลุ่ม"');
+  });
+
+  it("without a LIFF address it still works by typing the command", () => {
+    const card = json(buildGroupWelcomeCard({}));
+    expect(card).toContain('"text":"เปิดสมุดกลุ่ม"');
+    expect(card).not.toContain("undefined");
+  });
+
+  it("each small card is short (the first one fits a phone without scrolling)", () => {
+    for (const b of bubbles(
+      buildGroupWelcomeCard({
+        appUrl: "https://x.test",
+        openUrl: "https://liff.line.me/1/group-open",
+      }),
+    )) {
+      expect(json(b).length).toBeLessThan(6_000);
+    }
+  });
+});
+
 describe("group welcome card", () => {
   it("says who it is for, three steps, and has the two buttons that type the commands", () => {
     const card = json(buildGroupWelcomeCard({ appUrl: "https://x.test" }));
     expect(card).toContain("ครอบครัว");
     expect(card).toContain("เริ่มใช้ใน 3 ขั้น");
-    expect(card).toContain('"label":"📒 เปิดสมุดกลุ่ม","text":"เปิดสมุดกลุ่ม"');
+    expect(card).toContain('"label":"📒 เปิดสมุดกลุ่ม"');
     expect(card).toContain('"label":"📖 วิธีใช้งาน","text":"วิธีใช้งาน"');
     expect(card).toContain("https://x.test/logo.png");
     expect(card).toContain("Ultimate"); // the opener must be Ultimate; the rest are free

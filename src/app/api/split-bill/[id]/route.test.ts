@@ -11,6 +11,7 @@ let confirmResult = true;
 const confirmed: { lineUserId: string; shareSatang: number; paid: boolean }[][] = [];
 const upserts: string[] = [];
 let limited = false;
+let joinedRows: { lineUserId: string }[] = [];
 
 vi.mock("@/lib/auth/require-user", () => ({ requireUser: async () => session }));
 vi.mock("@/lib/supabase/admin", () => ({ getAdminClient: () => ({}) }));
@@ -34,6 +35,7 @@ vi.mock("@/lib/group-repo", () => ({
   },
 }));
 vi.mock("@/lib/split-bill-repo", () => ({
+  billMembers: async () => joinedRows,
   getBillAndGroup: async () => (bill ? { bill, group } : null),
   confirmBill: async (_db: unknown, _id: string, shares: (typeof confirmed)[number]) => {
     confirmed.push(shares);
@@ -78,6 +80,7 @@ beforeEach(() => {
   confirmed.length = 0;
   upserts.length = 0;
   limited = false;
+  joinedRows = [];
 });
 
 describe("GET /api/split-bill/<id>", () => {
@@ -104,6 +107,15 @@ describe("GET /api/split-bill/<id>", () => {
       "ชื่อ-Udan",
     );
     expect(upserts).toEqual(["Udan"]);
+  });
+
+  it("friends who tapped 'ร่วมหารด้วย' come back marked, so the page ticks them in advance", async () => {
+    joinedRows = [{ lineUserId: "Ubob" }];
+    const body = await (await get()).json();
+    const joined = Object.fromEntries(
+      body.people.map((p: { lineUserId: string; joined: boolean }) => [p.lineUserId, p.joined]),
+    );
+    expect(joined).toEqual({ Uanna: false, Ubob: true, Uchom: false });
   });
 
   it("only the payer (or the owner of the ledger) may open it", async () => {

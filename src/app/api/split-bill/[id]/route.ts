@@ -7,7 +7,7 @@ import { createLineClient } from "@/lib/line/client";
 import { log } from "@/lib/log";
 import { LIMITS, limitOr429 } from "@/lib/rate-limit";
 import { MAX_BILL_MEMBERS, billShares } from "@/lib/split-bill";
-import { confirmBill, getBillAndGroup } from "@/lib/split-bill-repo";
+import { billMembers, confirmBill, getBillAndGroup } from "@/lib/split-bill-repo";
 import { getAdminClient } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -80,7 +80,12 @@ export async function GET(
     const loaded = await loadFor(request, id);
     if ("error" in loaded) return loaded.error as Response;
     const { db, bill, group } = loaded;
-    const { people, listed } = await groupPeople(db, group, bill.payerLineUserId);
+    const [{ people, listed }, joined] = await Promise.all([
+      groupPeople(db, group, bill.payerLineUserId),
+      billMembers(db, bill.id),
+    ]);
+    // friends who tapped "ร่วมหารด้วย" are ticked in advance (the payer can untick them)
+    const tapped = new Set(joined.map((m) => m.lineUserId));
     return json({
       bill: {
         id: bill.id,
@@ -88,7 +93,7 @@ export async function GET(
         amountSatang: bill.amountSatang,
         status: bill.status,
       },
-      people,
+      people: people.map((p) => ({ ...p, joined: tapped.has(p.lineUserId) })),
       /** true when LINE listed every member; false = only people the bot has seen in the group */
       complete: listed,
       /** the list can still be chosen */

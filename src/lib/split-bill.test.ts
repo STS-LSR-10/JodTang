@@ -84,6 +84,79 @@ describe("parseBillCommand", () => {
     expect(parseBillCommand("เลือกคนหารบิล หมูกระทะ แล้ว #abcdef12")).toBeNull(); // typed by hand without the tick
   });
 
+  it("หารบิล can stand anywhere in the message", () => {
+    const bill = (input: string) => parseBillCommand(input);
+    expect(bill("หารบิลข้าว 100")).toMatchObject({
+      kind: "bill-new",
+      title: "ข้าว",
+      amountSatang: 10_000,
+    });
+    expect(bill("หารบิล ข้าว 100")).toMatchObject({ title: "ข้าว", amountSatang: 10_000 });
+    expect(bill("ข้าว 100 หารบิล")).toMatchObject({ title: "ข้าว", amountSatang: 10_000 });
+    expect(bill("ข้าว 100, หารบิล")).toMatchObject({ title: "ข้าว", amountSatang: 10_000 });
+    expect(bill("ข้าว หารบิล 100")).toMatchObject({ title: "ข้าว", amountSatang: 10_000 });
+    expect(bill("ข้าว 100 หาร บิล")).toMatchObject({ title: "ข้าว", amountSatang: 10_000 });
+    expect(bill("แบ่งบิลข้าว 100")).toMatchObject({ title: "ข้าว", amountSatang: 10_000 });
+    expect(bill("ข้าว 100 ทั้งหมด หารบิล")).toMatchObject({ title: "ข้าว", all: true });
+  });
+
+  it("several items in one message make one bill of their total", () => {
+    expect(parseBillCommand("หารบิล ข้าว 100, น้ำ 200")).toEqual({
+      kind: "bill-new",
+      title: "ข้าว, น้ำ",
+      amountSatang: 30_000,
+      names: [],
+      all: false,
+    });
+    expect(parseBillCommand("ข้าว 100, น้ำ 200 หารบิล")).toMatchObject({
+      title: "ข้าว, น้ำ",
+      amountSatang: 30_000,
+    });
+    expect(parseBillCommand("หารบิล ข้าว 100\nน้ำ 200\nขนม 50")).toMatchObject({
+      title: "ข้าว, น้ำ, ขนม",
+      amountSatang: 35_000,
+    });
+    // a comma inside a number is not a separator
+    expect(parseBillCommand("หารบิล ข้าว 1,200, น้ำ 300")).toMatchObject({ amountSatang: 150_000 });
+    // names / everyone after the last item belong to the whole bill
+    expect(parseBillCommand("หารบิล ข้าว 100, น้ำ 200 แอน บ๊อบ")).toMatchObject({
+      amountSatang: 30_000,
+      names: ["แอน", "บ๊อบ"],
+    });
+    expect(parseBillCommand("หารบิล ข้าว 100, น้ำ 200 ทั้งหมด")).toMatchObject({
+      all: true,
+      names: [],
+    });
+    expect(parseBillCommand("หารบิล 100 ข้าว, 200 น้ำ")).toMatchObject({
+      title: "ข้าว, น้ำ",
+      amountSatang: 30_000,
+    });
+  });
+
+  it("a long list of items is shortened, one long name is refused, an item without an amount is refused", () => {
+    const many = Array.from(
+      { length: 12 },
+      (_, i) => `อาหารจานที่${"กขคงจฉชซฌญฎฏ"[i]} ${100 + i}`,
+    ).join(", ");
+    const cmd = parseBillCommand(`หารบิล ${many}`);
+    expect(cmd?.kind).toBe("bill-new");
+    expect((cmd as { title: string }).title.length).toBeLessThanOrEqual(40);
+    expect(parseBillCommand("หารบิล ข้าว 100, น้ำ")).toMatchObject({
+      kind: "bill-new",
+      names: ["น้ำ"],
+    });
+    expect(parseBillCommand("หารบิล ข้าว 100, น้ำ 5 ขนม 7 ")?.kind).toBe("bill-new");
+    expect(parseBillCommand("หารบิล " + "ก".repeat(41) + " 100")?.kind).toBe("bill-usage");
+    expect(parseBillCommand("หารบิล ข้าว 60000000, น้ำ 60000000")?.kind).toBe("bill-usage"); // over ฿1,000,000
+  });
+
+  it("chat that merely contains the word, without an amount, is left alone", () => {
+    for (const chat of ["เดี๋ยวหารบิลกัน", "ช่วยหารบิลหน่อย", "ข้าว หารบิล ค่ะ", "หารบิลไหม"]) {
+      expect(parseBillCommand(chat), chat).toBeNull();
+    }
+    expect(parseBillCommand("หารบิล")).toEqual({ kind: "bill-usage" });
+  });
+
   it("Thai digits work", () => {
     expect(parseBillCommand("หารบิล ชาบู ๖๐๐")).toMatchObject({ amountSatang: 60_000 });
   });

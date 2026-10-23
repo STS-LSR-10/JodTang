@@ -2890,3 +2890,76 @@ describe("split bills round 3: setup, confirm, reminder, QR key (0037)", () => {
     }
   });
 });
+
+describe("friends joining a bill that is still being set up (0038)", () => {
+  it("join works on 'setup' and 'joining' bills, not after the people were chosen", async () => {
+    const owner = await newUser(db, `sb4-${Math.random()}`);
+    const group = (
+      await one<{ id: string }>(
+        db,
+        "insert into bot_groups (line_group_id, owner_user_id) values ($1,$2) returning id",
+        [`C${Math.random().toString(16).slice(2)}`, owner],
+      )
+    ).id;
+    const make = async (status: string) =>
+      (
+        await one<{ id: string }>(
+          db,
+          "insert into split_bills (group_id, payer_line_user_id, title, amount_satang, status) values ($1,'Uanna','x',90000,$2) returning id",
+          [group, status],
+        )
+      ).id;
+    const join = async (bill: string, user: string) =>
+      (await one<{ r: string }>(db, "select split_bill_join($1,$2) as r", [bill, user])).r;
+
+    const setup = await make("setup");
+    expect(await join(setup, "Ubob")).toBe("ok");
+    expect(await join(setup, "Ubob")).toBe("ok");
+    expect(await join(await make("joining"), "Ubob")).toBe("ok");
+    for (const closed of ["collecting", "settled", "cancelled"]) {
+      expect(await join(await make(closed), "Ubob"), closed).toBe("closed");
+    }
+
+    // the payer's choice wins: Bob tapped, but the payer confirms without him
+    await join(setup, "Uchom");
+    const ok = await one<{ r: boolean }>(db, "select split_bill_confirm($1,$2::jsonb) as r", [
+      setup,
+      JSON.stringify([
+        { user: "Uanna", share: 45_000 },
+        { user: "Uchom", share: 45_000 },
+      ]),
+    ]);
+    expect(ok.r).toBe(true);
+    const left = await rows<{ line_user_id: string }>(
+      db,
+      "select line_user_id from split_bill_members where bill_id = $1 order by line_user_id",
+      [setup],
+    );
+    expect(left.map((m) => m.line_user_id)).toEqual(["Uanna", "Uchom"]);
+    expect(await join(setup, "Udan")).toBe("closed");
+  });
+
+  it("a bill holds at most 30 people, however they got on it", async () => {
+    const owner = await newUser(db, `sb5-${Math.random()}`);
+    const group = (
+      await one<{ id: string }>(
+        db,
+        "insert into bot_groups (line_group_id, owner_user_id) values ($1,$2) returning id",
+        [`C${Math.random().toString(16).slice(2)}`, owner],
+      )
+    ).id;
+    const bill = (
+      await one<{ id: string }>(
+        db,
+        "insert into split_bills (group_id, payer_line_user_id, title, amount_satang, status) values ($1,'Uanna','x',90000,'setup') returning id",
+        [group],
+      )
+    ).id;
+    for (let i = 0; i < 30; i++) {
+      const r = await one<{ r: string }>(db, "select split_bill_join($1,$2) as r", [bill, `U${i}`]);
+      expect(r.r).toBe("ok");
+    }
+    const full = await one<{ r: string }>(db, "select split_bill_join($1,'U30') as r", [bill]);
+    expect(full.r).toBe("full");
+  });
+});

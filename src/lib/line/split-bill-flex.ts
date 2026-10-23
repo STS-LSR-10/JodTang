@@ -346,7 +346,7 @@ export function buildBillSetupCard(input: {
         },
         {
           type: "text",
-          text: "เลือกเสร็จ บอทจะหารเท่ากัน แล้วส่ง QR พร้อมเพย์ของแต่ละคนเข้ากลุ่มให้สแกนจ่ายได้เลย (เฉพาะคนจ่ายกดได้)",
+          text: "เพื่อนกด “ร่วมหารด้วย” เองได้ คนจ่ายเลือก/เพิ่ม/เอาออกได้ เลือกเสร็จ บอทจะหารเท่ากัน แล้วส่ง QR พร้อมเพย์ของแต่ละคนเข้ากลุ่มให้สแกนจ่ายได้เลย (เฉพาะคนจ่ายกดเลือกคน)",
           size: "xs",
           color: COLOR.muted,
           wrap: true,
@@ -361,6 +361,8 @@ export function buildBillSetupCard(input: {
           input.pickUrl ? "secondary" : "primary",
           postback("ทั้งหมดเลย", `a=gba&b=${bill.id}`, "ทั้งหมดเลย"),
         ),
+        // anyone in the group can add themselves while the payer is choosing
+        button("secondary", postback("🙋 ร่วมหารด้วย", `a=gbj&b=${bill.id}`, "ร่วมหาร")),
         button(
           "secondary",
           postback("📣 ส่ง QR เข้ากลุ่ม", `a=gbn&b=${bill.id}`, "ส่ง QR เข้ากลุ่ม"),

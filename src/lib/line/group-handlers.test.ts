@@ -206,14 +206,31 @@ describe("the bot joining and leaving", () => {
     );
     const card = said(reply);
     expect(card).toContain('"type":"flex"');
-    // two buttons: open the ledger, and how to use it (each types the command for the person who taps)
-    expect(card).toContain('"label":"📒 เปิดสมุดกลุ่ม","text":"เปิดสมุดกลุ่ม"');
+    // two buttons: open the ledger (a LIFF page when the LIFF id is known), and how to use it
+    expect(card).toContain('"label":"📒 เปิดสมุดกลุ่ม"');
     expect(card).toContain('"label":"📖 วิธีใช้งาน","text":"วิธีใช้งาน"');
     expect(card).toContain("Ultimate");
+    expect(card).toContain('"type":"carousel"'); // small cards to swipe, not one tall card
 
     ({ deps, reply } = setup());
     await handleEvent({ type: "leave", source: { type: "group", groupId: GID } }, deps);
     expect(closed).toEqual([GID]);
+  });
+});
+
+describe("the welcome card's open button", () => {
+  it("opens the LIFF page that checks friendship when the LIFF id is known", async () => {
+    process.env.NEXT_PUBLIC_LIFF_ID = "1234567890-abcdefgh";
+    try {
+      const { deps, reply } = setup();
+      await handleEvent(
+        { type: "join", replyToken: "rt", source: { type: "group", groupId: GID } },
+        deps,
+      );
+      expect(said(reply)).toContain('"uri":"https://liff.line.me/1234567890-abcdefgh/group-open"');
+    } finally {
+      delete process.env.NEXT_PUBLIC_LIFF_ID;
+    }
   });
 });
 

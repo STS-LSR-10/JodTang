@@ -17,19 +17,20 @@ GitHub Actions (รายชั่วโมง) ──► /api/cron/recurring + 
 
 ## 2) Environment variables
 
-| ตัวแปร                                                                  | ที่ตั้ง                       | ลับ?               | หมายเหตุ                                                  |
-| ----------------------------------------------------------------------- | ----------------------------- | ------------------ | --------------------------------------------------------- |
-| `LINE_CHANNEL_ID` / `LINE_CHANNEL_SECRET` / `LINE_CHANNEL_ACCESS_TOKEN` | Vercel                        | ใช่ (secret/token) | Messaging API channel                                     |
-| `LINE_LOGIN_CHANNEL_ID`                                                 | Vercel                        | ไม่                | LINE Login channel ที่เป็นเจ้าของ LIFF                    |
-| `NEXT_PUBLIC_LIFF_ID`                                                   | Vercel                        | ไม่                | ตั้งเป็น Sensitive ไม่ได้ (prefix `NEXT_PUBLIC_`)         |
-| `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY`            | Vercel                        | ไม่                |                                                           |
-| `SUPABASE_SERVICE_ROLE_KEY`                                             | Vercel                        | **ใช่ (สูงมาก)**   | ฝั่ง server เท่านั้น                                      |
-| `SESSION_JWT_SECRET`                                                    | Vercel                        | ใช่                | ≥ 32 ตัวอักษร ใช้เซ็น session และลิงก์ส่งออก              |
-| `CRON_SECRET`                                                           | Vercel **และ** GitHub Secrets | ใช่                | ค่าเดียวกัน 2 ที่                                         |
-| `APP_BASE_URL`                                                          | Vercel **และ** GitHub Secrets | ไม่                | เช่น `https://jod-tang.vercel.app`                        |
-| `AI_PROVIDER` (+ `AI_MODEL`) และ key ของค่าย                            | Vercel                        | key = ใช่          | `GEMINI_API_KEY` / `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` |
-| `EASYSLIP_API_KEY`, `SLIP_READERS`                                      | Vercel                        | key = ใช่          | ไม่บังคับ                                                 |
-| `NEXT_PUBLIC_CONTACT_EMAIL`                                             | Vercel                        | ไม่                | แสดงในหน้า Privacy/Terms                                  |
+| ตัวแปร                                                                  | ที่ตั้ง                       | ลับ?               | หมายเหตุ                                                                     |
+| ----------------------------------------------------------------------- | ----------------------------- | ------------------ | ---------------------------------------------------------------------------- |
+| `LINE_CHANNEL_ID` / `LINE_CHANNEL_SECRET` / `LINE_CHANNEL_ACCESS_TOKEN` | Vercel                        | ใช่ (secret/token) | Messaging API channel                                                        |
+| `LINE_LOGIN_CHANNEL_ID`                                                 | Vercel                        | ไม่                | LINE Login channel ที่เป็นเจ้าของ LIFF                                       |
+| `NEXT_PUBLIC_LIFF_ID`                                                   | Vercel                        | ไม่                | ตั้งเป็น Sensitive ไม่ได้ (prefix `NEXT_PUBLIC_`)                            |
+| `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY`            | Vercel                        | ไม่                |                                                                              |
+| `SUPABASE_SERVICE_ROLE_KEY`                                             | Vercel                        | **ใช่ (สูงมาก)**   | ฝั่ง server เท่านั้น                                                         |
+| `SESSION_JWT_SECRET`                                                    | Vercel                        | ใช่                | ≥ 32 ตัวอักษร ใช้เซ็น session และลิงก์ส่งออก                                 |
+| `CRON_SECRET`                                                           | Vercel **และ** GitHub Secrets | ใช่                | ค่าเดียวกัน 2 ที่                                                            |
+| `APP_BASE_URL`                                                          | Vercel **และ** GitHub Secrets | ไม่                | เช่น `https://jod-tang.vercel.app`                                           |
+| `AI_PROVIDER` (+ `AI_MODEL`) และ key ของค่าย                            | Vercel                        | key = ใช่          | `GEMINI_API_KEY` / `ANTHROPIC_API_KEY` / `OPENAI_API_KEY`                    |
+| `EASYSLIP_API_KEY`, `SLIP_READERS`                                      | Vercel                        | key = ใช่          | ไม่บังคับ                                                                    |
+| `NEXT_PUBLIC_CONTACT_EMAIL`                                             | Vercel                        | ไม่                | แสดงในหน้า Privacy/Terms                                                     |
+| `NEXT_PUBLIC_LINE_OA_BASIC_ID`                                          | Vercel                        | ไม่                | Basic ID ของ OA (ขึ้นต้นด้วย @) ใช้ทำลิงก์เพิ่มเพื่อน; ไม่ตั้ง = `@964jamyy` |
 
 ตัวแปรใหม่หรือแก้ค่า **ต้อง Redeploy** ถึงมีผล · อย่าตั้ง `NEXT_PUBLIC_E2E` ใน production (ใช้เฉพาะชุด e2e)
 

@@ -13,6 +13,8 @@ interface Person {
   lineUserId: string;
   name: string;
   isPayer: boolean;
+  /** tapped "ร่วมหารด้วย" in the group */
+  joined?: boolean;
 }
 interface SetupResponse {
   bill: { id: string; title: string; amountSatang: number; status: string };
@@ -43,7 +45,7 @@ export default function SplitBillPage() {
   const people = useMemo(() => data?.people ?? [], [data]);
   // the payer is always in; everyone else starts unticked
   const chosen = useMemo(() => {
-    const set = new Set(picked ?? []);
+    const set = new Set(picked ?? people.filter((p) => p.joined).map((p) => p.lineUserId));
     for (const p of people) if (p.isPayer) set.add(p.lineUserId);
     return set;
   }, [picked, people]);

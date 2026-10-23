@@ -519,10 +519,14 @@ export async function handleBillPostback(
       if (!ctx.writable) return ctx.reply([text(PAUSED_TEXT)]);
       const who = await ctx.knownName(ctx.userId);
       const result = await joinBill(ctx.db, bill.id, ctx.userId);
-      if (result === "closed")
-        return ctx.reply([text("บิลนี้ปิดรายชื่อแล้ว ถามคนจ่ายถ้าอยากร่วมหารนะ")]);
+      if (result === "closed") {
+        return ctx.reply([text("บิลนี้ล็อกรายชื่อแล้ว ถามคนจ่ายถ้าอยากร่วมหารนะ")]);
+      }
       if (result === "full") return ctx.reply([text("บิลนี้มีคนร่วมครบ 30 คนแล้ว")]);
-      const count = (await billMembers(ctx.db, bill.id)).length;
+      // the payer is on every bill, even before the list is fixed
+      const members = await billMembers(ctx.db, bill.id);
+      const count =
+        members.length + (members.some((m) => m.lineUserId === bill.payerLineUserId) ? 0 : 1);
       return ctx.reply([text(joinedText(who, bill.title, count))]);
     }
     case "gba": {
