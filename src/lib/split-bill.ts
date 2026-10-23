@@ -31,6 +31,8 @@ export interface BillMemberRow {
   qrToken: string;
   /** "โอนแล้ว": said they paid, the payer has not confirmed yet. */
   claimed?: boolean;
+  /** How a waiting "โอนแล้ว" came about when a slip was checked: the payer still has to confirm it. */
+  claimVia?: "slip" | "slip_unverified" | null;
   paidVia?: PaidVia | null;
 }
 

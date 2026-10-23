@@ -68,14 +68,15 @@ const tile = (bg: string, left: string, right: string, sub?: string) => ({
 /** The line under a name on the collecting card: how this share stands. */
 function statusOf(m: BillMemberRow, payer: string): string {
   if (m.lineUserId === payer) return "คนจ่าย";
-  if (m.paid) {
-    return m.paidVia === "slip"
-      ? "✅ จ่ายแล้ว · ตรวจสลิปแล้ว"
-      : m.paidVia === "slip_unverified"
-        ? "✅ จ่ายแล้ว · สลิป (ตรวจผู้รับไม่ได้)"
-        : "✅ จ่ายแล้ว";
+  if (m.paid) return "✅ จ่ายแล้ว (คนจ่ายยืนยัน)";
+  if (m.claimed) {
+    return m.claimVia === "slip"
+      ? "🕒 ส่งสลิปแล้ว (ตรวจแล้ว) รอคนจ่ายยืนยัน"
+      : m.claimVia === "slip_unverified"
+        ? "🕒 ส่งสลิปแล้ว (ตรวจผู้รับไม่ได้) รอคนจ่ายยืนยัน"
+        : "🕒 แจ้งโอนแล้ว รอคนจ่ายยืนยัน";
   }
-  return m.claimed ? "🕒 แจ้งโอนแล้ว รอคนจ่ายยืนยัน" : "⏳ ยังไม่จ่าย";
+  return "⏳ ยังไม่จ่าย";
 }
 
 /** The bill after the list is closed: everyone's share and whether it is paid, with the pay buttons. */
@@ -155,7 +156,7 @@ export function buildBillCollectingCard(input: {
             {
               type: "text",
               text:
-                "โอนแล้วส่งรูปสลิปเข้ากลุ่มได้เลย บอทตรวจยอดให้ · คนจ่ายกดปุ่ม ✅ เมื่อเงินเข้า" +
+                "โอนแล้วส่งรูปสลิปเข้ากลุ่มได้เลย บอทตรวจยอดให้ แต่ต้องรอคนจ่ายกด ✅ ยืนยันว่าเงินเข้าจริง (กดได้เฉพาะคนจ่าย)" +
                 (left.length > MAX_PAID_BUTTONS ? " (คนที่เหลือพิมพ์ ได้รับแล้ว ชื่อ)" : ""),
               size: "xxs",
               color: COLOR.muted,

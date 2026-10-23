@@ -6,10 +6,10 @@ import { sanitizeSlip } from "@/lib/ocr/slip-schema";
 import { LIMITS } from "@/lib/rate-limit";
 import { evaluateSlip, type PayeeDigits } from "@/lib/split-bill";
 import {
+  claimBySlip,
   claimPaid,
   getPaymentByLine,
   openSharesOf,
-  payBySlip,
   slipUsed,
 } from "@/lib/split-bill-repo";
 import { qrKey, readQrText } from "@/lib/slip-qr";
@@ -21,8 +21,8 @@ import { collectingCardFor, type BillContext } from "./split-bill-handlers";
 
 const baht = (satang: number) => `฿${formatBaht(satang)}`;
 
-/** A text with a "take it back" button, for when the receiver on the slip could not be checked. */
-const withUndo = (message: string, billId: string, who: string, userId: string): LineMessage => ({
+/** A text that asks the payer to confirm, with the one-tap button (it only works for the payer). */
+const askPayer = (message: string, billId: string, who: string, userId: string): LineMessage => ({
   type: "text",
   text: message,
   quickReply: {
@@ -31,9 +31,9 @@ const withUndo = (message: string, billId: string, who: string, userId: string):
         type: "action",
         action: {
           type: "postback",
-          label: `↩ ยังไม่ได้รับ ${who}`.slice(0, 20),
-          data: `a=gbu&b=${billId}&u=${userId}`,
-          displayText: `ยังไม่ได้รับจาก ${who}`,
+          label: `✅ ได้รับจาก ${who}`.slice(0, 20),
+          data: `a=gbp&b=${billId}&u=${userId}`,
+          displayText: `ได้รับเงินจาก ${who}`,
         },
       },
     ],
@@ -169,27 +169,18 @@ export async function checkGroupSlip(
     const claim = await claimPaid(db, verdict.share.bill.id, userId);
     if (claim === "already") return;
     return ctx.reply([
-      {
-        type: "text",
-        text: `🕒 ${who} ส่งสลิป ${baht(slip.amountSatang)} แล้ว แต่บอทอ่านรหัสบนสลิป (QR หรือเลขอ้างอิง) ไม่ได้ เลยตรวจกันสลิปซ้ำไม่ได้ ${payerName} ช่วยดูแล้วกดยืนยันด้วยนะ`,
-        quickReply: {
-          items: [
-            {
-              type: "action",
-              action: {
-                type: "postback",
-                label: `✅ ได้รับจาก ${who}`.slice(0, 20),
-                data: `a=gbp&b=${verdict.share.bill.id}&u=${userId}`,
-                displayText: `ได้รับเงินจาก ${who}`,
-              },
-            },
-          ],
-        },
-      },
+      askPayer(
+        `🕒 ${who} ส่งสลิป ${baht(slip.amountSatang)} แล้ว แต่บอทอ่านรหัสบนสลิป (QR หรือเลขอ้างอิง) ไม่ได้ เลยตรวจกันสลิปซ้ำไม่ได้ ${payerName} ช่วยดูว่าเงินเข้าจริงแล้วกด “✅ ได้รับจาก ${who}” (ปุ่มนี้กดได้เฉพาะคนจ่าย)`,
+        verdict.share.bill.id,
+        who,
+        userId,
+      ),
     ]);
   }
 
-  const paid = await payBySlip(db, {
+  // the bot has checked the slip, but only the payer can know the money really arrived: the share is
+  // left waiting ("🕒") and the payer confirms it (the button only works for them)
+  const claim = await claimBySlip(db, {
     billId: verdict.share.bill.id,
     lineUserId: userId,
     sha256,
@@ -198,30 +189,25 @@ export async function checkGroupSlip(
     receiverVerified: verdict.receiver === "verified",
     qrHash,
   });
-  if (paid === "duplicate") return ctx.reply([text("สลิปนี้เคยใช้จ่ายไปแล้วนะ")]);
-  if (paid !== "ok") return; // paid in the meantime, or the bill closed
+  if (claim === "duplicate") return ctx.reply([text("สลิปนี้เคยใช้จ่ายไปแล้วนะ")]);
+  if (claim !== "ok") return; // paid or already waiting in the meantime, or the bill closed
 
   const bill = verdict.share.bill;
   const over =
     verdict.overSatang >= 100
       ? ` (โอนเกินมา ${baht(verdict.overSatang)} ให้ ${payerName} ทอนหรือเก็บไว้)`
       : "";
-  const card = await collectingCardFor(ctx, bill);
-  if (verdict.receiver === "verified") {
-    return ctx.reply([
-      text(
-        `✅ ${who} จ่ายส่วนของ "${bill.title}" ${baht(verdict.share.shareSatang)} แล้ว (ตรวจสลิปแล้ว)${over}`,
-      ),
-      card,
-    ]);
-  }
+  const checked =
+    verdict.receiver === "verified"
+      ? "บอทตรวจสลิปแล้ว ยอดและผู้รับตรงกัน"
+      : "บอทตรวจยอดแล้ว แต่อ่านผู้รับในสลิปไม่ได้";
   return ctx.reply([
-    withUndo(
-      `✅ ${who} จ่ายส่วนของ "${bill.title}" ${baht(verdict.share.shareSatang)} แล้ว ยอดครบ แต่อ่านผู้รับในสลิปไม่ได้ ${payerName} ช่วยดูด้วยนะ ถ้าไม่ได้รับเงินจริง กด “↩ ยังไม่ได้รับ”${over}`,
+    askPayer(
+      `🕒 ${who} ส่งสลิปส่วนของ "${bill.title}" ${baht(verdict.share.shareSatang)} แล้ว ${checked}${over}\nเงินเข้าบัญชีจริงหรือยัง? ${payerName} ตรวจแล้วกด “✅ ได้รับจาก ${who}” (ปุ่มนี้กดได้เฉพาะคนจ่ายเท่านั้น)`,
       bill.id,
       who,
       userId,
     ),
-    card,
+    await collectingCardFor(ctx, bill),
   ]);
 }

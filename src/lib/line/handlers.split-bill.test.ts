@@ -160,6 +160,8 @@ vi.mock("@/lib/split-bill-repo", () => ({
     if (bill?.status !== "collecting" || !m) return "none";
     if (m.paid) return "already";
     m.paid = true;
+    m.claimed = false;
+    m.claimVia = null;
     if (billMembers[id]?.every((x) => x.paid)) bill.status = "settled";
     return "ok";
   },
@@ -201,7 +203,7 @@ vi.mock("@/lib/split-bill-repo", () => ({
         const m = billMembers[bill.id]?.find((x) => x.lineUserId === user);
         return m && !m.paid && m.shareSatang !== null ? [{ bill, shareSatang: m.shareSatang }] : [];
       }),
-  payBySlip: async (
+  claimBySlip: async (
     _db: unknown,
     input: {
       billId: string;
@@ -215,7 +217,7 @@ vi.mock("@/lib/split-bill-repo", () => ({
     const bill = bills.find((b) => b.id === input.billId);
     const m = billMembers[input.billId]?.find((x) => x.lineUserId === input.lineUserId);
     if (bill?.status !== "collecting" || !m) return "none";
-    if (m.paid) return "already";
+    if (m.paid || m.claimVia) return "already";
     if (
       usedSlips.has(`sha:${input.sha256}`) ||
       (input.reference && usedSlips.has(`ref:${input.reference}`)) ||
@@ -224,12 +226,11 @@ vi.mock("@/lib/split-bill-repo", () => ({
       return "duplicate";
     }
     usedSlips.add(`sha:${input.sha256}`);
-    if (input.qrHash) usedSlips.add(`qr:${input.qrHash}`);
     if (input.reference) usedSlips.add(`ref:${input.reference}`);
-    m.paid = true;
-    m.claimed = false;
-    m.paidVia = input.receiverVerified ? "slip" : "slip_unverified";
-    if (billMembers[input.billId]?.every((x) => x.paid)) bill.status = "settled";
+    if (input.qrHash) usedSlips.add(`qr:${input.qrHash}`);
+    // a checked slip leaves the share WAITING: only the payer's confirmation makes it paid
+    m.claimed = true;
+    m.claimVia = input.receiverVerified ? "slip" : "slip_unverified";
     return "ok";
   },
 }));
@@ -758,15 +759,30 @@ describe("a slip sent into the group", () => {
     slipRaw = slipOf();
   });
 
-  it("pays the share when the amount and the receiver fit (and says it was checked)", async () => {
+  it("a checked slip leaves the share WAITING: only the payer's tap makes it paid", async () => {
     const out = await run(photo("Ubob"));
-    expect(out).toContain("บ๊อบ จ่ายส่วนของ");
-    expect(out).toContain("ตรวจสลิปแล้ว");
+    expect(out).toContain("ส่งสลิปส่วนของ");
+    expect(out).toContain("บอทตรวจสลิปแล้ว");
+    expect(out).toContain("a=gbp&b=b1&u=Ubob");
+    expect(billMembers.b1?.find((m) => m.lineUserId === "Ubob")).toMatchObject({
+      paid: false,
+      claimed: true,
+      claimVia: "slip",
+    });
+    expect(await run(tap("Uanna", "a=gbp&b=b1&u=Ubob"))).toContain("บ๊อบ");
     expect(billMembers.b1?.find((m) => m.lineUserId === "Ubob")).toMatchObject({
       paid: true,
-      paidVia: "slip",
+      claimed: false,
+      claimVia: null,
     });
-    expect(out).toContain("ตรวจสลิปแล้ว"); // the card shows how it was paid too
+  });
+
+  it("the sender, other members and the ledger owner cannot confirm it", async () => {
+    await run(photo("Ubob"));
+    for (const who of ["Ubob", "Uchom", "Uowner"]) {
+      expect(await run(tap(who, "a=gbp&b=b1&u=Ubob"))).toContain("กดได้เฉพาะคนที่จ่ายบิลนี้");
+    }
+    expect(billMembers.b1?.find((m) => m.lineUserId === "Ubob")?.paid).toBe(false);
   });
 
   it("an amount over the share is accepted and mentioned", async () => {
@@ -788,18 +804,21 @@ describe("a slip sent into the group", () => {
     expect(billMembers.b1?.find((m) => m.lineUserId === "Ubob")?.paid).toBe(false);
   });
 
-  it("a receiver the slip does not show still pays, marked unverified, with a button to take it back", async () => {
+  it("a receiver the slip does not show still waits for the payer, marked unverified", async () => {
     slipRaw = slipOf({ payee_account: null });
     const out = await run(photo("Ubob"));
     expect(out).toContain("อ่านผู้รับในสลิปไม่ได้");
-    expect(out).toContain("a=gbu&b=b1&u=Ubob");
-    expect(billMembers.b1?.find((m) => m.lineUserId === "Ubob")?.paidVia).toBe("slip_unverified");
+    expect(out).toContain("a=gbp&b=b1&u=Ubob");
+    expect(billMembers.b1?.find((m) => m.lineUserId === "Ubob")).toMatchObject({
+      paid: false,
+      claimVia: "slip_unverified",
+    });
   });
 
   it("a payer with no account set cannot be checked either, and it is marked unverified", async () => {
     payments.clear();
     await run(photo("Ubob"));
-    expect(billMembers.b1?.find((m) => m.lineUserId === "Ubob")?.paidVia).toBe("slip_unverified");
+    expect(billMembers.b1?.find((m) => m.lineUserId === "Ubob")?.claimVia).toBe("slip_unverified");
   });
 
   it("a slip made before the bill was opened cannot pay it", async () => {
@@ -855,7 +874,8 @@ describe("a slip sent into the group", () => {
     expect(billMembers.b1?.find((m) => m.lineUserId === "Uchom")?.paid).toBe(false);
     slipQr = "a-different-slip-qr";
     slipRaw = slipOf({ reference: "OTHER-REF-2" });
-    expect(await run(photo("Uchom"))).toContain("ตรวจสลิปแล้ว");
+    expect(await run(photo("Uchom"))).toContain("บอทตรวจสลิปแล้ว");
+    expect(billMembers.b1?.find((m) => m.lineUserId === "Uchom")?.claimed).toBe(true);
   });
 
   it("a slip with no QR we can read and no reference cannot be told from another: the payer confirms it", async () => {
@@ -874,13 +894,16 @@ describe("a slip sent into the group", () => {
   it("a slip with a QR but no reference is fine: the QR is the key", async () => {
     slipRaw = slipOf({ reference: null });
     slipQr = "qr-only-slip";
-    expect(await run(photo("Ubob"))).toContain("ตรวจสลิปแล้ว");
+    expect(await run(photo("Ubob"))).toContain("บอทตรวจสลิปแล้ว");
   });
 
-  it("the last share to be paid settles the bill", async () => {
+  it("the last share the payer confirms settles the bill", async () => {
     await run(photo("Ubob"));
     slipRaw = slipOf({ reference: "REF999999" });
-    const out = await run(photo("Uchom"));
+    await run(photo("Uchom"));
+    expect(bills[0]?.status).toBe("collecting"); // two checked slips, nothing confirmed yet
+    await run(tap("Uanna", "a=gbp&b=b1&u=Ubob"));
+    const out = await run(tap("Uanna", "a=gbp&b=b1&u=Uchom"));
     expect(out).toContain("เก็บครบแล้ว");
     expect(bills[0]?.status).toBe("settled");
   });

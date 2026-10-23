@@ -87,6 +87,16 @@ async function names(db: SupabaseClient, groupId: string) {
 const mayManage = (ctx: BillContext, bill: BillRow) =>
   ctx.isOwner || (ctx.userId !== undefined && ctx.userId === bill.payerLineUserId);
 
+/**
+ * Whether money arrived is for the person who paid the bill to say, and nobody else (not the one who
+ * reported it, not the ledger's owner): this guards the confirm / take-back buttons against false claims.
+ */
+const isPayer = (ctx: BillContext, bill: BillRow) =>
+  ctx.userId !== undefined && ctx.userId === bill.payerLineUserId;
+
+const ONLY_PAYER_CONFIRMS_TEXT =
+  "ปุ่มนี้กดได้เฉพาะคนที่จ่ายบิลนี้ (คนสร้างบิล) เท่านั้นนะ เพราะมีแค่เขาที่เห็นว่าเงินเข้าบัญชีจริงไหม";
+
 export async function collectingCardFor(ctx: BillContext, bill: BillRow): Promise<LineMessage> {
   const [members, nameOf] = await Promise.all([
     billMembers(ctx.db, bill.id),
@@ -139,7 +149,7 @@ async function cancelFlow(ctx: BillContext, bill: BillRow): Promise<void> {
 
 async function paidFlow(ctx: BillContext, bill: BillRow, targets: string[]): Promise<void> {
   if (!ctx.writable) return ctx.reply([text(PAUSED_TEXT)]);
-  if (!mayManage(ctx, bill)) return ctx.reply([text(NOT_PAYER_TEXT)]);
+  if (!isPayer(ctx, bill)) return ctx.reply([text(ONLY_PAYER_CONFIRMS_TEXT)]);
   const nameOf = await names(ctx.db, ctx.group.id);
   const lines: string[] = [];
   for (const id of targets) {
@@ -176,7 +186,7 @@ async function claimFlow(ctx: BillContext, bill: BillRow): Promise<void> {
   return ctx.reply([
     {
       type: "text",
-      text: `🕒 ${who} แจ้งว่าโอนส่วนของ "${bill.title}" ${baht(mine?.shareSatang ?? 0)} แล้ว ${nameOf(bill.payerLineUserId)} ช่วยตรวจแล้วกดยืนยันด้วยนะ (หรือส่งรูปสลิปเข้ากลุ่ม บอทจะตรวจยอดให้เอง)`,
+      text: `🕒 ${who} แจ้งว่าโอนส่วนของ "${bill.title}" ${baht(mine?.shareSatang ?? 0)} แล้ว ${nameOf(bill.payerLineUserId)} ช่วยตรวจว่าเงินเข้าจริงแล้วกดยืนยันด้วยนะ (ปุ่มนี้กดได้เฉพาะคนจ่ายเท่านั้น) หรือส่งรูปสลิปเข้ากลุ่ม บอทจะตรวจยอดให้ก่อน`,
       quickReply: {
         items: [
           {
@@ -197,7 +207,7 @@ async function claimFlow(ctx: BillContext, bill: BillRow): Promise<void> {
 /** The payer takes a tick back. */
 async function unpayFlow(ctx: BillContext, bill: BillRow, targets: string[]): Promise<void> {
   if (!ctx.writable) return ctx.reply([text(PAUSED_TEXT)]);
-  if (!mayManage(ctx, bill)) return ctx.reply([text(NOT_PAYER_TEXT)]);
+  if (!isPayer(ctx, bill)) return ctx.reply([text(ONLY_PAYER_CONFIRMS_TEXT)]);
   const nameOf = await names(ctx.db, ctx.group.id);
   const lines: string[] = [];
   for (const id of targets) {

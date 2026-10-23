@@ -127,12 +127,13 @@ interface MemberDb {
   qr_token: string;
   claimed_at: string | null;
   paid_via: PaidVia | null;
+  claim_via: "slip" | "slip_unverified" | null;
 }
 
 export async function billMembers(db: SupabaseClient, billId: string): Promise<BillMemberRow[]> {
   const { data, error } = await db
     .from("split_bill_members")
-    .select("line_user_id,share_satang,paid,qr_token,claimed_at,paid_via")
+    .select("line_user_id,share_satang,paid,qr_token,claimed_at,paid_via,claim_via")
     .eq("bill_id", billId)
     .order("joined_at", { ascending: true });
   if (error) fail("load bill members", error);
@@ -142,6 +143,7 @@ export async function billMembers(db: SupabaseClient, billId: string): Promise<B
     paid: r.paid,
     qrToken: r.qr_token,
     claimed: r.claimed_at !== null,
+    claimVia: r.claim_via,
     paidVia: r.paid_via,
   }));
 }
@@ -362,10 +364,13 @@ export async function unpay(
   return data === "ok" ? "ok" : "none";
 }
 
-export type SlipPayResult = "ok" | "duplicate" | "already" | "none";
+export type SlipClaimResult = "ok" | "duplicate" | "already" | "none";
 
-/** A slip that covers the share: records it (one slip pays one share) and marks the share paid. */
-export async function payBySlip(
+/**
+ * A slip that covers the share: records it (one slip pays one share, ever) and leaves the share
+ * waiting for the payer to confirm. It never marks the share paid by itself.
+ */
+export async function claimBySlip(
   db: SupabaseClient,
   input: {
     billId: string;
@@ -377,8 +382,8 @@ export async function payBySlip(
     /** Hash of the QR printed on the slip, when it could be read. */
     qrHash?: string | null;
   },
-): Promise<SlipPayResult> {
-  const { data, error } = await db.rpc("split_bill_pay_by_slip", {
+): Promise<SlipClaimResult> {
+  const { data, error } = await db.rpc("split_bill_claim_by_slip", {
     p_bill: input.billId,
     p_user: input.lineUserId,
     p_sha: input.sha256,
@@ -387,7 +392,7 @@ export async function payBySlip(
     p_verified: input.receiverVerified,
     p_qr_hash: input.qrHash ?? null,
   });
-  if (error) fail("pay by slip", error);
+  if (error) fail("claim by slip", error);
   return data === "ok" || data === "duplicate" || data === "already" ? data : "none";
 }
 

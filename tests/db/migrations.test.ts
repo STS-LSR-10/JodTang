@@ -2568,7 +2568,7 @@ describe("split bills round 2: claim, slips, unpay (0036)", () => {
     const member = (user: string) =>
       one<{ paid: boolean; claimed_at: string | null; paid_via: string | null }>(
         db,
-        "select paid, claimed_at::text, paid_via from split_bill_members where bill_id = $1 and line_user_id = $2",
+        "select paid, claimed_at::text, paid_via, claim_via from split_bill_members where bill_id = $1 and line_user_id = $2",
         [bill, user],
       );
     const status = async () =>
@@ -2615,38 +2615,60 @@ describe("split bills round 2: claim, slips, unpay (0036)", () => {
     ).toBe("none");
   });
 
-  it("pay by slip: marks the share paid, clears the claim, records the slip, and a settled bill follows", async () => {
+  it("claim by slip: leaves the share waiting (never paid), records the slip; only the payer's mark_paid settles", async () => {
     const { bill, call, member, status } = await collecting();
-    await call("split_bill_claim($1,'Ubob')", bill);
     expect(
-      await call("split_bill_pay_by_slip($1,'Ubob','sha-@T-1','REF@T1',30000,true)", bill),
+      await call("split_bill_claim_by_slip($1,'Ubob','sha-@T-1','REF@T1',30000,true)", bill),
     ).toBe("ok");
-    expect(await member("Ubob")).toMatchObject({ paid: true, claimed_at: null, paid_via: "slip" });
+    const waiting = await member("Ubob");
+    expect(waiting).toMatchObject({ paid: false, claim_via: "slip" });
+    expect(waiting.claimed_at).not.toBeNull();
     expect(
-      await call("split_bill_pay_by_slip($1,'Ubob','sha-@T-9','REF@T9',30000,true)", bill),
+      await call("split_bill_claim_by_slip($1,'Ubob','sha-@T-9','REF@T9',30000,true)", bill),
     ).toBe("already");
-    expect(await status()).toBe("collecting");
     expect(
-      await call("split_bill_pay_by_slip($1,'Uchom','sha-@T-2','REF@T2',30000,false)", bill),
+      await call("split_bill_claim_by_slip($1,'Uchom','sha-@T-2','REF@T2',30000,false)", bill),
     ).toBe("ok");
-    expect(await member("Uchom")).toMatchObject({ paid: true, paid_via: "slip_unverified" });
+    expect(await member("Uchom")).toMatchObject({ paid: false, claim_via: "slip_unverified" });
+    expect(await status()).toBe("collecting"); // two waiting claims settle nothing
+    expect(await call("split_bill_mark_paid($1,'Ubob')", bill)).toBe("ok");
+    expect(await member("Ubob")).toMatchObject({
+      paid: true,
+      claimed_at: null,
+      claim_via: null,
+      paid_via: "payer",
+    });
+    expect(await call("split_bill_mark_paid($1,'Uchom')", bill)).toBe("ok");
     expect(await status()).toBe("settled");
+  });
+
+  it("unpay clears a confirmed share completely", async () => {
+    const { bill, call, member } = await collecting();
+    await call("split_bill_claim_by_slip($1,'Ubob','sha-@T-1','REF@T1',30000,true)", bill);
+    await call("split_bill_mark_paid($1,'Ubob')", bill);
+    expect(await call("split_bill_unpay($1,'Ubob')", bill)).toBe("ok");
+    expect(await member("Ubob")).toMatchObject({
+      paid: false,
+      claimed_at: null,
+      claim_via: null,
+      paid_via: null,
+    });
   });
 
   it("one slip pays one share, ever: the same picture or the same reference is a duplicate", async () => {
     const { bill, call, member } = await collecting();
     expect(
-      await call("split_bill_pay_by_slip($1,'Ubob','sha-@T-1','REF@T1',30000,true)", bill),
+      await call("split_bill_claim_by_slip($1,'Ubob','sha-@T-1','REF@T1',30000,true)", bill),
     ).toBe("ok");
     expect(
-      await call("split_bill_pay_by_slip($1,'Uchom','sha-@T-1','REF@T2',30000,true)", bill),
+      await call("split_bill_claim_by_slip($1,'Uchom','sha-@T-1','REF@T2',30000,true)", bill),
     ).toBe("duplicate");
     expect(
-      await call("split_bill_pay_by_slip($1,'Uchom','sha-@T-3','REF@T1',30000,true)", bill),
+      await call("split_bill_claim_by_slip($1,'Uchom','sha-@T-3','REF@T1',30000,true)", bill),
     ).toBe("duplicate");
     expect((await member("Uchom")).paid).toBe(false); // the failed attempts left nothing behind
     expect(
-      await call("split_bill_pay_by_slip($1,'Uchom','sha-@T-3','REF@T3',30000,true)", bill),
+      await call("split_bill_claim_by_slip($1,'Uchom','sha-@T-3','REF@T3',30000,true)", bill),
     ).toBe("ok");
   });
 
@@ -2655,7 +2677,7 @@ describe("split bills round 2: claim, slips, unpay (0036)", () => {
     for (const u of ["Ubob", "Uchom"]) {
       const r = await one<{ r: string }>(
         db,
-        "select split_bill_pay_by_slip($1,$2,$3,null,30000,true) as r",
+        "select split_bill_claim_by_slip($1,$2,$3,null,30000,true) as r",
         [bill, u, `sha-${bill}-${u}`],
       );
       expect(r.r).toBe("ok");
@@ -2666,7 +2688,7 @@ describe("split bills round 2: claim, slips, unpay (0036)", () => {
     const { bill, call } = await collecting();
     await db.query("update split_bills set status = 'cancelled' where id = $1", [bill]);
     expect(
-      await call("split_bill_pay_by_slip($1,'Ubob','sha-@T-1','REF@T1',30000,true)", bill),
+      await call("split_bill_claim_by_slip($1,'Ubob','sha-@T-1','REF@T1',30000,true)", bill),
     ).toBe("none");
   });
 
@@ -2685,7 +2707,7 @@ describe("split bills round 2: claim, slips, unpay (0036)", () => {
 
   it("deleting the group takes the slips with it", async () => {
     const { bill, call, group } = await collecting();
-    await call("split_bill_pay_by_slip($1,'Ubob','sha-@T-1','REF@T1',30000,true)", bill);
+    await call("split_bill_claim_by_slip($1,'Ubob','sha-@T-1','REF@T1',30000,true)", bill);
     await db.query("delete from bot_groups where id = $1", [group]);
     const n = await one<{ n: number }>(
       db,
@@ -2860,7 +2882,7 @@ describe("split bills round 3: setup, confirm, reminder, QR key (0037)", () => {
       (
         await one<{ r: string }>(
           db,
-          "select split_bill_pay_by_slip($1,$2,$3,$4,30000,true,$5) as r",
+          "select split_bill_claim_by_slip($1,$2,$3,$4,30000,true,$5) as r",
           [bill, user, `${sha}-${tag}`, ref ? `${ref}-${tag}` : null, qr ? `${qr}-${tag}` : null],
         )
       ).r;
@@ -2883,7 +2905,7 @@ describe("split bills round 3: setup, confirm, reminder, QR key (0037)", () => {
     ] as const) {
       const r = await one<{ r: string }>(
         db,
-        "select split_bill_pay_by_slip($1,$2,$3,$4,30000,false) as r",
+        "select split_bill_claim_by_slip($1,$2,$3,$4,30000,false) as r",
         [bill, u, `plain-${tag}-${i}`, `ref-${tag}-${i}`],
       );
       expect(r.r).toBe("ok");
