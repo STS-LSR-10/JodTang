@@ -299,6 +299,47 @@ test.describe("transactions page (360px)", () => {
     await expect(page.getByText("บันทึกแล้ว")).toBeVisible();
   });
 
+  test("?edit=<id> (the chat's แก้ button) opens that entry's editor, and saving says it worked", async ({
+    page,
+  }) => {
+    const id = "11111111-1111-1111-1111-111111111111";
+    const bodies: unknown[] = [];
+    await mockApi(page, {
+      [`GET /api/transactions/${id}`]: TX(),
+      "GET /api/categories": CATEGORIES,
+      "GET /api/wallets": { items: [] },
+      "GET /api/me": ME_FREE,
+      [`PATCH /api/transactions/${id}`]: (route: Route) => {
+        bodies.push(route.request().postDataJSON());
+        return { ok: true };
+      },
+    });
+    await page.goto(`/transactions?edit=${id}`);
+
+    const dialog = page.getByRole("dialog", { name: "แก้ไขรายการ" });
+    await expect(dialog.getByLabel("ชื่อรายการ")).toHaveValue("กาแฟ");
+    await expectNoHorizontalScroll(page);
+    await dialog.getByLabel("ชื่อรายการ").fill("กาแฟเย็น");
+    await dialog.getByRole("button", { name: "บันทึก" }).click();
+    await expect.poll(() => bodies.length).toBe(1);
+    expect(bodies[0]).toEqual({ title: "กาแฟเย็น" });
+    await expect(page.getByText("✅ แก้ไขรายการสำเร็จ")).toBeVisible();
+  });
+
+  test("?edit= for an entry that is gone says so instead of hanging", async ({ page }) => {
+    const id = "99999999-9999-9999-9999-999999999999";
+    await mockApi(page, { "GET /api/me": ME_FREE });
+    await page.route(`**/api/transactions/${id}`, (route) =>
+      route.fulfill({
+        status: 404,
+        contentType: "application/json",
+        body: JSON.stringify({ error: "ไม่พบรายการนี้" }),
+      }),
+    );
+    await page.goto(`/transactions?edit=${id}`);
+    await expect(page.getByText("ไม่พบรายการนี้")).toBeVisible();
+  });
+
   test("edit sheet validates before sending", async ({ page }) => {
     const { seen } = await mockApi(page, {
       "GET /api/transactions": LIST,

@@ -5,6 +5,7 @@ import { log } from "@/lib/log";
 import { can } from "@/lib/plan";
 import { getPlanInfo, loadMemoryIfAllowed } from "@/lib/plan-server";
 import { LIMITS, limitOr429 } from "@/lib/rate-limit";
+import { TX_SELECT, toTxDto } from "@/lib/dto";
 import { getTransaction, loadCategories, patchTransactionRow, updateTransaction } from "@/lib/repo";
 import { getSlip, learnMerchant } from "@/lib/slip-repo";
 import { getAdminClient } from "@/lib/supabase/admin";
@@ -26,6 +27,31 @@ const patchSchema = z
   })
   .partial()
   .strict();
+
+/** GET /api/transactions/:id — one of the user's own confirmed entries (the chat "แก้" button opens its editor). */
+export async function GET(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> },
+): Promise<Response> {
+  return guard(async () => {
+    const auth = await requireUser(request);
+    if (auth instanceof Response) return auth;
+
+    const { id } = await params;
+    if (!z.string().uuid().safeParse(id).success) return apiError("ไม่พบรายการนี้", 404);
+
+    const { data, error } = await getAdminClient()
+      .from("transactions")
+      .select(TX_SELECT)
+      .eq("id", id)
+      .eq("user_id", auth.userId)
+      .eq("status", "confirmed")
+      .maybeSingle();
+    if (error) throw new Error(`load transaction: ${error.message}`);
+    if (!data) return apiError("ไม่พบรายการนี้", 404);
+    return json({ ...toTxDto(data as Parameters<typeof toTxDto>[0]), mine: true });
+  });
+}
 
 /** PATCH /api/transactions/:id — edit a confirmed entry (title, amount, type, category, date, note). */
 export async function PATCH(

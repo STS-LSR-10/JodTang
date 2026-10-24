@@ -34,6 +34,10 @@ export interface ConfirmCardInput {
   fxNote?: string | null;
   /** Offer the "ย้ายกระเป๋า" button (the user has two or more wallets). */
   canMoveWallet?: boolean;
+  /** LIFF page that edits this entry; the "แก้" chip opens it (falls back to a chat hint without it). */
+  editUrl?: string;
+  /** The card confirms an edit ("แก้ไขรายการสำเร็จ") rather than a new entry. */
+  edited?: boolean;
   /** Public PNG of the logo for the card header (omitted when the app URL is unknown). */
   logoUrl?: string;
 }
@@ -101,7 +105,7 @@ export function buildConfirmMessage(input: ConfirmCardInput): LineMessage {
   if (input.style === "short") {
     return {
       type: "text",
-      text: `จดแล้ว: ${input.title} ${amountText} · ${category}${tagsText}${walletText}${input.fxNote ? ` · ${input.fxNote}` : ""}`,
+      text: `${input.edited ? "แก้ไขรายการสำเร็จ" : "จดแล้ว"}: ${input.title} ${amountText} · ${category}${tagsText}${walletText}${input.fxNote ? ` · ${input.fxNote}` : ""}`,
       quickReply: {
         items: [
           ...moveItem,
@@ -144,7 +148,7 @@ export function buildConfirmMessage(input: ConfirmCardInput): LineMessage {
           contents: [
             {
               type: "text",
-              text: "จดสำเร็จ",
+              text: input.edited ? "แก้ไขรายการสำเร็จ" : "จดสำเร็จ",
               weight: "bold",
               size: "xl",
               color: "#0B5D4F",
@@ -166,7 +170,11 @@ export function buildConfirmMessage(input: ConfirmCardInput): LineMessage {
         },
         {
           type: "text",
-          text: income ? "เย้! มีเงินเข้ากระเป๋าเพิ่มแล้วนะ" : "อย่าลืมตรวจสอบรายการที่จดด้วยนะ",
+          text: input.edited
+            ? "อัปเดตรายการเรียบร้อยแล้ว"
+            : income
+              ? "เย้! มีเงินเข้ากระเป๋าเพิ่มแล้วนะ"
+              : "อย่าลืมตรวจสอบรายการที่จดด้วยนะ",
           size: "xs",
           color: "#3F6B63",
           wrap: true,
@@ -285,12 +293,19 @@ export function buildConfirmMessage(input: ConfirmCardInput): LineMessage {
           color: accent,
           flex: 0,
         },
-        chip("แก้", "#EAEEF0", "#334155", {
-          type: "postback",
-          label: "แก้ไข",
-          data: `a=edit&id=${input.txId}`,
-          displayText: "แก้ไข",
-        }),
+        chip(
+          "แก้",
+          "#EAEEF0",
+          "#334155",
+          input.editUrl
+            ? { type: "uri", label: "แก้ไข", uri: input.editUrl }
+            : {
+                type: "postback",
+                label: "แก้ไข",
+                data: `a=edit&id=${input.txId}`,
+                displayText: "แก้ไข",
+              },
+        ),
         chip("ลบ", accentSoft, COLOR.expense, {
           type: "postback",
           label: "ลบ",

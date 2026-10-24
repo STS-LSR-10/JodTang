@@ -66,12 +66,81 @@ function useDebounced<T>(value: T, ms: number): T {
   return debounced;
 }
 
-/** The page reads `?q=` (the chat search card links here), which needs a Suspense boundary. */
+/**
+ * The page reads `?q=` (the chat search card links here) and `?edit=` (the chat "แก้" button opens
+ * the editor of that entry), which needs a Suspense boundary.
+ */
 export default function TransactionsPage() {
   return (
     <Suspense fallback={<LoadingBlock rows={5} />}>
-      <TransactionsView />
+      <TransactionsRoute />
     </Suspense>
+  );
+}
+
+function TransactionsRoute() {
+  const editId = useSearchParams().get("edit");
+  return editId ? <EditFromChat id={editId} /> : <TransactionsView />;
+}
+
+/**
+ * Opened from the chat's "แก้" button: the editor of one entry. After a save it sends
+ * "แก้ไขเสร็จแล้ว" into the chat (the bot answers with the card) and closes the window; outside
+ * LINE, where nothing can be sent, the page itself says it worked.
+ */
+function EditFromChat({ id }: { id: string }) {
+  const tx = useApi<TxDto>(`/api/transactions/${encodeURIComponent(id)}`);
+  const [done, setDone] = useState(false);
+
+  async function saved() {
+    setDone(true);
+    try {
+      const liff = (await import("@line/liff")).default;
+      if (liff.isApiAvailable("sendMessages")) {
+        await liff.sendMessages([{ type: "text", text: "แก้ไขเสร็จแล้ว" }]);
+        liff.closeWindow();
+      }
+    } catch {
+      /* the page already says it was saved */
+    }
+  }
+
+  if (tx.loading) return <LoadingBlock rows={4} />;
+  if (tx.error || !tx.data) {
+    return (
+      <ErrorState
+        message={tx.error ?? "ไม่พบรายการนี้แล้ว (อาจถูกลบไปก่อนหน้า)"}
+        onRetry={tx.reload}
+      />
+    );
+  }
+  if (done) {
+    return (
+      <div className="space-y-4 px-4 py-10 text-center">
+        <p role="status" className="text-lg font-bold text-primary">
+          ✅ แก้ไขรายการสำเร็จ
+        </p>
+        <p className="text-sm text-muted">บอทส่งการ์ดสรุปรายการเข้าแชทให้แล้ว กลับไปที่แชทได้เลย</p>
+        <Link
+          href="/transactions"
+          className="inline-flex h-11 items-center rounded-2xl bg-primary px-5 text-sm font-semibold text-surface"
+        >
+          ดูรายการทั้งหมด
+        </Link>
+      </div>
+    );
+  }
+  return (
+    <div>
+      <PageHeader title="แก้ไขรายการ" />
+      <EditSheet
+        tx={tx.data}
+        onClose={() => {
+          window.location.assign("/transactions");
+        }}
+        onSaved={saved}
+      />
+    </div>
   );
 }
 

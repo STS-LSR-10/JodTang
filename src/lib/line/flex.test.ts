@@ -41,6 +41,21 @@ describe("flex", () => {
     expect(msg.altText).toBeTypeOf("string");
   });
 
+  it("the 'แก้' chip opens the editor page when a link is known, and says so on an edited card", () => {
+    const url = "https://liff.line.me/1234-abcd/transactions?edit=" + base.txId;
+    const json = JSON.stringify(buildConfirmMessage({ ...base, style: "full", editUrl: url }));
+    expect(json).toContain(url);
+    expect(json).not.toContain("a=edit&id=");
+    expect(json).toContain("จดสำเร็จ");
+    const done = JSON.stringify(
+      buildConfirmMessage({ ...base, style: "full", editUrl: url, edited: true }),
+    );
+    expect(done).toContain("แก้ไขรายการสำเร็จ");
+    expect(done).not.toContain("จดสำเร็จ");
+    const short = JSON.stringify(buildConfirmMessage({ ...base, style: "short", edited: true }));
+    expect(short).toContain("แก้ไขรายการสำเร็จ: ");
+  });
+
   it("income card is green with a plus sign and its own message", () => {
     const json = JSON.stringify(
       buildConfirmMessage({

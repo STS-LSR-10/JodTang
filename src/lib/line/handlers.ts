@@ -15,6 +15,7 @@ import {
   ensureUser,
   expenseTotalSatang,
   getLatestConfirmed,
+  getRecentlyEdited,
   getSettings,
   getTransaction,
   claimPendingTransaction,
@@ -156,6 +157,7 @@ import { buildHelpPrompt, buildHelpTopicCard, buildWelcomeCard, isHelpTopic } fr
 import { notUnderstood } from "./not-understood";
 import {
   EDIT_HINT_TEXT,
+  EDIT_LINK_TEXT,
   EDIT_USAGE_TEXT,
   BACKDATE_BAD_DATE_TEXT,
   BACKDATE_LOCKED_TEXT,
@@ -1394,6 +1396,7 @@ async function confirmCard(
   tags: string[] = [],
   walletId: string | null = null,
   fxNote: string | null = null,
+  edited = false,
 ): Promise<LineMessage> {
   const style = settings.confirm_style === "short" ? "short" : "full";
   // The wallet only shows up once there is more than one to tell apart.
@@ -1425,6 +1428,8 @@ async function confirmCard(
     walletName: wallet ? walletLabel(wallet) : null,
     canMoveWallet: multi,
     fxNote,
+    editUrl: pageUrl(`/transactions?edit=${tx.id}`),
+    edited,
     cycleTotalSatang: cycleTotal,
     cycleLabel:
       settings.budget_cycle === "weekly"
@@ -1787,6 +1792,32 @@ async function runCommand(
       ];
     }
 
+    case "edit-done": {
+      // the LIFF editor sends this after a save: show what was just edited (nothing if nothing was)
+      const edited = await getRecentlyEdited(
+        db,
+        user.id,
+        new Date(deps.now().getTime() - 15 * 60_000),
+      );
+      if (!edited) return [];
+      const settings = await getSettings(db, user.id);
+      const categories = await loadCategories(db, user.id);
+      return [
+        await confirmCard(
+          edited,
+          edited.category_id,
+          categories,
+          settings,
+          user,
+          deps,
+          [],
+          edited.account_id,
+          null,
+          true,
+        ),
+      ];
+    }
+
     case "edit-latest-usage":
       return [text(EDIT_USAGE_TEXT)];
 
@@ -1994,7 +2025,11 @@ async function handlePostback(
     return [text(`ลบแล้ว: ${tx.title} ฿${formatBaht(txAmountSatang(tx))}`)];
   }
 
-  if (action === "edit") return [text(EDIT_HINT_TEXT)];
+  if (action === "edit") {
+    // buttons on cards sent before the editor page existed: point to it
+    const url = pageUrl(`/transactions?edit=${id}`);
+    return [text(url ? `${EDIT_LINK_TEXT}\n${url}` : EDIT_HINT_TEXT)];
+  }
 
   // "💳 ย้ายกระเป๋า": list the wallets, then (a=wm) move the entry to the one tapped
   if (action === "wl") {

@@ -33,6 +33,7 @@ export type Command =
   | { kind: "delete-latest" }
   | { kind: "edit-latest"; amountSatang: number }
   | { kind: "edit-latest-usage" }
+  | { kind: "edit-done" }
   | { kind: "points" }
   | { kind: "my-code" }
   | { kind: "use-code"; code: string }
@@ -161,6 +162,8 @@ export function parseCommand(input: string): Command | null {
       : { kind: "payment-usage" };
   }
 
+  // sent by the LIFF edit page after a save: the bot answers with the card of what was edited
+  if (text === "แก้ไขเสร็จแล้ว") return { kind: "edit-done" };
   if (text.startsWith("แก้ล่าสุด")) {
     const rest = text.slice("แก้ล่าสุด".length).trim();
     const m = /^(\d(?:[\d,]*\d)?(?:\.\d+)?)\s*(k|พัน|หมื่น|แสน|ล้าน)?\s*(?:บาท)?$/.exec(rest);

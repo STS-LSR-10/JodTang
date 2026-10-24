@@ -13,6 +13,7 @@ describe("parseCommand", () => {
     ["แก้ล่าสุด 1,200", { kind: "edit-latest", amountSatang: 120_000 }],
     ["แก้ล่าสุด 2k", { kind: "edit-latest", amountSatang: 200_000 }],
     ["แก้ล่าสุด", { kind: "edit-latest-usage" }],
+    ["แก้ไขเสร็จแล้ว", { kind: "edit-done" }],
     ["แก้ล่าสุด abc", { kind: "edit-latest-usage" }],
     ["แก้ล่าสุด 0", { kind: "edit-latest-usage" }],
   ])("%s", (input, expected) => {

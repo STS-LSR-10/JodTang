@@ -350,6 +350,25 @@ export async function getLatestConfirmed(
   return (data as TxRow | null) ?? null;
 }
 
+/** The entry the user saved an edit on most recently (within `since`), for the "edit done" card. */
+export async function getRecentlyEdited(
+  db: SupabaseClient,
+  userId: string,
+  since: Date,
+): Promise<(TxRow & { account_id: string | null }) | null> {
+  const { data, error } = await db
+    .from("transactions")
+    .select(`${TX_COLUMNS},account_id`)
+    .eq("user_id", userId)
+    .eq("status", "confirmed")
+    .gte("updated_at", since.toISOString())
+    .order("updated_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) fail("load edited transaction", error);
+  return (data as (TxRow & { account_id: string | null }) | null) ?? null;
+}
+
 /** Apply a validated column patch (see `planEdit`) to one of the user's live entries. */
 export async function patchTransactionRow(
   db: SupabaseClient,
