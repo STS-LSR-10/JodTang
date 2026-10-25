@@ -12,10 +12,18 @@ import { handleEvent, type HandlerDeps, type LineEvent } from "./handlers";
 import { ERROR_TEXT, text } from "./messages";
 import { log } from "@/lib/log";
 
+const TYPING_SECONDS = 20;
+
 function isLineEvent(value: unknown): value is LineEvent {
   return (
     typeof value === "object" && value !== null && typeof (value as LineEvent).type === "string"
   );
+}
+
+/** Messages and button taps in a 1:1 chat get the "typing" dots (LINE has none for groups). */
+export function typingChatId(event: LineEvent): string | null {
+  if (event.type !== "message" && event.type !== "postback") return null;
+  return event.source?.type === "user" && event.source.userId ? event.source.userId : null;
 }
 
 /**
@@ -78,6 +86,8 @@ export async function processEvents(rawEvents: unknown[]): Promise<void> {
     const eventId = raw.webhookEventId;
     try {
       if (eventId && !(await claimEvent(db, eventId))) continue; // duplicate / redelivery
+      const chatId = typingChatId(raw);
+      if (chatId) void line.showLoading(chatId, TYPING_SECONDS).catch(() => undefined);
       try {
         await handleEvent(raw, deps);
       } catch (error) {

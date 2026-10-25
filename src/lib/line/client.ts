@@ -24,6 +24,19 @@ export function createLineClient(accessToken: string) {
       if (!res.ok) throw new Error(`LINE reply failed: ${res.status}`);
     },
 
+    /**
+     * The "bot is typing" dots in a 1:1 chat. Free (no quota); LINE removes them as soon as the bot
+     * replies, or after `seconds` (5-60). Best effort: a failure only means no dots.
+     */
+    async showLoading(lineUserId: string, seconds = 20): Promise<void> {
+      const res = await fetch(`${API}/chat/loading/start`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ chatId: lineUserId, loadingSeconds: seconds }),
+      });
+      if (!res.ok) throw new Error(`LINE loading failed: ${res.status}`);
+    },
+
     /** Push (outside a reply). Counts against the OA's monthly push quota — use sparingly. */
     async push(lineUserId: string, messages: LineMessage[]): Promise<void> {
       const res = await fetch(`${API}/message/push`, {
