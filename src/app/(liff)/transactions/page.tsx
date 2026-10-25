@@ -409,7 +409,10 @@ function TransactionsView() {
         ) : null}
 
         {notice ? (
-          <p role="status" className="rounded-2xl bg-primary-soft px-4 py-2 text-sm text-primary">
+          <p
+            role="status"
+            className="whitespace-pre-line rounded-2xl bg-primary-soft px-4 py-2 text-sm text-primary"
+          >
             {notice}
           </p>
         ) : null}
@@ -581,9 +584,9 @@ function TransactionsView() {
       {formOpen ? (
         <AddSheet
           onClose={() => setFormOpen(false)}
-          onSaved={() => {
+          onSaved={(alerts) => {
             setFormOpen(false);
-            setNotice("จดแล้ว");
+            setNotice(["จดแล้ว", ...alerts].join("\n"));
             list.reload();
           }}
         />
@@ -764,7 +767,13 @@ function PhotoSheet({
   );
 }
 
-function AddSheet({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
+function AddSheet({
+  onClose,
+  onSaved,
+}: {
+  onClose: () => void;
+  onSaved: (alerts: string[]) => void;
+}) {
   const { api } = useLiff();
   const categories = useApi<CategoriesResponse>("/api/categories");
   const [type, setType] = useState<"expense" | "income">("expense");
@@ -786,7 +795,7 @@ function AddSheet({ onClose, onSaved }: { onClose: () => void; onSaved: () => vo
     setSaving(true);
     setError(null);
     try {
-      await api("/api/transactions", {
+      const res = await api<{ alerts?: string[] }>("/api/transactions", {
         method: "POST",
         body: JSON.stringify({
           type,
@@ -795,7 +804,7 @@ function AddSheet({ onClose, onSaved }: { onClose: () => void; onSaved: () => vo
           categoryId: categoryId || null,
         }),
       });
-      onSaved();
+      onSaved(res.alerts ?? []);
     } catch (err) {
       setError(err instanceof Error ? err.message : "บันทึกไม่สำเร็จ");
       setSaving(false);

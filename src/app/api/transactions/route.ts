@@ -3,8 +3,6 @@ import { apiError, guard, json } from "@/lib/api";
 import { requireUser } from "@/lib/auth/require-user";
 import { budgetAlertsFor, dailyBudgetAlertsFor } from "@/lib/budget-alert";
 import { categorizeByRules } from "@/lib/categorize/rules";
-import { getServerEnv } from "@/lib/env";
-import { createLineClient } from "@/lib/line/client";
 import { TX_SELECT, toTxDto } from "@/lib/dto";
 import { toSatang } from "@/lib/money";
 import { can, effectivePlan } from "@/lib/plan";
@@ -147,16 +145,20 @@ export async function POST(request: Request): Promise<Response> {
     // The day's point (and a pending referral bonus) for the first entry of the day.
     await awardActivity(db, auth.userId, new Date());
 
-    // Budget alert for entries made in the web app: pushed to the chat (best effort).
+    // Budget alerts for an entry made in the web app come back in the response (the page shows them
+    // right where the person is looking) instead of being pushed to the chat, which costs quota.
+    const alerts: string[] = [];
     try {
-      const alerts = await budgetAlertsFor(db, {
-        userId: auth.userId,
-        type: body.type,
-        categoryId,
-        amountSatang,
-        occurredAt: new Date(tx.occurred_at),
-        now: new Date(),
-      });
+      alerts.push(
+        ...(await budgetAlertsFor(db, {
+          userId: auth.userId,
+          type: body.type,
+          categoryId,
+          amountSatang,
+          occurredAt: new Date(tx.occurred_at),
+          now: new Date(),
+        })),
+      );
       if (body.type === "expense") {
         alerts.push(
           ...(await dailyBudgetAlertsFor(db, {
@@ -167,16 +169,9 @@ export async function POST(request: Request): Promise<Response> {
           })),
         );
       }
-      if (alerts.length > 0) {
-        const line = createLineClient(getServerEnv().LINE_CHANNEL_ACCESS_TOKEN);
-        await line.push(
-          auth.lineUserId,
-          alerts.map((t) => ({ type: "text", text: t })),
-        );
-      }
     } catch (error) {
       log.error("budget_alert_failed", error);
     }
-    return json({ id: tx.id }, 201);
+    return json({ id: tx.id, alerts }, 201);
   });
 }

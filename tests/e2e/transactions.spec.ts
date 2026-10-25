@@ -223,6 +223,25 @@ test.describe("transactions page (360px)", () => {
       .toBe(true);
   });
 
+  test("an entry added here that goes over the budget shows the warning on the page", async ({
+    page,
+  }) => {
+    await mockApi(page, {
+      "GET /api/transactions": LIST,
+      "GET /api/categories": CATEGORIES,
+      "GET /api/me": ME_PLUS,
+      "POST /api/transactions": { id: "x", alerts: ["⚠️ หมวดอาหารเกินงบแล้ว"] },
+    });
+    await page.goto("/transactions");
+    await page.getByRole("button", { name: "เพิ่ม" }).click();
+    await page.getByLabel("ชื่อรายการ", { exact: true }).fill("ข้าว");
+    await page.getByLabel("จำนวนเงิน").fill("500");
+    await page.getByRole("button", { name: "บันทึก" }).click();
+    await expect(page.getByText("จดแล้ว")).toBeVisible();
+    await expect(page.getByText("หมวดอาหารเกินงบแล้ว")).toBeVisible();
+    await expectNoHorizontalScroll(page);
+  });
+
   test("add sheet validates the amount before sending", async ({ page }) => {
     const { seen } = await mockApi(page, {
       "GET /api/transactions": LIST,
