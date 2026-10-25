@@ -2,7 +2,9 @@ import { expect, test } from "@playwright/test";
 import { expectNoHorizontalScroll, mockApi, ME_FREE } from "./helpers";
 
 test.describe("opening screen (360px)", () => {
-  test("shows the muted looping logo video while signing in, then the page", async ({ page }) => {
+  test("shows the muted logo video (first frame first) while signing in, then the page", async ({
+    page,
+  }) => {
     await mockApi(page, {
       "GET /api/pin/status": async () => {
         await new Promise((r) => setTimeout(r, 1200));
@@ -18,7 +20,9 @@ test.describe("opening screen (360px)", () => {
     await expect(splash).toBeVisible();
     const video = splash.locator("video");
     await expect(video).toHaveAttribute("src", "/loading.mp4");
-    expect(await video.evaluate((v: HTMLVideoElement) => [v.muted, v.loop])).toEqual([true, true]);
+    // muted, plays once (no loop) and rests on its last frame
+    expect(await video.evaluate((v: HTMLVideoElement) => [v.muted, v.loop])).toEqual([true, false]);
+    await expect(splash.locator('img[src="/loading-poster.jpg"]')).toBeAttached();
     await expectNoHorizontalScroll(page);
 
     await expect(splash).toHaveCount(0);

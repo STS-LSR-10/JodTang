@@ -1,15 +1,41 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 
 /**
- * Full-screen opening screen while the app signs in. The still logo shows at once; the muted,
- * looping logo video fades in over it as soon as it can play (and not at all for people who asked
- * their device for less motion). White on purpose: the video is on white, in dark mode too.
+ * How far the logo video got, kept while the app moves from one page to the next (the module stays
+ * alive across in-app navigation), so the next opening screen carries on instead of starting over.
+ */
+let resumeAt = 0;
+
+/**
+ * Full-screen opening screen while the app signs in. The first frame of the logo video shows at
+ * once (same size and place as the video, so nothing jumps); the muted video fades in over it, plays
+ * once and rests on its last frame. People who asked their device for less motion keep the still
+ * frame. White on purpose: the video is on white, in dark mode too.
  */
 export function Splash() {
+  const video = useRef<HTMLVideoElement>(null);
   const [playing, setPlaying] = useState(false);
+  // carrying on from a previous screen: no first-frame flash underneath
+  const [carrying] = useState(() => resumeAt > 0);
+
+  function onLoadedMetadata() {
+    const v = video.current;
+    if (!v) return;
+    if (resumeAt > 0) v.currentTime = Math.min(resumeAt, v.duration);
+    // already finished on the previous screen: stay on the last frame
+    if (resumeAt < v.duration - 0.1) void v.play().catch(() => undefined);
+    else setPlaying(true);
+  }
+
+  // the video can have its metadata before this page is hydrated (cached): its event is gone by then
+  useEffect(() => {
+    if (video.current && video.current.readyState >= 1) onLoadedMetadata();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   return (
     <div
       role="status"
@@ -19,22 +45,27 @@ export function Splash() {
       <div className="relative aspect-video w-full max-w-md">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
-          src="/logo.png"
+          src="/loading-poster.jpg"
           alt=""
           aria-hidden
-          className="absolute left-1/2 top-1/2 h-40 w-40 -translate-x-1/2 -translate-y-1/2 object-contain"
+          className={cn("absolute inset-0 h-full w-full object-contain", carrying && "opacity-0")}
         />
         <video
+          ref={video}
           src="/loading.mp4"
-          poster="/logo.png"
-          autoPlay
-          loop
           muted
           playsInline
           preload="auto"
           aria-hidden
           tabIndex={-1}
-          onCanPlay={() => setPlaying(true)}
+          onLoadedMetadata={onLoadedMetadata}
+          onPlaying={() => setPlaying(true)}
+          onTimeUpdate={(e) => {
+            resumeAt = e.currentTarget.currentTime;
+          }}
+          onEnded={(e) => {
+            resumeAt = e.currentTarget.duration;
+          }}
           className={cn(
             "absolute inset-0 h-full w-full bg-white object-contain transition-opacity duration-300 motion-reduce:hidden",
             playing ? "opacity-100" : "opacity-0",
