@@ -85,33 +85,38 @@ function TransactionsRoute() {
 
 /**
  * Opened from the chat's "แก้" button: the editor of one entry. After a save it sends
- * "แก้ไขเสร็จแล้ว" into the chat (the bot answers with the card) and closes the window; outside
- * LINE, where nothing can be sent, the page itself says it worked.
+ * "แก้ไขเสร็จแล้ว" into the chat as the person's own message (the bot answers it with a free reply,
+ * so nothing counts against the push quota) and closes the window. When LINE does not let the page
+ * send it (outside LINE, or the permission was not given), the page offers a button to try again.
  */
 function EditFromChat({ id }: { id: string }) {
-  const { api } = useLiff();
   const tx = useApi<TxDto>(`/api/transactions/${encodeURIComponent(id)}`);
   const [done, setDone] = useState(false);
+  const [sent, setSent] = useState(false);
+
+  async function sendToChat() {
+    try {
+      const liff = (await import("@line/liff")).default;
+      if (!liff.isApiAvailable("sendMessages")) return;
+      // a person who signed in before the permission existed has to agree once more
+      try {
+        if ((await liff.permission.query("chat_message.write")).state === "prompt") {
+          await liff.permission.requestAll();
+        }
+      } catch {
+        /* sending below tells whether it worked */
+      }
+      await liff.sendMessages([{ type: "text", text: "แก้ไขเสร็จแล้ว" }]);
+      setSent(true);
+      liff.closeWindow();
+    } catch {
+      /* the page already says it was saved, and offers the button */
+    }
+  }
 
   async function saved() {
     setDone(true);
-    // The chat gets the card either way: our own message (the bot answers it for free) when LINE
-    // lets the page send one, otherwise the server pushes the card.
-    try {
-      const liff = (await import("@line/liff")).default;
-      if (liff.isApiAvailable("sendMessages")) {
-        await liff.sendMessages([{ type: "text", text: "แก้ไขเสร็จแล้ว" }]);
-        liff.closeWindow();
-        return;
-      }
-    } catch {
-      /* fall through to the push */
-    }
-    try {
-      await api("/api/transactions/edit-notice", { method: "POST" });
-    } catch {
-      /* the page already says it was saved */
-    }
+    await sendToChat();
   }
 
   if (tx.loading) return <LoadingBlock rows={4} />;
@@ -129,7 +134,20 @@ function EditFromChat({ id }: { id: string }) {
         <p role="status" className="text-lg font-bold text-primary">
           ✅ แก้ไขรายการสำเร็จ
         </p>
-        <p className="text-sm text-muted">บอทส่งการ์ดสรุปรายการเข้าแชทให้แล้ว กลับไปที่แชทได้เลย</p>
+        <p className="text-sm text-muted">
+          {sent
+            ? "บอทส่งการ์ดสรุปรายการเข้าแชทให้แล้ว กลับไปที่แชทได้เลย"
+            : 'ถ้าบอทยังไม่ส่งการ์ดสรุปเข้าแชท กด "ส่งการ์ดเข้าแชท" หรือพิมพ์ "แก้ไขเสร็จแล้ว" ในแชทได้เลย'}
+        </p>
+        {sent ? null : (
+          <button
+            type="button"
+            onClick={() => void sendToChat()}
+            className="h-11 rounded-2xl border border-border px-5 text-sm font-semibold"
+          >
+            ส่งการ์ดเข้าแชท
+          </button>
+        )}
         <Link
           href="/transactions"
           className="inline-flex h-11 items-center rounded-2xl bg-primary px-5 text-sm font-semibold text-surface"
