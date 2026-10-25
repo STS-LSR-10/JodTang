@@ -24,4 +24,24 @@ test.describe("opening screen (360px)", () => {
     await expect(splash).toHaveCount(0);
     await expect(page.getByText("ยังไม่มีรายการ")).toBeVisible();
   });
+
+  test("the entry page is the same opening screen, with no title or tagline text", async ({
+    page,
+  }) => {
+    // hold the redirect target so the entry page stays on screen
+    await mockApi(page, {
+      "GET /api/pin/status": async () => {
+        await new Promise((r) => setTimeout(r, 1500));
+        return { required: false };
+      },
+      "GET /api/me": ME_FREE,
+      "GET /api/wallets": { items: [] },
+    });
+    await page.route("**/summary**", (route) => route.abort());
+    await page.goto("/");
+    const splash = page.getByRole("status", { name: "กำลังเปิดแอป" });
+    await expect(splash).toBeVisible();
+    await expect(page.getByText("จดง่าย เห็นเงินชัด")).toHaveCount(0);
+    await expect(page.getByText("กำลังเปิด...")).toHaveCount(0);
+  });
 });

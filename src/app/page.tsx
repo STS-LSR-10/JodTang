@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
-import { Logo } from "@/components/logo";
+import { Splash } from "@/components/liff/splash";
 
 /**
  * LIFF entry point (the LIFF Endpoint URL is the site root).
@@ -51,14 +51,6 @@ export default function HomePage() {
     };
   }, [router]);
 
-  return (
-    <main className="mx-auto flex min-h-screen max-w-md flex-col items-center justify-center gap-3 p-6 text-center">
-      <Logo size={112} />
-      <h1 className="text-2xl font-bold text-primary">จดตังค์ (JodTang)</h1>
-      <p className="text-muted">จดง่าย เห็นเงินชัด</p>
-      <p role="status" className="text-sm text-muted">
-        กำลังเปิด...
-      </p>
-    </main>
-  );
+  // the same opening screen as the pages behind it (logo video), so nothing else flashes first
+  return <Splash />;
 }
