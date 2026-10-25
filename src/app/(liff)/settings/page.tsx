@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useApi, useLiff } from "@/components/liff/liff-provider";
 import { DeleteCard } from "@/components/liff/settings/delete-card";
 import { PersonalizeCard } from "@/components/liff/settings/personalize-card";
+import { PhotoPromptCard } from "@/components/liff/settings/photo-prompt-card";
 import { PinCard } from "@/components/liff/settings/pin-card";
 import { ResetCard } from "@/components/liff/settings/reset-card";
 import { MemoryCard } from "@/components/liff/settings/memory-card";
@@ -163,6 +164,7 @@ export default function SettingsPage() {
             <ReminderCard me={me.data} settings={current} onSaved={setOverride} />
             <SummaryCard me={me.data} settings={current} onSaved={setOverride} />
             <PersonalizeCard me={me.data} settings={current} onSaved={setOverride} />
+            <PhotoPromptCard me={me.data} settings={current} onSaved={setOverride} />
             <Link
               href="/wallets"
               className={`${cardClass} flex items-center gap-3 !space-y-0`}

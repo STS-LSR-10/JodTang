@@ -172,17 +172,19 @@ describe("compose card", () => {
   });
 });
 
-describe("the แนบรูป button", () => {
-  it("is on the full card as a postback for that entry", () => {
-    const json = JSON.stringify(buildConfirmMessage({ ...base, style: "full" }));
-    expect(json).toContain(`"data":"a=ph&id=${base.txId}"`);
+describe("the cards no longer carry a แนบรูป button (the bot offers the photo itself)", () => {
+  it("not on the full card", () => {
+    expect(JSON.stringify(buildConfirmMessage({ ...base, style: "full" }))).not.toContain("a=ph");
   });
 
-  it("is a quick reply under the short card", () => {
+  it("not under the short card, which has no quick reply at all without a wallet to move to", () => {
     const msg = buildConfirmMessage({ ...base, style: "short" }) as unknown as {
-      quickReply: { items: { action: { data: string } }[] };
+      quickReply?: unknown;
     };
-    expect(msg.quickReply.items[0]?.action.data).toBe(`a=ph&id=${base.txId}`);
+    expect(msg.quickReply).toBeUndefined();
+    const withMove = buildConfirmMessage({ ...base, style: "short", canMoveWallet: true });
+    expect(JSON.stringify(withMove)).not.toContain("a=ph");
+    expect(JSON.stringify(withMove)).toContain("quickReply");
   });
 });
 

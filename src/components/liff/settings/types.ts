@@ -26,6 +26,7 @@ export interface Settings {
   monthly_summary_enabled: boolean;
   card_theme?: string;
   bot_persona?: string;
+  photo_prompt?: boolean;
 }
 
 export const cardClass = "space-y-3 rounded-2xl border border-border bg-surface p-4 shadow-card";

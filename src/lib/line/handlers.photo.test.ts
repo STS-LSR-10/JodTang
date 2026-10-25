@@ -30,6 +30,7 @@ vi.mock("@/lib/photo-repo", () => ({
   getLivePhotoWait: async () => wait,
   getPhotoTx: async () => existing,
   startPhotoWait: (...a: unknown[]) => startPhotoWait(...a),
+  PHOTO_OFFER_WAIT_MINUTES: 3,
 }));
 vi.mock("@/lib/photos", () => ({
   photoBlockedReply: async () => blocked,

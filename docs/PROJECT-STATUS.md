@@ -87,7 +87,7 @@ Vercel (Production) · ตัวที่ขึ้นต้น `NEXT_PUBLIC_*` �
 - AI: `AI_PROVIDER` (`gemini` ค่าเริ่มต้น | `anthropic` | `openai` — **ต้องไม่ว่าง**) + key ของค่ายที่เลือก (`GEMINI_API_KEY` …), ตัวเสริม `AI_MODEL`, `EASYSLIP_API_KEY`, `SLIP_READERS` (อย่าสร้างตัวแปรเสริมแบบค่าว่าง)
 - Stripe: `STRIPE_SECRET_KEY` (`sk_test_`/`sk_live_`), `STRIPE_WEBHOOK_SECRET` (`whsec_`) — ถ้าไม่ตั้ง ปุ่มชำระเงินตอบ "ยังไม่เปิดให้ชำระเงิน"
 
-## 7) ฐานข้อมูล: migrations `supabase/migrations/0001…0039` (รันตามลำดับ รันซ้ำได้)
+## 7) ฐานข้อมูล: migrations `supabase/migrations/0001…0040` (รันตามลำดับ รันซ้ำได้)
 
 | ไฟล์      | ทำอะไร                                                                                                                                                                                                                                                                                                                   |
 | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -128,6 +128,7 @@ Vercel (Production) · ตัวที่ขึ้นต้น `NEXT_PUBLIC_*` �
 | 0037      | หารบิลรอบ 3: สถานะ `setup` ของบิล, `qr_announced_at`, `last_reminded_on`, `split_bill_slips.qr_hash` (unique = QR บนสลิปใบเดียวจ่ายได้ส่วนเดียว) + `split_bill_confirm` (เลือกคน+ล็อกยอดแบบ atomic), `split_bill_mark_announced`, `split_bill_mark_reminded`, `split_bill_pay_by_slip` รับ qr_hash                       |
 | 0038      | `split_bill_join` ใช้ได้กับบิลสถานะ `setup` (เพื่อนกด "ร่วมหารด้วย" ระหว่างที่คนจ่ายกำลังเลือก; รายชื่อสุดท้ายคือที่คนจ่ายเลือก)                                                                                                                                                                                         |
 | 0039      | หารบิล: คนจ่ายเท่านั้นที่ยืนยันว่าเงินเข้า — `split_bill_members.claim_via` (slip / slip_unverified), `split_bill_claim_by_slip` แทน `split_bill_pay_by_slip` (สลิปที่บอทตรวจแล้วแค่ "รอคนจ่ายยืนยัน" ไม่ติ๊กจ่ายเอง), `split_bill_mark_paid` / `split_bill_unpay` ล้างสถานะรอ                                           |
+| 0040      | `user_settings.photo_prompt` (ชวนแนบรูปหลังจด: Pro ขึ้นไปได้ปุ่มถ่ายรูป/เลือกจากอัลบั้มต่อท้ายการ์ด เปิดไว้เป็นค่าเริ่มต้น ปิดได้ในหน้าตั้งค่า)                                                                                                                                                                          |
 
 - **ทุกครั้งที่เพิ่ม migration: รันใน Supabase SQL Editor ก่อน push** (โค้ดใหม่อ้างคอลัมน์/ฟังก์ชันใหม่ ถ้ายังไม่รันบางหน้าจะ 500)
 - โปรเจกต์ใหม่: ใช้ไฟล์รวม `supabase/_all-migrations.sql` (สร้างจาก migrations, ไม่ถูก commit — สร้างใหม่ด้วยการต่อไฟล์ตามลำดับ) แล้วรัน `supabase/tests/rls_check.sql` ต้องได้ `RLS checks passed`

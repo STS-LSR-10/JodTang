@@ -148,6 +148,7 @@ export const splitDoneText = (lines: { title: string; amountBaht: string }[], to
 // ───── photos attached to entries ─────
 export const PHOTO_LOCKED_TEXT =
   'การแนบรูปประกอบรายการเป็นฟีเจอร์ของแผน Professional ขึ้นไป ลองทดลองใช้ฟรี 7 วันได้ที่เมนู "อัปเกรด" นะ';
+export const PHOTO_OFFER_TEXT = "📷 อยากแนบรูปใบเสร็จหรือสินค้ากับรายการนี้ไหม";
 export const PHOTO_ASK_TEXT =
   "ส่งรูปที่ต้องการแนบมาได้เลย (ภายใน 10 นาที) ถ้าส่งรูปอื่นภายหลัง ระบบจะอ่านเป็นสลิปตามปกติ";
 export const PHOTO_ASK_REPLACE_TEXT =

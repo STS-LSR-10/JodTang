@@ -77,3 +77,34 @@ test.describe("theme and bot manner (360px)", () => {
     );
   });
 });
+
+test.describe("photo offer after a save (360px)", () => {
+  test("Free sees it locked; Professional can switch it off", async ({ page }) => {
+    await mockApi(page, { ...COMMON, "GET /api/settings": SETTINGS, "GET /api/me": ME_FREE });
+    await page.goto("/settings");
+    const free = page.getByRole("region", { name: "ชวนแนบรูปหลังจด" });
+    await expect(free.getByText("สำหรับแผน Professional")).toBeVisible();
+    await expect(free.getByRole("switch")).toBeDisabled();
+    await expectNoHorizontalScroll(page);
+  });
+
+  test("Professional switches it off", async ({ page }) => {
+    const bodies: unknown[] = [];
+    await mockApi(page, {
+      ...COMMON,
+      "GET /api/me": ME_PLUS,
+      "GET /api/settings": SETTINGS,
+      "PATCH /api/settings": async (route: Route) => {
+        bodies.push(route.request().postDataJSON());
+        return { ...SETTINGS, photo_prompt: false };
+      },
+    });
+    await page.goto("/settings");
+    const card = page.getByRole("region", { name: "ชวนแนบรูปหลังจด" });
+    await expect(card.getByRole("switch")).toBeChecked();
+    await card.getByRole("switch").click();
+    await expect.poll(() => bodies.length).toBe(1);
+    expect(bodies[0]).toEqual({ photo_prompt: false });
+    await expect(card.getByRole("switch")).not.toBeChecked();
+  });
+});

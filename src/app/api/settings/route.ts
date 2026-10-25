@@ -30,6 +30,7 @@ const patchSchema = z
     monthly_summary_enabled: z.boolean(),
     card_theme: z.enum(THEME_IDS),
     bot_persona: z.enum(PERSONA_IDS),
+    photo_prompt: z.boolean(),
   })
   .partial()
   .refine((v) => Object.keys(v).length > 0, "empty");

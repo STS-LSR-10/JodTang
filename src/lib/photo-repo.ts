@@ -4,6 +4,8 @@ import { bangkokParts, fromBangkok } from "@/lib/thai-date";
 
 /** How long "send me the photo" stays open after the person taps the button. */
 export const PHOTO_WAIT_MINUTES = 10;
+/** After the automatic offer the window is short, so a slip sent a bit later is not taken for a photo. */
+export const PHOTO_OFFER_WAIT_MINUTES = 3;
 
 function fail(context: string, error: { message: string }): never {
   throw new Error(`${context}: ${error.message}`);
@@ -56,12 +58,13 @@ export async function startPhotoWait(
   userId: string,
   txId: string,
   now: Date,
+  minutes = PHOTO_WAIT_MINUTES,
 ): Promise<void> {
   const { error } = await db.from("photo_waits").upsert(
     {
       user_id: userId,
       tx_id: txId,
-      expires_at: new Date(now.getTime() + PHOTO_WAIT_MINUTES * 60_000).toISOString(),
+      expires_at: new Date(now.getTime() + minutes * 60_000).toISOString(),
     },
     { onConflict: "user_id" },
   );

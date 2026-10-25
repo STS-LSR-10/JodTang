@@ -2985,3 +2985,20 @@ describe("friends joining a bill that is still being set up (0038)", () => {
     expect(full.r).toBe("full");
   });
 });
+
+describe("the photo offer setting (0040)", () => {
+  it("is on for everybody by default and can be switched off", async () => {
+    const u = await newUser(db, `po-${Math.random()}`);
+    const read = async () =>
+      (
+        await one<{ photo_prompt: boolean }>(
+          db,
+          "select photo_prompt from user_settings where user_id=$1",
+          [u],
+        )
+      ).photo_prompt;
+    expect(await read()).toBe(true);
+    await db.query("update user_settings set photo_prompt = false where user_id = $1", [u]);
+    expect(await read()).toBe(false);
+  });
+});

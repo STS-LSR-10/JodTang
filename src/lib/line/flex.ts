@@ -106,20 +106,8 @@ export function buildConfirmMessage(input: ConfirmCardInput): LineMessage {
     return {
       type: "text",
       text: `${input.edited ? "แก้ไขรายการสำเร็จ" : "จดแล้ว"}: ${input.title} ${amountText} · ${category}${tagsText}${walletText}${input.fxNote ? ` · ${input.fxNote}` : ""}`,
-      quickReply: {
-        items: [
-          ...moveItem,
-          {
-            type: "action",
-            action: {
-              type: "postback",
-              label: "📷 แนบรูป",
-              data: `a=ph&id=${input.txId}`,
-              displayText: "แนบรูป",
-            },
-          },
-        ],
-      },
+      // LINE refuses a quick reply with no buttons
+      ...(moveItem.length > 0 ? { quickReply: { items: moveItem } } : {}),
     };
   }
 
@@ -383,18 +371,6 @@ export function buildConfirmMessage(input: ConfirmCardInput): LineMessage {
     }
   }
 
-  body.push({
-    type: "button",
-    style: "link",
-    height: "sm",
-    margin: "md",
-    action: {
-      type: "postback",
-      label: "📷 แนบรูป",
-      data: `a=ph&id=${input.txId}`,
-      displayText: "แนบรูป",
-    },
-  });
   if (input.canMoveWallet) {
     body.push({
       type: "button",

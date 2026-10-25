@@ -32,7 +32,7 @@ import {
 import { bangkokParts, formatThaiDate, fromBangkok, isValidYmd } from "@/lib/thai-date";
 import type { LineMessage, TxType } from "@/lib/types";
 import type { SlipImage, SlipOcrProvider } from "@/lib/ocr/provider";
-import { can, effectivePlan } from "@/lib/plan";
+import { can, effectivePlan, PHOTOS_PER_MONTH } from "@/lib/plan";
 import {
   applyTheme,
   DEFAULT_PERSONA,
@@ -136,7 +136,13 @@ import {
   buildRecentCard,
   buildYearCard,
 } from "./spend-flex";
-import { getLivePhotoWait, getPhotoTx, startPhotoWait } from "@/lib/photo-repo";
+import {
+  countPhotosThisMonth,
+  getLivePhotoWait,
+  getPhotoTx,
+  PHOTO_OFFER_WAIT_MINUTES,
+  startPhotoWait,
+} from "@/lib/photo-repo";
 import {
   BACKDATE_MAX_DAYS,
   buildBackdatePrompt,
@@ -169,6 +175,7 @@ import {
   NOT_FOUND_TEXT,
   PHOTO_ASK_REPLACE_TEXT,
   PHOTO_ASK_TEXT,
+  PHOTO_OFFER_TEXT,
   COMPARE_EMPTY_TEXT,
   COMPARE_LOCKED_TEXT,
   INSIGHT_EMPTY_TEXT,
@@ -1226,6 +1233,17 @@ async function saveEntries(
     if (quip) messages.push(text(quip));
   }
   if (confirmed.length > 0) messages.push(...(await awardAndNotify(deps, user.id)));
+  // Last, so its camera / album buttons sit at the bottom of the chat.
+  const only = confirmed[0];
+  if (
+    only &&
+    confirmed.length === 1 &&
+    pending.length === 0 &&
+    messages.length < MAX_REPLY_MESSAGES &&
+    (await offerPhoto(deps, user, settings, only.tx.id))
+  ) {
+    messages.push(buildPhotoAsk(PHOTO_OFFER_TEXT));
+  }
   return messages;
 }
 
@@ -1383,6 +1401,29 @@ async function safeDailyAlerts(
   } catch (error) {
     log.error("daily_budget_alert_failed", error);
     return [];
+  }
+}
+
+/**
+ * Professional and above are offered a photo for a plain single save, with no tap needed: the next
+ * image becomes the entry's photo (for a short while). Best effort: a failure only means no offer.
+ */
+async function offerPhoto(
+  deps: HandlerDeps,
+  user: UserRow,
+  settings: SettingsRow,
+  txId: string,
+): Promise<boolean> {
+  if (settings.confirm_style === "off" || settings.photo_prompt === false) return false;
+  const now = deps.now();
+  if (!can(effectivePlan(user.plan, user.plan_expires_at, now), "entryPhoto")) return false;
+  try {
+    if ((await countPhotosThisMonth(deps.db, user.id, now)) >= PHOTOS_PER_MONTH) return false;
+    await startPhotoWait(deps.db, user.id, txId, now, PHOTO_OFFER_WAIT_MINUTES);
+    return true;
+  } catch (error) {
+    log.error("photo_offer_failed", error);
+    return false;
   }
 }
 
