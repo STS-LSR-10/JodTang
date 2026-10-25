@@ -1,6 +1,7 @@
 "use client";
 
 import { PinLock } from "@/components/liff/pin-lock";
+import { Splash } from "@/components/liff/splash";
 import {
   createContext,
   useCallback,
@@ -374,6 +375,8 @@ export function LiffProvider({ children }: { children: ReactNode }) {
           requestReset={requestPinReset}
           cancelReset={cancelPinReset}
         />
+      ) : status === "loading" ? (
+        <Splash />
       ) : (
         children
       )}
