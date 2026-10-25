@@ -1441,6 +1441,29 @@ async function confirmCard(
   });
 }
 
+/** The "แก้ไขรายการสำเร็จ" card of the entry the user edited in the last quarter of an hour (null if none). */
+export async function editedCardFor(user: UserRow, deps: HandlerDeps): Promise<LineMessage | null> {
+  const { db } = deps;
+  const edited = await getRecentlyEdited(db, user.id, new Date(deps.now().getTime() - 15 * 60_000));
+  if (!edited) return null;
+  const [settings, categories] = await Promise.all([
+    getSettings(db, user.id),
+    loadCategories(db, user.id),
+  ]);
+  return confirmCard(
+    edited,
+    edited.category_id,
+    categories,
+    settings,
+    user,
+    deps,
+    [],
+    edited.account_id,
+    null,
+    true,
+  );
+}
+
 // ───────────────────────── commands ─────────────────────────
 
 async function runCommand(
@@ -1794,28 +1817,8 @@ async function runCommand(
 
     case "edit-done": {
       // the LIFF editor sends this after a save: show what was just edited (nothing if nothing was)
-      const edited = await getRecentlyEdited(
-        db,
-        user.id,
-        new Date(deps.now().getTime() - 15 * 60_000),
-      );
-      if (!edited) return [];
-      const settings = await getSettings(db, user.id);
-      const categories = await loadCategories(db, user.id);
-      return [
-        await confirmCard(
-          edited,
-          edited.category_id,
-          categories,
-          settings,
-          user,
-          deps,
-          [],
-          edited.account_id,
-          null,
-          true,
-        ),
-      ];
+      const card = await editedCardFor(user, deps);
+      return card ? [card] : [];
     }
 
     case "edit-latest-usage":

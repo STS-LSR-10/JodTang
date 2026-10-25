@@ -304,6 +304,7 @@ test.describe("transactions page (360px)", () => {
   }) => {
     const id = "11111111-1111-1111-1111-111111111111";
     const bodies: unknown[] = [];
+    const notices: number[] = [];
     await mockApi(page, {
       [`GET /api/transactions/${id}`]: TX(),
       "GET /api/categories": CATEGORIES,
@@ -311,6 +312,10 @@ test.describe("transactions page (360px)", () => {
       "GET /api/me": ME_FREE,
       [`PATCH /api/transactions/${id}`]: (route: Route) => {
         bodies.push(route.request().postDataJSON());
+        return { ok: true };
+      },
+      "POST /api/transactions/edit-notice": () => {
+        notices.push(1);
         return { ok: true };
       },
     });
@@ -324,6 +329,8 @@ test.describe("transactions page (360px)", () => {
     await expect.poll(() => bodies.length).toBe(1);
     expect(bodies[0]).toEqual({ title: "กาแฟเย็น" });
     await expect(page.getByText("✅ แก้ไขรายการสำเร็จ")).toBeVisible();
+    // LINE cannot send a message from this page here, so the server is asked to push the card
+    await expect.poll(() => notices.length).toBe(1);
   });
 
   test("?edit= for an entry that is gone says so instead of hanging", async ({ page }) => {

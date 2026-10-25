@@ -89,17 +89,26 @@ function TransactionsRoute() {
  * LINE, where nothing can be sent, the page itself says it worked.
  */
 function EditFromChat({ id }: { id: string }) {
+  const { api } = useLiff();
   const tx = useApi<TxDto>(`/api/transactions/${encodeURIComponent(id)}`);
   const [done, setDone] = useState(false);
 
   async function saved() {
     setDone(true);
+    // The chat gets the card either way: our own message (the bot answers it for free) when LINE
+    // lets the page send one, otherwise the server pushes the card.
     try {
       const liff = (await import("@line/liff")).default;
       if (liff.isApiAvailable("sendMessages")) {
         await liff.sendMessages([{ type: "text", text: "แก้ไขเสร็จแล้ว" }]);
         liff.closeWindow();
+        return;
       }
+    } catch {
+      /* fall through to the push */
+    }
+    try {
+      await api("/api/transactions/edit-notice", { method: "POST" });
     } catch {
       /* the page already says it was saved */
     }
