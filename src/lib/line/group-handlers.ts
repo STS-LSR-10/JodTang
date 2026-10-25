@@ -620,7 +620,7 @@ async function knownName(
 ): Promise<string> {
   const names = await memberNames(db, group.id);
   const known = names.get(userId);
-  if (known && Date.now() - new Date(known.updatedAt).getTime() < NAME_REFRESH_MS)
+  if (known && deps.now().getTime() - new Date(known.updatedAt).getTime() < NAME_REFRESH_MS)
     return known.name;
   try {
     const profile = await deps.getGroupMemberProfile?.(group.lineGroupId, userId);

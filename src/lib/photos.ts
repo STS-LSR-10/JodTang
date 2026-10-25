@@ -46,6 +46,38 @@ export async function photoBlockedReply(
   return null;
 }
 
+/** Store the image as the entry's one photo (replacing a previous one) and record it on the entry. */
+export async function attachPhotoBytes(
+  db: SupabaseClient,
+  userId: string,
+  tx: { id: string; photo_path: string | null },
+  image: SlipImage,
+  now: Date,
+): Promise<void> {
+  const path = photoPathFor(userId, tx.id, image.mimeType);
+  const upload = await db.storage
+    .from(SLIP_BUCKET)
+    .upload(path, image.bytes, { contentType: image.mimeType, upsert: true });
+  if (upload.error) throw new Error(`upload photo: ${upload.error.message}`);
+
+  try {
+    await setPhoto(db, userId, tx.id, path, now);
+  } catch (error) {
+    await db.storage
+      .from(SLIP_BUCKET)
+      .remove([path])
+      .catch(() => undefined);
+    throw error;
+  }
+  // a different file type than before leaves the old file behind: remove it
+  if (tx.photo_path && tx.photo_path !== path) {
+    await db.storage
+      .from(SLIP_BUCKET)
+      .remove([tx.photo_path])
+      .catch(() => undefined);
+  }
+}
+
 /**
  * The image that follows a tap on "แนบรูป": store it for that entry. No OCR, no AI call, and it
  * does not count toward the slip quota. The wait row is cleared whatever happens, so one tap
@@ -79,28 +111,7 @@ export async function handlePhotoImage(
       throw error;
     }
 
-    const path = photoPathFor(user.id, tx.id, image.mimeType);
-    const upload = await db.storage
-      .from(SLIP_BUCKET)
-      .upload(path, image.bytes, { contentType: image.mimeType, upsert: true });
-    if (upload.error) throw new Error(`upload photo: ${upload.error.message}`);
-
-    try {
-      await setPhoto(db, user.id, tx.id, path, now);
-    } catch (error) {
-      await db.storage
-        .from(SLIP_BUCKET)
-        .remove([path])
-        .catch(() => undefined);
-      throw error;
-    }
-    // a different file type than before leaves the old file behind: remove it
-    if (tx.photo_path && tx.photo_path !== path) {
-      await db.storage
-        .from(SLIP_BUCKET)
-        .remove([tx.photo_path])
-        .catch(() => undefined);
-    }
+    await attachPhotoBytes(db, user.id, tx, image, now);
     return [text(PHOTO_ATTACHED_TEXT(tx.title))];
   } catch (error) {
     log.error("photo_attach_failed", error);

@@ -4,7 +4,9 @@ import {
   CheckSquare,
   Download,
   FolderInput,
+  Camera,
   Image as ImageIcon,
+  Lock,
   Plus,
   Receipt,
   Trash2,
@@ -12,7 +14,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useMemo, useState, type FormEvent } from "react";
+import { Suspense, useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { Sheet } from "@/components/liff/sheet";
 import { EmptyState, ErrorState, LoadingBlock, PageHeader } from "@/components/liff/states";
 import { TxItem } from "@/components/liff/tx-item";
@@ -22,7 +24,7 @@ import type { TxDto } from "@/lib/dto";
 import { formatBaht } from "@/lib/money";
 import { satangToString } from "@/lib/money";
 import { normalizeThaiDigits } from "@/lib/parse/thai-number";
-import { fromBangkokInputValue, toBangkokInputValue } from "@/lib/thai-date";
+import { formatThaiDate, fromBangkokInputValue, toBangkokInputValue } from "@/lib/thai-date";
 import { MAX_BULK, MAX_NOTE, MAX_TITLE } from "@/lib/tx-edit";
 import { cn } from "@/lib/utils";
 
@@ -92,9 +94,10 @@ function TransactionsRoute() {
 function EditFromChat({ id }: { id: string }) {
   const tx = useApi<TxDto>(`/api/transactions/${encodeURIComponent(id)}`);
   const [done, setDone] = useState(false);
+  const [warning, setWarning] = useState<string | null>(null);
   const [sent, setSent] = useState(false);
 
-  async function sendToChat() {
+  async function sendToChat(close = true) {
     try {
       const liff = (await import("@line/liff")).default;
       if (!liff.isApiAvailable("sendMessages")) return;
@@ -108,15 +111,17 @@ function EditFromChat({ id }: { id: string }) {
       }
       await liff.sendMessages([{ type: "text", text: "แก้ไขเสร็จแล้ว" }]);
       setSent(true);
-      liff.closeWindow();
+      // a photo warning stays on screen instead of being closed away
+      if (close) liff.closeWindow();
     } catch {
       /* the page already says it was saved, and offers the button */
     }
   }
 
-  async function saved() {
+  async function saved(photoWarning?: string) {
+    setWarning(photoWarning ?? null);
     setDone(true);
-    await sendToChat();
+    await sendToChat(!photoWarning);
   }
 
   if (tx.loading) return <LoadingBlock rows={4} />;
@@ -134,6 +139,11 @@ function EditFromChat({ id }: { id: string }) {
         <p role="status" className="text-lg font-bold text-primary">
           ✅ แก้ไขรายการสำเร็จ
         </p>
+        {warning ? (
+          <p role="alert" className="text-sm text-expense">
+            {warning}
+          </p>
+        ) : null}
         <p className="text-sm text-muted">
           {sent
             ? "บอทส่งการ์ดสรุปรายการเข้าแชทให้แล้ว กลับไปที่แชทได้เลย"
@@ -160,13 +170,15 @@ function EditFromChat({ id }: { id: string }) {
   return (
     <div>
       <PageHeader title="แก้ไขรายการ" />
-      <EditSheet
-        tx={tx.data}
-        onClose={() => {
-          window.location.assign("/transactions");
-        }}
-        onSaved={saved}
-      />
+      <div className="px-4 pb-8">
+        <EditForm
+          tx={tx.data}
+          onCancel={() => {
+            window.location.assign("/transactions");
+          }}
+          onSaved={saved}
+        />
+      </div>
     </div>
   );
 }
@@ -552,9 +564,9 @@ function TransactionsView() {
         <EditSheet
           tx={editFor}
           onClose={() => setEditFor(null)}
-          onSaved={() => {
+          onSaved={(warning) => {
             setEditFor(null);
-            setNotice("บันทึกแล้ว");
+            setNotice(warning ? `บันทึกแล้ว ${warning}` : "บันทึกแล้ว");
             list.reload();
           }}
         />
@@ -962,7 +974,35 @@ function MoveSheet({
   );
 }
 
-/** Edit one confirmed entry. Only fields that changed are sent. */
+/** The photo is shrunk in the phone first: the longest side 1600px, JPEG, well under the upload limit. */
+async function shrinkPhoto(file: File): Promise<File> {
+  const bitmap = await createImageBitmap(file);
+  const scale = Math.min(1, 1600 / Math.max(bitmap.width, bitmap.height));
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+  canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("อ่านรูปไม่สำเร็จ");
+  ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+  bitmap.close();
+  const blob = await new Promise<Blob | null>((resolve) =>
+    canvas.toBlob(resolve, "image/jpeg", 0.82),
+  );
+  if (!blob) throw new Error("อ่านรูปไม่สำเร็จ");
+  return new File([blob], "photo.jpg", { type: "image/jpeg" });
+}
+
+/** A caption above a form control. */
+function Field({ label, children }: { label: ReactNode; children: ReactNode }) {
+  return (
+    <div className="space-y-1">
+      <p className="px-1 text-xs font-medium text-muted">{label}</p>
+      {children}
+    </div>
+  );
+}
+
+/** Edit one confirmed entry in a bottom sheet (the entries list). */
 function EditSheet({
   tx,
   onClose,
@@ -970,11 +1010,30 @@ function EditSheet({
 }: {
   tx: TxDto;
   onClose: () => void;
-  onSaved: () => void;
+  onSaved: (warning?: string) => void;
+}) {
+  return (
+    <Sheet title="แก้ไขรายการ" onClose={onClose}>
+      <EditForm tx={tx} onCancel={onClose} onSaved={onSaved} />
+    </Sheet>
+  );
+}
+
+/** Edit one confirmed entry. Only fields that changed are sent; the photo goes after the entry. */
+function EditForm({
+  tx,
+  onCancel,
+  onSaved,
+}: {
+  tx: TxDto;
+  onCancel: () => void;
+  onSaved: (warning?: string) => void;
 }) {
   const { api } = useLiff();
   const categories = useApi<CategoriesResponse>("/api/categories");
   const wallets = useApi<WalletsLite>("/api/wallets");
+  const me = useApi<{ features: Record<string, boolean> }>("/api/me");
+  const canPhoto = me.data?.features.entryPhoto === true;
   const walletItems = wallets.data?.items ?? [];
   const mainWalletId = walletItems.find((w) => w.isDefault)?.id ?? "";
   const initial = useMemo(
@@ -995,14 +1054,34 @@ function EditSheet({
   const [when, setWhen] = useState(initial.when);
   const [note, setNote] = useState(initial.note);
   const [pickedWallet, setPickedWallet] = useState<string | null>(null);
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const [removePhoto, setRemovePhoto] = useState(false);
+  const savedPhoto = useApi<{ url: string }>(
+    tx.hasPhoto ? `/api/transactions/${tx.id}/photo` : null,
+  );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!photoFile) return setPhotoPreview(null);
+    const url = URL.createObjectURL(photoFile);
+    setPhotoPreview(url);
+    return () => URL.revokeObjectURL(url);
+  }, [photoFile]);
 
   // An entry without a wallet belongs to the main one.
   const currentWallet = tx.accountId ?? mainWalletId;
   const walletValue = pickedWallet ?? currentWallet;
   const typeChanged = type !== initial.type;
   const options = (categories.data?.items ?? []).filter((c) => c.type === type);
+  const shownPhoto = removePhoto ? null : (photoPreview ?? savedPhoto.data?.url ?? null);
+  const hasPhoto = !removePhoto && (photoFile !== null || tx.hasPhoto);
+
+  // the summary card follows what is typed
+  const previewAt = fromBangkokInputValue(when);
+  const previewAmount = Number(normalizeThaiDigits(amount).replace(/,/g, "").trim());
+  const categoryName = options.find((c) => c.id === categoryId)?.name;
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -1025,25 +1104,65 @@ function EditSheet({
     if (when !== initial.when) body.occurredAt = at.toISOString();
     if (note.trim() !== initial.note.trim()) body.note = note.trim() || null;
     if (pickedWallet && pickedWallet !== currentWallet) body.accountId = pickedWallet;
-    if (Object.keys(body).length === 0) return onClose();
+    const photoChange = photoFile !== null || (removePhoto && tx.hasPhoto);
+    if (Object.keys(body).length === 0 && !photoChange) return onCancel();
 
     setSaving(true);
     setError(null);
     try {
-      await api(`/api/transactions/${tx.id}`, { method: "PATCH", body: JSON.stringify(body) });
-      onSaved();
+      if (Object.keys(body).length > 0) {
+        await api(`/api/transactions/${tx.id}`, { method: "PATCH", body: JSON.stringify(body) });
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "บันทึกไม่สำเร็จ");
       setSaving(false);
+      return;
     }
+    // the entry is saved; a photo that fails must not undo that, so it only adds a warning
+    let warning: string | undefined;
+    try {
+      if (photoFile) {
+        const form = new FormData();
+        form.append("file", await shrinkPhoto(photoFile));
+        await api(`/api/transactions/${tx.id}/photo`, { method: "POST", body: form });
+      } else if (removePhoto && tx.hasPhoto) {
+        await api(`/api/transactions/${tx.id}/photo`, { method: "DELETE" });
+      }
+    } catch (err) {
+      warning = `แต่รูปแนบยังไม่ขึ้น: ${err instanceof Error ? err.message : "ลองใหม่อีกครั้งนะ"}`;
+    }
+    onSaved(warning);
   }
 
   const field =
-    "h-12 w-full rounded-2xl border border-border bg-background px-4 outline-none focus:border-primary";
+    "h-12 w-full min-w-0 max-w-full appearance-none rounded-2xl border border-border bg-background px-4 text-left outline-none focus:border-primary";
+  const income = type === "income";
 
   return (
-    <Sheet title="แก้ไขรายการ" onClose={onClose}>
-      <form onSubmit={submit} className="space-y-3">
+    <form onSubmit={submit} className="space-y-3">
+      <div
+        className={cn(
+          "flex items-center gap-3 rounded-2xl px-3 py-3",
+          income ? "bg-income/10" : "bg-expense/10",
+        )}
+      >
+        <div className="min-w-0 flex-1">
+          <p className={cn("truncate font-semibold", income ? "text-income" : "text-expense")}>
+            {title.trim() || "ไม่มีชื่อ"}
+          </p>
+          <p className="truncate text-xs text-muted">
+            {[previewAt ? formatThaiDate(previewAt, true) : null, categoryName]
+              .filter(Boolean)
+              .join(" · ")}
+          </p>
+        </div>
+        <p className={cn("num shrink-0 font-bold", income ? "text-income" : "text-expense")}>
+          {income ? "+" : "-"}฿
+          {Number.isFinite(previewAmount) ? previewAmount.toLocaleString("th-TH") : "0"}
+        </p>
+      </div>
+
+      <Field label="ประเภท">
         <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="ประเภท">
           {(["expense", "income"] as const).map((t) => (
             <button
@@ -1068,6 +1187,8 @@ function EditSheet({
             </button>
           ))}
         </div>
+      </Field>
+      <Field label="ชื่อรายการ">
         <input
           value={title}
           onChange={(e) => setTitle(e.target.value)}
@@ -1075,6 +1196,8 @@ function EditSheet({
           aria-label="ชื่อรายการ"
           className={field}
         />
+      </Field>
+      <Field label="จำนวนเงิน (บาท)">
         <input
           value={amount}
           onChange={(e) => setAmount(e.target.value)}
@@ -1082,6 +1205,8 @@ function EditSheet({
           aria-label="จำนวนเงิน"
           className={cn(field, "num")}
         />
+      </Field>
+      <Field label="หมวดหมู่">
         <select
           value={categoryId}
           onChange={(e) => setCategoryId(e.target.value)}
@@ -1095,6 +1220,8 @@ function EditSheet({
             </option>
           ))}
         </select>
+      </Field>
+      <Field label="วันที่และเวลา">
         <input
           type="datetime-local"
           value={when}
@@ -1102,7 +1229,9 @@ function EditSheet({
           aria-label="วันและเวลา"
           className={field}
         />
-        {walletItems.length > 1 ? (
+      </Field>
+      {walletItems.length > 1 ? (
+        <Field label="กระเป๋า">
           <select
             value={walletValue}
             onChange={(e) => setPickedWallet(e.target.value)}
@@ -1115,30 +1244,100 @@ function EditSheet({
               </option>
             ))}
           </select>
-        ) : null}
+        </Field>
+      ) : null}
+      <Field label="โน้ต (ไม่บังคับ)">
         <input
           value={note}
           onChange={(e) => setNote(e.target.value)}
           maxLength={MAX_NOTE}
-          placeholder="โน้ต (ไม่บังคับ)"
+          placeholder="เช่น ซื้อที่ร้านหน้าปากซอย"
           aria-label="โน้ต"
           className={field}
         />
+      </Field>
 
-        {error ? (
-          <p role="alert" className="text-sm text-expense">
-            {error}
-          </p>
-        ) : null}
+      <Field
+        label={
+          <span className="inline-flex items-center gap-1.5">
+            รูปแนบ
+            <span className="rounded-lg bg-primary-soft px-2 py-0.5 text-[11px] text-primary">
+              Pro
+            </span>
+          </span>
+        }
+      >
+        {canPhoto ? (
+          <div className="flex items-center gap-3">
+            <div className="flex h-[72px] w-[72px] shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-border bg-background">
+              {shownPhoto ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={shownPhoto} alt="รูปแนบ" className="h-full w-full object-cover" />
+              ) : (
+                <ImageIcon className="h-6 w-6 text-muted" aria-hidden />
+              )}
+            </div>
+            <div className="flex flex-col items-start gap-1.5">
+              <label className="inline-flex h-10 cursor-pointer items-center gap-2 rounded-2xl border border-border px-4 text-sm font-semibold">
+                <Camera className="h-4 w-4" aria-hidden />
+                {hasPhoto ? "เปลี่ยนรูป" : "ถ่ายหรือเลือกรูป"}
+                <input
+                  type="file"
+                  accept="image/*"
+                  aria-label="เลือกรูปแนบ"
+                  className="sr-only"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) {
+                      setPhotoFile(f);
+                      setRemovePhoto(false);
+                    }
+                    e.target.value = "";
+                  }}
+                />
+              </label>
+              {hasPhoto ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPhotoFile(null);
+                    setRemovePhoto(true);
+                  }}
+                  className="px-1 text-xs font-semibold text-expense"
+                >
+                  เอารูปออก
+                </button>
+              ) : null}
+            </div>
+          </div>
+        ) : (
+          <Link
+            href="/upgrade"
+            className="flex items-center gap-3 rounded-2xl border border-dashed border-border bg-background px-4 py-3"
+          >
+            <Lock className="h-5 w-5 shrink-0 text-muted" aria-hidden />
+            <span className="min-w-0 flex-1">
+              <span className="block text-sm font-semibold">แนบรูปใบเสร็จหรือสินค้า</span>
+              <span className="block text-xs text-muted">ใช้ได้ในแผน Pro ขึ้นไป</span>
+            </span>
+            <span className="text-sm font-semibold text-primary">ดูแผน</span>
+          </Link>
+        )}
+      </Field>
 
-        <button
-          type="submit"
-          disabled={saving}
-          className="h-12 w-full rounded-2xl bg-primary text-base font-semibold text-surface disabled:opacity-60"
-        >
-          {saving ? "กำลังบันทึก..." : "บันทึก"}
-        </button>
-      </form>
-    </Sheet>
+      {error ? (
+        <p role="alert" className="text-sm text-expense">
+          {error}
+        </p>
+      ) : null}
+
+      <button
+        type="submit"
+        disabled={saving}
+        className="h-12 w-full rounded-2xl bg-primary text-base font-semibold text-surface disabled:opacity-60"
+      >
+        {saving ? "กำลังบันทึก..." : "บันทึก"}
+      </button>
+    </form>
   );
 }

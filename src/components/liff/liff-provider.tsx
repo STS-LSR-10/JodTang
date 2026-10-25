@@ -219,7 +219,7 @@ export function LiffProvider({ children }: { children: ReactNode }) {
         const headers = new Headers(init.headers);
         headers.set("Authorization", `Bearer ${bearer}`);
         if (unlockToken.current) headers.set("X-Unlock", unlockToken.current);
-        if (init.body && !headers.has("Content-Type")) {
+        if (init.body && !(init.body instanceof FormData) && !headers.has("Content-Type")) {
           headers.set("Content-Type", "application/json");
         }
         return fetch(path, { ...init, headers });

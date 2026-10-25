@@ -335,16 +335,64 @@ test.describe("transactions page (360px)", () => {
     });
     await page.goto(`/transactions?edit=${id}`);
 
-    const dialog = page.getByRole("dialog", { name: "แก้ไขรายการ" });
-    await expect(dialog.getByLabel("ชื่อรายการ")).toHaveValue("กาแฟ");
+    // a full page, not a sheet: captions above every field and a summary card on top
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+    await expect(page.getByLabel("ชื่อรายการ")).toHaveValue("กาแฟ");
+    await expect(page.getByText("วันที่และเวลา")).toBeVisible();
+    await expect(page.getByText("จำนวนเงิน (บาท)")).toBeVisible();
     await expectNoHorizontalScroll(page);
-    await dialog.getByLabel("ชื่อรายการ").fill("กาแฟเย็น");
-    await dialog.getByRole("button", { name: "บันทึก" }).click();
+    await page.getByLabel("ชื่อรายการ").fill("กาแฟเย็น");
+    await page.getByRole("button", { name: "บันทึก" }).click();
     await expect.poll(() => bodies.length).toBe(1);
     expect(bodies[0]).toEqual({ title: "กาแฟเย็น" });
     await expect(page.getByText("✅ แก้ไขรายการสำเร็จ")).toBeVisible();
     // outside LINE nothing can be sent, so the page offers the button (never a server push)
     await expect(page.getByRole("button", { name: "ส่งการ์ดเข้าแชท" })).toBeVisible();
+  });
+
+  test("Pro can attach a photo in the editor (shrunk, sent after the entry); Free sees a locked row", async ({
+    page,
+  }) => {
+    const id = "11111111-1111-1111-1111-111111111111";
+    const uploads: string[] = [];
+    await mockApi(page, {
+      [`GET /api/transactions/${id}`]: TX(),
+      "GET /api/categories": CATEGORIES,
+      "GET /api/wallets": { items: [] },
+      "GET /api/me": ME_PLUS,
+      [`POST /api/transactions/${id}/photo`]: (route: Route) => {
+        uploads.push(route.request().headers()["content-type"] ?? "");
+        return { ok: true };
+      },
+    });
+    await page.goto(`/transactions?edit=${id}`);
+    await expect(page.getByText("ถ่ายหรือเลือกรูป")).toBeVisible();
+    const png = Buffer.from(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+      "base64",
+    );
+    await page
+      .getByLabel("เลือกรูปแนบ")
+      .setInputFiles({ name: "r.png", mimeType: "image/png", buffer: png });
+    await expect(page.getByRole("img", { name: "รูปแนบ" })).toBeVisible();
+    await page.getByRole("button", { name: "บันทึก" }).click();
+    await expect.poll(() => uploads.length).toBe(1);
+    expect(uploads[0]).toContain("multipart/form-data");
+    await expect(page.getByText("✅ แก้ไขรายการสำเร็จ")).toBeVisible();
+  });
+
+  test("Free sees the photo row locked with a link to the plans", async ({ page }) => {
+    const id = "11111111-1111-1111-1111-111111111111";
+    await mockApi(page, {
+      [`GET /api/transactions/${id}`]: TX(),
+      "GET /api/categories": CATEGORIES,
+      "GET /api/wallets": { items: [] },
+      "GET /api/me": ME_FREE,
+    });
+    await page.goto(`/transactions?edit=${id}`);
+    await expect(page.getByText("ใช้ได้ในแผน Pro ขึ้นไป")).toBeVisible();
+    await expect(page.getByLabel("เลือกรูปแนบ")).toHaveCount(0);
+    await expectNoHorizontalScroll(page);
   });
 
   test("?edit= for an entry that is gone says so instead of hanging", async ({ page }) => {
