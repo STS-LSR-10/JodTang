@@ -25,3 +25,8 @@ export const GoalChart = dynamic(
   () => import("@/components/liff/charts").then((m) => m.GoalChart),
   { ssr: false, loading: Loading },
 );
+
+export const MiniBarChart = dynamic(
+  () => import("@/components/liff/charts").then((m) => m.MiniBarChart),
+  { ssr: false, loading: () => <Skeleton className="h-full w-full" /> },
+);

@@ -9,6 +9,7 @@ const config: Config = {
       colors: {
         primary: { DEFAULT: "var(--primary)", soft: "var(--primary-soft)" },
         accent: "var(--accent)",
+        warn: { DEFAULT: "var(--warn)", soft: "var(--warn-soft)" },
         expense: "var(--expense)",
         income: "var(--income)",
         background: "var(--background)",

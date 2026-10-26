@@ -22,9 +22,10 @@ import {
 import { formatBaht } from "@/lib/money";
 import { sliceColor } from "@/components/liff/slice-color";
 
-export const INCOME_FILL = "#059669"; // bars: graphical objects need 3:1, which this meets
-export const EXPENSE_FILL = "#E11D48";
-const LINE = "#0F766E";
+// the page theme (tokens.css) decides the colours; graphical objects need 3:1, which they meet
+export const INCOME_FILL = "var(--income)";
+export const EXPENSE_FILL = "var(--expense)";
+const LINE = "var(--primary)";
 
 const compact = (baht: number) => {
   const abs = Math.abs(baht);
@@ -108,6 +109,24 @@ export function MiniDonut({ slices }: { slices: DonutSlice[] }) {
           ))}
         </Pie>
       </PieChart>
+    </ResponsiveContainer>
+  );
+}
+
+/** Six small bars (one per month) for the history inside the category sheet. */
+export function MiniBarChart({ points }: { points: { label: string; value: number }[] }) {
+  return (
+    <ResponsiveContainer width="100%" height="100%">
+      <BarChart data={points} margin={{ top: 4, right: 0, bottom: 0, left: 0 }}>
+        <XAxis dataKey="label" tickLine={false} axisLine={false} fontSize={10} />
+        <Tooltip formatter={(v) => [money(v), "ใช้จ่าย"]} cursor={false} />
+        <Bar
+          dataKey="value"
+          fill="var(--primary)"
+          radius={[4, 4, 0, 0]}
+          isAnimationActive={false}
+        />
+      </BarChart>
     </ResponsiveContainer>
   );
 }

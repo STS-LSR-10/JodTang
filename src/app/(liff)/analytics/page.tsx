@@ -86,7 +86,7 @@ export default function AnalyticsPage() {
     key: c.categoryId ?? c.name,
     name: c.name,
     value: c.totalSatang / 100,
-    color: c.color,
+    color: null, // the olive palette, in rank order, on every chart of the page
   }));
   const catTotal = data.data?.categoriesTotalSatang ?? 0;
 
@@ -105,7 +105,7 @@ export default function AnalyticsPage() {
               label: (
                 <span className="inline-flex items-center justify-center gap-1.5">
                   เก็บออม
-                  <span className="rounded-full border border-amber-200 bg-amber-50 px-1.5 text-[10px] font-bold text-amber-700">
+                  <span className="rounded-full border border-warn/30 bg-warn-soft px-1.5 text-[10px] font-bold text-warn">
                     ★ PRO
                   </span>
                 </span>
@@ -267,7 +267,7 @@ export default function AnalyticsPage() {
                         {cats.map((c, i) => {
                           const pct =
                             catTotal > 0 ? Math.round((c.totalSatang * 100) / catTotal) : 0;
-                          const color = sliceColor(c.color, i);
+                          const color = sliceColor(null, i);
                           const emoji = emojiOf(c.icon);
                           return (
                             <li key={c.categoryId ?? c.name} className="space-y-1.5">

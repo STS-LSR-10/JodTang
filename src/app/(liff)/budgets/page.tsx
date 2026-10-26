@@ -1,16 +1,33 @@
 "use client";
 
-import { ArrowDown, ArrowUp, Eye, EyeOff, Lock, Pencil, Plus } from "lucide-react";
+import {
+  ArrowDown,
+  ArrowUp,
+  ArrowUpDown,
+  Check,
+  ChevronDown,
+  ChevronRight,
+  Lock,
+  Plus,
+  Search,
+  Settings2,
+  Sparkles,
+  X,
+} from "lucide-react";
 import Link from "next/link";
-import { useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { MiniBarChart } from "@/components/liff/lazy-charts";
 import { PlusLock } from "@/components/liff/settings/plus-lock";
 import { ProgressBar } from "@/components/liff/progress-bar";
 import { Sheet } from "@/components/liff/sheet";
-import { EmptyState, ErrorState, LoadingBlock, PageHeader } from "@/components/liff/states";
+import { sliceColor } from "@/components/liff/slice-color";
+import { EmptyState, ErrorState, PageHeader, Skeleton } from "@/components/liff/states";
 import { useApi, useLiff } from "@/components/liff/liff-provider";
+import { budgetState, percentUsed } from "@/lib/budget";
 import { EMOJI_CHOICES, isSingleEmoji } from "@/lib/category-emoji";
 import { normalizeThaiDigits } from "@/lib/parse/thai-number";
 import { formatBaht } from "@/lib/money";
+import { formatThaiMonthShort } from "@/lib/thai-date";
 import { cn } from "@/lib/utils";
 
 type Kind = "expense" | "income";
@@ -32,9 +49,12 @@ interface CategoryItem {
 interface BudgetsResponse {
   mode: "overall" | "category";
   cycle: "monthly" | "weekly";
+  cycleStartDay?: number;
   overall: { amountSatang: number | null; spentSatang: number };
   /** The limit for one day (Professional and above) and today's spending. */
   daily?: { amountSatang: number | null; spentSatang: number };
+  /** What came in this cycle, per income category. */
+  income?: { categoryId: string; receivedSatang: number }[];
   categories: {
     categoryId: string;
     name: string;
@@ -56,6 +76,8 @@ const SWATCHES = [
   "#475569",
 ];
 const AMOUNT_PATTERN = /^\d{1,9}(\.\d{1,2})?$/;
+const QUICK_ADD = [500, 1000, 3000, 5000];
+const TIP_KEY = "jt_budget_tip_off";
 
 function parseAmount(input: string): { ok: true; value: string | null } | { ok: false } {
   const text = normalizeThaiDigits(input).replace(/,/g, "").trim();
@@ -75,282 +97,46 @@ function keywordsFromText(text: string): string[] {
   );
 }
 
-export default function BudgetsPage() {
-  const { api } = useLiff();
-  const [kind, setKind] = useState<Kind>("expense");
-  const cats = useApi<{ items: CategoryItem[] }>("/api/categories?all=1");
-  const budgets = useApi<BudgetsResponse>("/api/budgets");
-  const me = useApi<{ features: Record<string, boolean> }>("/api/me");
-  // Professional and above create and edit their own categories; the server checks it too.
-  const locked = !me.loading && me.data !== null && me.data?.features.customCategory !== true;
-  // Per-category budgets and the 80% / 100% warnings are Professional and above too.
-  const budgetLocked = !me.loading && me.data !== null && me.data?.features.categoryBudget !== true;
-  const dailyLocked = !me.loading && me.data !== null && me.data?.features.dailyBudget !== true;
-  const alertsOff = !me.loading && me.data !== null && me.data?.features.budgetAlert !== true;
-  const [notice, setNotice] = useState<string | null>(null);
-  const [editing, setEditing] = useState<CategoryItem | null>(null);
-  const [adding, setAdding] = useState(false);
+/** A category's tile colour: its own pick when it is a custom one, else the olive palette by place. */
+function tileColor(c: CategoryItem, index: number): string {
+  return c.own && c.color ? c.color : sliceColor(null, index);
+}
 
-  const list = useMemo(
-    () =>
-      (cats.data?.items ?? [])
-        .filter((c) => c.type === kind)
-        .sort((a, b) => a.sortOrder - b.sortOrder),
-    [cats.data, kind],
-  );
-
-  function refresh() {
-    cats.reload();
-    budgets.reload();
-  }
-
-  async function run(action: () => Promise<unknown>, done?: string) {
-    setNotice(null);
-    try {
-      await action();
-      if (done) setNotice(done);
-      refresh();
-    } catch (e) {
-      setNotice(e instanceof Error ? e.message : "ทำรายการไม่สำเร็จ");
-    }
-  }
-
-  const move = (index: number, delta: -1 | 1) => {
-    const target = index + delta;
-    if (target < 0 || target >= list.length) return;
-    const ids = list.map((c) => c.id);
-    const [moved] = ids.splice(index, 1);
-    if (!moved) return;
-    ids.splice(target, 0, moved);
-    void run(() =>
-      api("/api/categories/reorder", { method: "POST", body: JSON.stringify({ ids }) }),
-    );
-  };
-
-  const toggleHidden = (c: CategoryItem) =>
-    run(() =>
-      api(`/api/categories/${c.id}`, {
-        method: "PATCH",
-        body: JSON.stringify({ isHidden: !c.isHidden }),
-      }),
-    );
-
-  const budgetOf = (categoryId: string) =>
-    budgets.data?.categories.find((b) => b.categoryId === categoryId);
-
-  const loading = cats.loading || (kind === "expense" && budgets.loading && !budgets.data);
-  const error = cats.error ?? (kind === "expense" ? budgets.error : null);
-
+function Tile({ c, index }: { c: CategoryItem; index: number }) {
+  const color = tileColor(c, index);
   return (
-    <main>
-      <PageHeader
-        title="หมวด/งบ"
-        right={
-          <button
-            type="button"
-            onClick={() => setAdding(true)}
-            className="flex h-11 items-center gap-1 rounded-2xl bg-primary px-4 text-sm font-semibold text-surface"
-          >
-            {locked ? (
-              <Lock className="h-4 w-4" aria-hidden />
-            ) : (
-              <Plus className="h-4 w-4" aria-hidden />
-            )}{" "}
-            เพิ่มหมวด
-          </button>
-        }
-      />
-
-      <div className="space-y-4 px-4 pb-4">
-        <div role="tablist" aria-label="ประเภทหมวด" className="grid grid-cols-2 gap-2">
-          {(["expense", "income"] as const).map((k) => (
-            <button
-              key={k}
-              role="tab"
-              type="button"
-              aria-selected={kind === k}
-              onClick={() => setKind(k)}
-              className={cn(
-                "h-11 rounded-2xl border text-sm font-semibold",
-                kind === k
-                  ? "border-primary bg-primary-soft text-primary"
-                  : "border-border bg-surface text-muted",
-              )}
-            >
-              {k === "expense" ? "รายจ่าย" : "รายรับ"}
-            </button>
-          ))}
-        </div>
-
-        {notice ? (
-          <p role="status" className="rounded-2xl bg-primary-soft px-4 py-2 text-sm text-primary">
-            {notice}
-          </p>
-        ) : null}
-
-        {loading ? (
-          <LoadingBlock rows={5} />
-        ) : error ? (
-          <ErrorState message={error} onRetry={refresh} />
-        ) : (
-          <>
-            {kind === "expense" && budgets.data?.daily ? (
-              <DailyBudgetCard
-                daily={budgets.data.daily}
-                locked={dailyLocked}
-                onSave={(value) =>
-                  run(
-                    () =>
-                      api("/api/budgets", {
-                        method: "PUT",
-                        body: JSON.stringify({ daily: value }),
-                      }),
-                    value ? "ตั้งงบรายวันแล้ว" : "ล้างงบรายวันแล้ว",
-                  )
-                }
-              />
-            ) : null}
-            {kind === "expense" && budgets.data ? (
-              <BudgetCard
-                data={budgets.data}
-                categoryLocked={budgetLocked}
-                alertsOff={alertsOff}
-                onChange={(body, done) =>
-                  run(
-                    () => api("/api/budgets", { method: "PUT", body: JSON.stringify(body) }),
-                    done,
-                  )
-                }
-              />
-            ) : null}
-
-            {list.length === 0 ? (
-              <div className="rounded-2xl border border-border bg-surface shadow-card">
-                <EmptyState title="ยังไม่มีหมวด" hint="กด “เพิ่มหมวด” เพื่อสร้างหมวดของคุณเอง" />
-              </div>
-            ) : (
-              <ul className="divide-y divide-border rounded-2xl border border-border bg-surface shadow-card">
-                {list.map((c, i) => {
-                  const b = budgetOf(c.id);
-                  const showBudget =
-                    kind === "expense" && budgets.data?.mode === "category" && !c.isHidden;
-                  return (
-                    <li
-                      key={c.id}
-                      className={cn("space-y-2 px-4 py-3", c.isHidden && "opacity-60")}
-                    >
-                      <div className="flex items-center gap-2">
-                        <span
-                          aria-hidden
-                          className="h-8 w-1.5 shrink-0 rounded-full"
-                          style={{ background: c.color ?? "#64748B" }}
-                        />
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-semibold">
-                            {c.emoji ? (
-                              <span aria-hidden className="mr-1">
-                                {c.emoji}
-                              </span>
-                            ) : null}
-                            {c.name}
-                            {c.own ? (
-                              <span className="ml-2 rounded-full bg-primary-soft px-2 py-0.5 text-[10px] font-semibold text-primary">
-                                ของฉัน
-                              </span>
-                            ) : null}
-                          </p>
-                          <p className="truncate text-xs text-muted">
-                            {c.isHidden
-                              ? "ซ่อนอยู่"
-                              : c.keywords.length
-                                ? c.keywords.join(", ")
-                                : "ยังไม่มีคำค้น"}
-                          </p>
-                        </div>
-                        <IconButton
-                          label={`เลื่อน ${c.name} ขึ้น`}
-                          onClick={() => move(i, -1)}
-                          disabled={i === 0}
-                        >
-                          <ArrowUp className="h-4 w-4" aria-hidden />
-                        </IconButton>
-                        <IconButton
-                          label={`เลื่อน ${c.name} ลง`}
-                          onClick={() => move(i, 1)}
-                          disabled={i === list.length - 1}
-                        >
-                          <ArrowDown className="h-4 w-4" aria-hidden />
-                        </IconButton>
-                        {!c.isFallback ? (
-                          <IconButton
-                            label={c.isHidden ? `แสดง ${c.name}` : `ซ่อน ${c.name}`}
-                            onClick={() => toggleHidden(c)}
-                          >
-                            {c.isHidden ? (
-                              <EyeOff className="h-4 w-4" aria-hidden />
-                            ) : (
-                              <Eye className="h-4 w-4" aria-hidden />
-                            )}
-                          </IconButton>
-                        ) : null}
-                        <IconButton label={`แก้ไข ${c.name}`} onClick={() => setEditing(c)}>
-                          <Pencil className="h-4 w-4" aria-hidden />
-                        </IconButton>
-                      </div>
-
-                      {showBudget ? (
-                        <CategoryBudget
-                          name={c.name}
-                          amountSatang={b?.amountSatang ?? null}
-                          spentSatang={b?.spentSatang ?? 0}
-                          readOnly={budgetLocked}
-                          onSave={(value) =>
-                            run(() =>
-                              api("/api/budgets", {
-                                method: "PUT",
-                                body: JSON.stringify({
-                                  categories: [{ categoryId: c.id, amount: value }],
-                                }),
-                              }),
-                            )
-                          }
-                        />
-                      ) : null}
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-          </>
-        )}
-      </div>
-
-      {editing ? (
-        <EditSheet
-          category={editing}
-          locked={locked}
-          onClose={() => setEditing(null)}
-          onSaved={(msg) => {
-            setEditing(null);
-            setNotice(msg);
-            refresh();
-          }}
-        />
-      ) : null}
-      {adding && locked ? <CustomCategoryLockedSheet onClose={() => setAdding(false)} /> : null}
-      {adding && !locked ? (
-        <AddSheet
-          kind={kind}
-          onClose={() => setAdding(false)}
-          onSaved={() => {
-            setAdding(false);
-            setNotice("เพิ่มหมวดแล้ว");
-            refresh();
-          }}
-        />
-      ) : null}
-    </main>
+    <span
+      aria-hidden
+      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-lg"
+      style={{ backgroundColor: `${color}26` }}
+    >
+      {c.emoji ?? <span className="h-3 w-3 rounded-full" style={{ backgroundColor: color }} />}
+    </span>
   );
+}
+
+function QuickAmounts({ onAdd }: { onAdd: (amount: number) => void }) {
+  return (
+    <div className="flex gap-1.5" aria-label="เพิ่มยอดอย่างเร็ว" role="group">
+      {QUICK_ADD.map((n) => (
+        <button
+          key={n}
+          type="button"
+          onClick={() => onAdd(n)}
+          className="num h-9 flex-1 rounded-lg bg-background text-[11px] font-medium"
+        >
+          +฿{n.toLocaleString("th-TH")}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** The amount in a text box (satang in, plain baht text out) plus the quick "+500" buttons. */
+function addToAmount(text: string, add: number): string {
+  const parsed = parseAmount(text);
+  const current = parsed.ok && parsed.value ? Number(parsed.value) : 0;
+  return String(current + add);
 }
 
 /** What Free sees instead of the add form: the feature is Professional and above. */
@@ -420,143 +206,6 @@ function EmojiPicker({ value, onChange }: { value: string; onChange: (e: string)
       </div>
       {!valid ? <p className="text-xs text-expense">ใส่ได้เป็นอีโมจิตัวเดียวเท่านั้นนะ</p> : null}
     </div>
-  );
-}
-
-function IconButton({
-  label,
-  onClick,
-  disabled,
-  children,
-}: {
-  label: string;
-  onClick: () => void;
-  disabled?: boolean;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      aria-label={label}
-      onClick={onClick}
-      disabled={disabled}
-      className="flex h-11 w-9 shrink-0 items-center justify-center rounded-xl text-muted disabled:opacity-30"
-    >
-      {children}
-    </button>
-  );
-}
-
-function BudgetCard({
-  data,
-  categoryLocked,
-  alertsOff,
-  onChange,
-}: {
-  data: BudgetsResponse;
-  categoryLocked: boolean;
-  alertsOff: boolean;
-  onChange: (
-    body: { mode?: "overall" | "category"; overall?: string | null },
-    done?: string,
-  ) => void;
-}) {
-  const [text, setText] = useState(
-    data.overall.amountSatang ? formatBaht(data.overall.amountSatang).replace(/,/g, "") : "",
-  );
-  const [error, setError] = useState<string | null>(null);
-
-  function saveOverall() {
-    const parsed = parseAmount(text);
-    if (!parsed.ok) return setError("จำนวนเงินไม่ถูกต้อง (เช่น 5000 หรือ 5000.50)");
-    setError(null);
-    onChange({ overall: parsed.value }, parsed.value ? "ตั้งงบแล้ว" : "ล้างงบแล้ว");
-  }
-
-  return (
-    <section className="space-y-3 rounded-2xl border border-border bg-surface p-4 shadow-card">
-      <div className="flex items-center justify-between">
-        <h2 className="font-semibold">งบประมาณ</h2>
-        <span className="text-xs text-muted">
-          {data.cycle === "weekly" ? "รายสัปดาห์" : "รายเดือน"}
-        </span>
-      </div>
-
-      <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="รูปแบบงบ">
-        {(
-          [
-            ["overall", "งบรวม"],
-            ["category", "แยกหมวด"],
-          ] as const
-        ).map(([value, label]) => (
-          <button
-            key={value}
-            type="button"
-            role="radio"
-            aria-checked={data.mode === value}
-            disabled={value === "category" && categoryLocked && data.mode !== "category"}
-            onClick={() => data.mode !== value && onChange({ mode: value })}
-            className={cn(
-              "h-11 rounded-2xl border text-sm font-semibold disabled:opacity-40",
-              data.mode === value
-                ? "border-primary bg-primary-soft text-primary"
-                : "border-border text-muted",
-            )}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-
-      {data.mode === "overall" ? (
-        <div className="space-y-2">
-          <div className="flex gap-2">
-            <input
-              value={text}
-              onChange={(e) => setText(e.target.value)}
-              inputMode="decimal"
-              placeholder="งบรวมต่อรอบ (บาท)"
-              aria-label="งบรวมต่อรอบ"
-              className="num h-11 min-w-0 flex-1 rounded-2xl border border-border bg-background px-4 outline-none focus:border-primary"
-            />
-            <button
-              type="button"
-              onClick={saveOverall}
-              className="h-11 rounded-2xl bg-primary px-4 text-sm font-semibold text-surface"
-            >
-              บันทึก
-            </button>
-          </div>
-          {error ? (
-            <p role="alert" className="text-sm text-expense">
-              {error}
-            </p>
-          ) : null}
-          {data.overall.amountSatang ? (
-            <ProgressBar
-              spentSatang={data.overall.spentSatang}
-              limitSatang={data.overall.amountSatang}
-            />
-          ) : (
-            <p className="text-xs text-muted">
-              ยังไม่ได้ตั้งงบ ใช้ไปแล้ว ฿{formatBaht(data.overall.spentSatang)} ในรอบนี้
-            </p>
-          )}
-        </div>
-      ) : (
-        <p className="text-xs text-muted">
-          ตั้งงบของแต่ละหมวดได้ที่รายการด้านล่าง เว้นว่างไว้ถ้าไม่ต้องการจำกัด
-        </p>
-      )}
-      {alertsOff || categoryLocked ? (
-        <PlusLock>
-          งบแยกหมวดและการแจ้งเตือนในแชทเมื่อใช้ถึง 80% / เกินงบ
-          {data.mode === "category" ? " (งบที่เคยตั้งไว้ยังอยู่ แก้ไขได้เมื่ออัปเกรด)" : ""}
-        </PlusLock>
-      ) : (
-        <p className="text-xs text-muted">จะแจ้งเตือนในแชทเมื่อใช้ถึง 80% และเมื่อเกินงบ</p>
-      )}
-    </section>
   );
 }
 
@@ -633,53 +282,6 @@ function DailyBudgetCard({
         <p className="text-xs text-muted">ถ้าวันนี้ใช้เกิน บอทจะเตือนในแชททันที เว้นว่างเพื่อปิด</p>
       )}
     </section>
-  );
-}
-
-function CategoryBudget({
-  name,
-  amountSatang,
-  spentSatang,
-  readOnly,
-  onSave,
-}: {
-  name: string;
-  amountSatang: number | null;
-  spentSatang: number;
-  readOnly: boolean;
-  onSave: (value: string | null) => void;
-}) {
-  const initial = amountSatang ? formatBaht(amountSatang).replace(/,/g, "") : "";
-  const [text, setText] = useState(initial);
-  const [error, setError] = useState<string | null>(null);
-
-  function commit() {
-    if (text === initial) return;
-    const parsed = parseAmount(text);
-    if (!parsed.ok) return setError("จำนวนเงินไม่ถูกต้อง");
-    setError(null);
-    onSave(parsed.value);
-  }
-
-  return (
-    <div className="space-y-2 pl-3.5">
-      <input
-        value={text}
-        onChange={(e) => setText(e.target.value)}
-        onBlur={commit}
-        disabled={readOnly}
-        inputMode="decimal"
-        placeholder="งบของหมวดนี้ (บาท)"
-        aria-label={`งบหมวด ${name}`}
-        className="num h-11 w-full rounded-2xl border border-border bg-background px-4 text-sm outline-none focus:border-primary disabled:opacity-60"
-      />
-      {error ? (
-        <p role="alert" className="text-xs text-expense">
-          {error}
-        </p>
-      ) : null}
-      {amountSatang ? <ProgressBar spentSatang={spentSatang} limitSatang={amountSatang} /> : null}
-    </div>
   );
 }
 
@@ -788,15 +390,757 @@ function AddSheet({
   );
 }
 
-function EditSheet({
+export default function BudgetsPage() {
+  const { api } = useLiff();
+  const [kind, setKind] = useState<Kind>("expense");
+  const cats = useApi<{ items: CategoryItem[] }>("/api/categories?all=1");
+  const budgets = useApi<BudgetsResponse>("/api/budgets");
+  const me = useApi<{ features: Record<string, boolean> }>("/api/me");
+  // Professional and above create and edit their own categories; the server checks it too.
+  const locked = !me.loading && me.data !== null && me.data?.features.customCategory !== true;
+  // Per-category budgets and the 80% / 100% warnings are Professional and above too.
+  const budgetLocked = !me.loading && me.data !== null && me.data?.features.categoryBudget !== true;
+  const dailyLocked = !me.loading && me.data !== null && me.data?.features.dailyBudget !== true;
+  const alertsOff = !me.loading && me.data !== null && me.data?.features.budgetAlert !== true;
+  const historyOn = me.data?.features.dashboard === true;
+  const [notice, setNotice] = useState<string | null>(null);
+  const [editing, setEditing] = useState<CategoryItem | null>(null);
+  const [adding, setAdding] = useState(false);
+  const [totalOpen, setTotalOpen] = useState(false);
+  const [ordering, setOrdering] = useState(false);
+  const [search, setSearch] = useState("");
+  const [tipOff, setTipOff] = useState(true); // hidden until we know (no flash for people who closed it)
+
+  useEffect(() => {
+    try {
+      setTipOff(window.localStorage.getItem(TIP_KEY) === "1");
+    } catch {
+      setTipOff(false);
+    }
+  }, []);
+
+  const all = useMemo(
+    () =>
+      (cats.data?.items ?? [])
+        .filter((c) => c.type === kind)
+        .sort((a, b) => a.sortOrder - b.sortOrder),
+    [cats.data, kind],
+  );
+  const term = search.trim().toLowerCase();
+  const list = term
+    ? all.filter(
+        (c) =>
+          c.name.toLowerCase().includes(term) ||
+          c.keywords.some((k) => k.toLowerCase().includes(term)),
+      )
+    : all;
+
+  function refresh() {
+    cats.reload();
+    budgets.reload();
+  }
+
+  async function run(action: () => Promise<unknown>, done?: string) {
+    setNotice(null);
+    try {
+      await action();
+      if (done) setNotice(done);
+      refresh();
+    } catch (e) {
+      setNotice(e instanceof Error ? e.message : "ทำรายการไม่สำเร็จ");
+    }
+  }
+
+  const putBudget = (body: Record<string, unknown>, done?: string) =>
+    run(() => api("/api/budgets", { method: "PUT", body: JSON.stringify(body) }), done);
+
+  const move = (id: string, delta: -1 | 1) => {
+    const index = all.findIndex((c) => c.id === id);
+    const target = index + delta;
+    if (index < 0 || target < 0 || target >= all.length) return;
+    const ids = all.map((c) => c.id);
+    const [moved] = ids.splice(index, 1);
+    if (!moved) return;
+    ids.splice(target, 0, moved);
+    void run(() =>
+      api("/api/categories/reorder", { method: "POST", body: JSON.stringify({ ids }) }),
+    );
+  };
+
+  const budgetOf = (categoryId: string) =>
+    budgets.data?.categories.find((b) => b.categoryId === categoryId);
+  const receivedOf = (categoryId: string) =>
+    budgets.data?.income?.find((r) => r.categoryId === categoryId)?.receivedSatang ?? 0;
+
+  const loading = cats.loading || (kind === "expense" && budgets.loading && !budgets.data);
+  const error = cats.error ?? (kind === "expense" ? budgets.error : null);
+
+  return (
+    <main>
+      <PageHeader title="จัดการหมวดและงบ" />
+
+      <div className="space-y-4 px-4 pb-4">
+        <div
+          role="tablist"
+          aria-label="ประเภทหมวด"
+          className="flex rounded-2xl border border-border bg-background p-1"
+        >
+          {(["expense", "income"] as const).map((k) => (
+            <button
+              key={k}
+              role="tab"
+              type="button"
+              aria-selected={kind === k}
+              onClick={() => {
+                setKind(k);
+                setSearch("");
+                setOrdering(false);
+              }}
+              className={cn(
+                "flex h-10 flex-1 items-center justify-center gap-1.5 rounded-xl text-xs",
+                kind === k ? "bg-surface font-semibold text-primary shadow-card" : "text-muted",
+              )}
+            >
+              <span
+                aria-hidden
+                className={cn(
+                  "h-2 w-2 rounded-full",
+                  k === "expense" ? "bg-expense" : "bg-primary",
+                )}
+              />
+              {k === "expense" ? "หมวดรายจ่าย" : "หมวดรายรับ"}
+            </button>
+          ))}
+        </div>
+
+        {notice ? (
+          <p role="status" className="rounded-2xl bg-primary-soft px-4 py-2 text-sm text-primary">
+            {notice}
+          </p>
+        ) : null}
+
+        {loading ? (
+          <BudgetsSkeleton />
+        ) : error ? (
+          <ErrorState message={error} onRetry={refresh} />
+        ) : (
+          <>
+            {kind === "expense" && budgets.data ? (
+              <>
+                <BudgetHero
+                  data={budgets.data}
+                  categoryLocked={budgetLocked}
+                  alertsOff={alertsOff}
+                  onMode={(mode) => putBudget({ mode })}
+                  onAdjust={() => setTotalOpen(true)}
+                />
+                {budgets.data.daily ? (
+                  <DailyBudgetCard
+                    daily={budgets.data.daily}
+                    locked={dailyLocked}
+                    onSave={(value) =>
+                      putBudget({ daily: value }, value ? "ตั้งงบรายวันแล้ว" : "ล้างงบรายวันแล้ว")
+                    }
+                  />
+                ) : null}
+                {tipOff ? null : (
+                  <section
+                    aria-label="คำแนะนำการตั้งงบ"
+                    className="relative flex items-start gap-3 rounded-2xl border border-border bg-primary-soft p-3.5"
+                  >
+                    <Sparkles className="mt-0.5 h-5 w-5 shrink-0 text-primary" aria-hidden />
+                    <div className="flex-1 pr-6">
+                      <p className="text-xs font-bold">คำแนะนำการตั้งงบ 50-30-20</p>
+                      <p className="mt-0.5 text-[11px] leading-relaxed text-primary">
+                        ลองจัดงบ 50% สำหรับของจำเป็น (ที่พัก อาหาร) 30% สำหรับความสุข และ 20%
+                        สำหรับเงินออม ช่วยให้คุมค่าใช้จ่ายได้สบายใจขึ้น
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      aria-label="ปิดคำแนะนำ"
+                      onClick={() => {
+                        setTipOff(true);
+                        try {
+                          window.localStorage.setItem(TIP_KEY, "1");
+                        } catch {
+                          /* it just comes back next time */
+                        }
+                      }}
+                      className="absolute right-1 top-1 flex h-9 w-9 items-center justify-center rounded-lg text-muted"
+                    >
+                      <X className="h-4 w-4" aria-hidden />
+                    </button>
+                  </section>
+                )}
+              </>
+            ) : null}
+
+            <section aria-label="จัดการรายการหมวด" className="space-y-2.5">
+              <div className="flex items-center gap-2">
+                <div className="relative min-w-0 flex-1">
+                  <Search
+                    className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted"
+                    aria-hidden
+                  />
+                  <input
+                    type="search"
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    placeholder="ค้นหาหมวดหมู่..."
+                    aria-label="ค้นหาหมวดหมู่"
+                    className="h-11 w-full rounded-xl border border-border bg-surface pl-9 pr-3 text-sm outline-none focus:border-primary"
+                  />
+                </div>
+                <button
+                  type="button"
+                  aria-pressed={ordering}
+                  onClick={() => setOrdering((v) => !v)}
+                  className={cn(
+                    "flex h-11 shrink-0 items-center gap-1 rounded-xl border px-2.5 text-xs font-medium",
+                    ordering
+                      ? "border-primary bg-primary-soft text-primary"
+                      : "border-border bg-surface text-muted",
+                  )}
+                >
+                  <ArrowUpDown className="h-3.5 w-3.5" aria-hidden />
+                  จัดเรียง
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAdding(true)}
+                  className="flex h-11 shrink-0 items-center gap-1 rounded-xl bg-primary px-3 text-xs font-semibold text-surface"
+                >
+                  {locked ? (
+                    <Lock className="h-3.5 w-3.5" aria-hidden />
+                  ) : (
+                    <Plus className="h-3.5 w-3.5" aria-hidden />
+                  )}
+                  เพิ่มหมวด
+                </button>
+              </div>
+              <div className="flex items-center justify-between px-1 text-[11px]">
+                <span className="text-muted">
+                  ทั้งหมด {all.length} หมวดหมู่{kind === "expense" ? "รายจ่าย" : "รายรับ"}
+                </span>
+                <span className="font-medium text-primary">
+                  {ordering ? "กดลูกศรเพื่อเลื่อนลำดับ" : "แตะหมวดหมู่เพื่อแก้ไขหรือตั้งงบ"}
+                </span>
+              </div>
+            </section>
+
+            {list.length === 0 ? (
+              <div className="rounded-2xl border border-border bg-surface shadow-card">
+                <EmptyState
+                  title={term ? "ไม่พบหมวดที่ค้นหา" : "ยังไม่มีหมวด"}
+                  hint={term ? "ลองใช้คำอื่นดูนะ" : "กด “เพิ่มหมวด” เพื่อสร้างหมวดของคุณเอง"}
+                />
+              </div>
+            ) : (
+              <ul className="space-y-2.5">
+                {list.map((c) => {
+                  const index = all.findIndex((x) => x.id === c.id);
+                  const b = budgetOf(c.id);
+                  const showBudget =
+                    kind === "expense" && budgets.data?.mode === "category" && !c.isHidden;
+                  return (
+                    <li
+                      key={c.id}
+                      className={cn(
+                        "rounded-2xl border border-border bg-surface shadow-card",
+                        c.isHidden && "opacity-60",
+                      )}
+                    >
+                      <div className="flex items-center">
+                        <button
+                          type="button"
+                          aria-label={`แก้ไข ${c.name}`}
+                          disabled={ordering}
+                          onClick={() => setEditing(c)}
+                          className="min-w-0 flex-1 p-3.5 text-left"
+                        >
+                          <span className="flex items-center gap-3">
+                            <Tile c={c} index={index} />
+                            <span className="min-w-0 flex-1">
+                              <span className="block truncate text-xs font-bold">
+                                {c.name}
+                                {c.own ? (
+                                  <span className="ml-2 rounded-full bg-primary-soft px-2 py-0.5 text-[10px] font-semibold text-primary">
+                                    ของฉัน
+                                  </span>
+                                ) : null}
+                              </span>
+                              <span className="block truncate text-[11px] text-muted">
+                                {c.isHidden
+                                  ? "ซ่อนอยู่"
+                                  : c.keywords.length
+                                    ? c.keywords.join(", ")
+                                    : "ยังไม่มีคำค้น"}
+                              </span>
+                            </span>
+                            <CategoryAmount
+                              kind={kind}
+                              showBudget={showBudget}
+                              budget={b}
+                              received={receivedOf(c.id)}
+                              spent={b?.spentSatang ?? 0}
+                            />
+                            {ordering ? null : (
+                              <ChevronRight className="h-4 w-4 shrink-0 text-muted" aria-hidden />
+                            )}
+                          </span>
+                          {showBudget && b?.amountSatang ? (
+                            <MiniBar spent={b.spentSatang} limit={b.amountSatang} name={c.name} />
+                          ) : null}
+                        </button>
+                        {ordering ? (
+                          <div className="flex shrink-0 pr-1.5">
+                            <IconButton
+                              label={`เลื่อน ${c.name} ขึ้น`}
+                              onClick={() => move(c.id, -1)}
+                              disabled={index === 0 || term !== ""}
+                            >
+                              <ArrowUp className="h-4 w-4" aria-hidden />
+                            </IconButton>
+                            <IconButton
+                              label={`เลื่อน ${c.name} ลง`}
+                              onClick={() => move(c.id, 1)}
+                              disabled={index === all.length - 1 || term !== ""}
+                            >
+                              <ArrowDown className="h-4 w-4" aria-hidden />
+                            </IconButton>
+                          </div>
+                        ) : null}
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </>
+        )}
+      </div>
+
+      {editing ? (
+        <CategorySheet
+          category={editing}
+          index={all.findIndex((c) => c.id === editing.id)}
+          locked={locked}
+          budget={
+            kind === "expense" && budgets.data?.mode === "category"
+              ? { amountSatang: budgetOf(editing.id)?.amountSatang ?? null, locked: budgetLocked }
+              : null
+          }
+          cycle={budgets.data?.cycle ?? "monthly"}
+          historyOn={historyOn && kind === "expense"}
+          onClose={() => setEditing(null)}
+          onSaved={(msg) => {
+            setEditing(null);
+            setNotice(msg);
+            refresh();
+          }}
+        />
+      ) : null}
+      {totalOpen && budgets.data ? (
+        <TotalBudgetSheet
+          amountSatang={budgets.data.overall.amountSatang}
+          onClose={() => setTotalOpen(false)}
+          onSave={(value) => {
+            setTotalOpen(false);
+            void putBudget({ overall: value }, value ? "ตั้งงบแล้ว" : "ล้างงบแล้ว");
+          }}
+        />
+      ) : null}
+      {adding && locked ? <CustomCategoryLockedSheet onClose={() => setAdding(false)} /> : null}
+      {adding && !locked ? (
+        <AddSheet
+          kind={kind}
+          onClose={() => setAdding(false)}
+          onSaved={() => {
+            setAdding(false);
+            setNotice("เพิ่มหมวดแล้ว");
+            refresh();
+          }}
+        />
+      ) : null}
+    </main>
+  );
+}
+
+/** The dark olive card at the top: budget, how much is used, the budget mode and the cycle. */
+function BudgetHero({
+  data,
+  categoryLocked,
+  alertsOff,
+  onMode,
+  onAdjust,
+}: {
+  data: BudgetsResponse;
+  categoryLocked: boolean;
+  alertsOff: boolean;
+  onMode: (mode: "overall" | "category") => void;
+  onAdjust: () => void;
+}) {
+  const [menu, setMenu] = useState(false);
+  const total =
+    data.mode === "overall"
+      ? data.overall.amountSatang
+      : data.categories.reduce((s, c) => s + (c.amountSatang ?? 0), 0) || null;
+  const spent = data.overall.spentSatang;
+  const pct = total ? percentUsed(spent, total) : 0;
+  const state = total ? budgetState(spent, total) : "ok";
+  const remaining = total ? total - spent : null;
+  const per = data.cycle === "weekly" ? "สัปดาห์" : "เดือน";
+  const modeText = data.mode === "overall" ? "รวมก้อนเดียว" : "แยกตามหมวด";
+
+  return (
+    <section
+      aria-label="งบประมาณ"
+      className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[var(--hero-from)] to-[var(--hero-to)] p-5 text-white shadow-card"
+    >
+      <div
+        aria-hidden
+        className="pointer-events-none absolute -right-6 -top-6 h-32 w-32 rounded-full bg-[var(--hero-glow)]/20 blur-2xl"
+      />
+      <div className="relative space-y-3">
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-xs font-medium text-white/90">งบประมาณประจำ{per}</p>
+          <div className="relative">
+            <button
+              type="button"
+              aria-haspopup="menu"
+              aria-expanded={menu}
+              onClick={() => setMenu((v) => !v)}
+              className="flex h-9 items-center gap-1.5 rounded-xl border border-white/25 bg-white/15 px-3 text-xs font-medium text-white"
+            >
+              {modeText}
+              <ChevronDown className="h-3 w-3 text-[var(--hero-glow)]" aria-hidden />
+            </button>
+            {menu ? (
+              <div
+                role="menu"
+                aria-label="รูปแบบงบ"
+                className="absolute right-0 z-20 mt-1.5 w-40 overflow-hidden rounded-xl border border-border bg-surface py-1 text-xs text-foreground shadow-card"
+              >
+                {(
+                  [
+                    ["category", "แยกตามหมวด"],
+                    ["overall", "รวมก้อนเดียว"],
+                  ] as const
+                ).map(([value, label]) => (
+                  <button
+                    key={value}
+                    type="button"
+                    role="menuitemradio"
+                    aria-checked={data.mode === value}
+                    disabled={value === "category" && categoryLocked && data.mode !== "category"}
+                    onClick={() => {
+                      setMenu(false);
+                      if (data.mode !== value) onMode(value);
+                    }}
+                    className="flex h-10 w-full items-center justify-between px-3 text-left disabled:opacity-40"
+                  >
+                    {label}
+                    {data.mode === value ? (
+                      <Check className="h-3.5 w-3.5 text-primary" aria-hidden />
+                    ) : null}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+          </div>
+        </div>
+
+        <div className="flex items-end justify-between gap-2">
+          <div className="min-w-0">
+            <p className="text-xs text-white/85">ยอดงบที่ตั้งไว้ทั้งหมด</p>
+            <p className="num mt-0.5 truncate text-2xl font-bold">
+              {total ? `฿${formatBaht(total)}` : "ยังไม่ตั้ง"}
+              {total ? (
+                <span className="ml-1.5 text-xs font-normal text-white/85">/ {per}</span>
+              ) : null}
+            </p>
+          </div>
+          {data.mode === "overall" ? (
+            <button
+              type="button"
+              onClick={onAdjust}
+              className="flex h-9 shrink-0 items-center gap-1.5 rounded-xl bg-[var(--hero-glow)] px-3 text-xs font-semibold text-[#2b2410]"
+            >
+              {total ? "ปรับงบ" : "ตั้งงบ"}
+            </button>
+          ) : null}
+        </div>
+
+        {total ? (
+          <div className="space-y-1.5">
+            <div className="flex justify-between gap-2 text-[11px] text-white/90">
+              <span className="num">
+                ใช้ไปแล้ว ฿{formatBaht(spent)} ({pct}%)
+              </span>
+              <span className="num font-medium text-[var(--hero-glow)]">
+                {remaining !== null && remaining < 0
+                  ? `เกินงบ ฿${formatBaht(-remaining)}`
+                  : `เหลือ ฿${formatBaht(remaining ?? 0)}`}
+              </span>
+            </div>
+            <div
+              role="progressbar"
+              aria-label="การใช้งบ"
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-valuenow={Math.min(pct, 100)}
+              className="h-2.5 overflow-hidden rounded-full bg-black/25 p-0.5"
+            >
+              <div
+                className="h-full rounded-full bg-[var(--hero-glow)]"
+                style={{ width: `${Math.min(pct, 100)}%` }}
+              />
+            </div>
+            {state !== "ok" ? (
+              <p className="text-[11px] font-medium text-white">
+                {state === "over" ? "ครบงบแล้ว" : "ใกล้ครบงบ"}
+              </p>
+            ) : null}
+          </div>
+        ) : (
+          <p className="text-xs text-white/85">
+            {data.mode === "overall"
+              ? `ยังไม่ได้ตั้งงบ ใช้ไปแล้ว ฿${formatBaht(spent)} ในรอบนี้`
+              : "ตั้งงบของแต่ละหมวดได้ที่การ์ดด้านล่าง เว้นว่างไว้ถ้าไม่ต้องการจำกัด"}
+          </p>
+        )}
+
+        <div className="flex items-center justify-between gap-2 border-t border-white/15 pt-2 text-xs text-white/90">
+          <span>
+            รอบงบ:{" "}
+            <strong className="font-medium text-white">
+              {data.cycle === "weekly"
+                ? "ทุกวันจันทร์"
+                : `ทุกวันที่ ${data.cycleStartDay ?? 1} ของเดือน`}
+            </strong>
+          </span>
+          <Link
+            href="/settings"
+            className="flex h-8 items-center gap-1 font-medium text-[var(--hero-glow)]"
+          >
+            ตั้งค่า
+            <Settings2 className="h-3 w-3" aria-hidden />
+          </Link>
+        </div>
+
+        {alertsOff || categoryLocked ? (
+          <div className="rounded-2xl bg-surface text-foreground">
+            <PlusLock>
+              งบแยกหมวดและการแจ้งเตือนในแชทเมื่อใช้ถึง 80% / เกินงบ
+              {data.mode === "category" ? " (งบที่เคยตั้งไว้ยังอยู่ แก้ไขได้เมื่ออัปเกรด)" : ""}
+            </PlusLock>
+          </div>
+        ) : (
+          <p className="text-[11px] text-white/85">
+            จะแจ้งเตือนในแชทเมื่อใช้ถึง 80% และเมื่อเกินงบ
+          </p>
+        )}
+      </div>
+    </section>
+  );
+}
+
+/** The figures on the right of a category card. */
+function CategoryAmount({
+  kind,
+  showBudget,
+  budget,
+  received,
+  spent,
+}: {
+  kind: Kind;
+  showBudget: boolean;
+  budget: BudgetsResponse["categories"][number] | undefined;
+  received: number;
+  spent: number;
+}) {
+  if (kind === "income") {
+    return received > 0 ? (
+      <span className="shrink-0 text-right">
+        <span className="num block text-xs font-bold text-income">+฿{formatBaht(received)}</span>
+        <span className="block text-[10px] text-muted">รอบนี้</span>
+      </span>
+    ) : (
+      <span className="shrink-0 text-[10px] text-muted">ยังไม่มีรายรับ</span>
+    );
+  }
+  if (showBudget && budget?.amountSatang) {
+    const limit = budget.amountSatang;
+    const left = limit - spent;
+    const state = budgetState(spent, limit);
+    const chip =
+      left < 0
+        ? { text: `เกินงบ ฿${formatBaht(-left)}`, cls: "bg-expense/10 text-expense" }
+        : left === 0
+          ? { text: "เต็มงบแล้ว", cls: "bg-expense/10 text-expense" }
+          : {
+              text: `เหลือ ฿${formatBaht(left)}`,
+              cls: state === "warn" ? "bg-warn-soft text-warn" : "bg-primary-soft text-primary",
+            };
+    return (
+      <span className="shrink-0 space-y-0.5 text-right">
+        <span className="num block text-xs font-bold">
+          ฿{formatBaht(spent)}{" "}
+          <span className="text-[10px] font-normal text-muted">/ ฿{formatBaht(limit)}</span>
+        </span>
+        <span
+          className={cn("inline-block rounded px-1.5 py-0.5 text-[10px] font-medium", chip.cls)}
+        >
+          {chip.text}
+        </span>
+      </span>
+    );
+  }
+  return (
+    <span className="shrink-0 text-right">
+      <span className="num block text-xs font-semibold">฿{formatBaht(spent)}</span>
+      <span className="block text-[10px] text-muted">{showBudget ? "ไม่ได้ตั้งงบ" : "รอบนี้"}</span>
+    </span>
+  );
+}
+
+function MiniBar({ spent, limit, name }: { spent: number; limit: number; name: string }) {
+  const pct = Math.min(100, percentUsed(spent, limit));
+  const state = budgetState(spent, limit);
+  return (
+    <span
+      role="progressbar"
+      aria-label={`การใช้งบหมวด ${name}`}
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-valuenow={pct}
+      className="mt-2 block h-1.5 overflow-hidden rounded-full bg-border"
+    >
+      <span
+        className={cn(
+          "block h-full rounded-full",
+          state === "over" ? "bg-expense" : state === "warn" ? "bg-accent" : "bg-primary",
+        )}
+        style={{ width: `${pct}%` }}
+      />
+    </span>
+  );
+}
+
+function IconButton({
+  label,
+  onClick,
+  disabled,
+  children,
+}: {
+  label: string;
+  onClick: () => void;
+  disabled?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      onClick={onClick}
+      disabled={disabled}
+      className="flex h-11 w-9 shrink-0 items-center justify-center rounded-xl text-muted disabled:opacity-30"
+    >
+      {children}
+    </button>
+  );
+}
+
+/** What the page looks like while its numbers load. */
+function BudgetsSkeleton() {
+  return (
+    <div role="status" aria-label="กำลังโหลด" className="space-y-4">
+      <Skeleton className="h-52 w-full rounded-3xl" />
+      <Skeleton className="h-11 w-full" />
+      {[0, 1, 2, 3].map((i) => (
+        <Skeleton key={i} className="h-[4.5rem] w-full" />
+      ))}
+    </div>
+  );
+}
+
+/** "ปรับงบ": the one budget for the whole cycle. */
+function TotalBudgetSheet({
+  amountSatang,
+  onClose,
+  onSave,
+}: {
+  amountSatang: number | null;
+  onClose: () => void;
+  onSave: (value: string | null) => void;
+}) {
+  const [text, setText] = useState(amountSatang ? formatBaht(amountSatang).replace(/,/g, "") : "");
+  const [error, setError] = useState<string | null>(null);
+
+  function submit(e: FormEvent) {
+    e.preventDefault();
+    const parsed = parseAmount(text);
+    if (!parsed.ok) return setError("จำนวนเงินไม่ถูกต้อง (เช่น 5000 หรือ 5000.50)");
+    onSave(parsed.value);
+  }
+
+  return (
+    <Sheet title="งบรวมต่อรอบ" onClose={onClose}>
+      <form onSubmit={submit} className="space-y-3">
+        <div className="relative">
+          <span
+            aria-hidden
+            className="num absolute left-4 top-1/2 -translate-y-1/2 text-sm font-bold text-muted"
+          >
+            ฿
+          </span>
+          <input
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            inputMode="decimal"
+            placeholder="ไม่ตั้งงบประมาณ"
+            aria-label="งบรวมต่อรอบ"
+            className="num h-12 w-full rounded-2xl border border-border bg-background pl-9 pr-4 text-sm font-bold outline-none focus:border-primary"
+          />
+        </div>
+        <p className="text-[11px] text-muted">ปล่อยว่างไว้ถ้าไม่ต้องการจำกัดงบ</p>
+        <QuickAmounts onAdd={(n) => setText((t) => addToAmount(t, n))} />
+        {error ? (
+          <p role="alert" className="text-sm text-expense">
+            {error}
+          </p>
+        ) : null}
+        <button
+          type="submit"
+          className="h-12 w-full rounded-2xl bg-primary text-base font-semibold text-surface"
+        >
+          บันทึก
+        </button>
+      </form>
+    </Sheet>
+  );
+}
+
+/** One category: name, keywords, its budget (expense, per-category mode), six-month history, hide, delete. */
+function CategorySheet({
   category,
+  index,
   locked,
+  budget,
+  cycle,
+  historyOn,
   onClose,
   onSaved,
 }: {
   category: CategoryItem;
+  index: number;
   /** Free cannot change what an own category is; it can still be deleted. */
   locked: boolean;
+  /** Null when budgets are not per category; `locked` makes the field read only (Free). */
+  budget: { amountSatang: number | null; locked: boolean } | null;
+  cycle: "monthly" | "weekly";
+  historyOn: boolean;
   onClose: () => void;
   onSaved: (message: string) => void;
 }) {
@@ -805,9 +1149,18 @@ function EditSheet({
   const [keywords, setKeywords] = useState(category.keywords.join(", "));
   const [color, setColor] = useState(category.color ?? SWATCHES[0] ?? "#0F766E");
   const [emoji, setEmoji] = useState(category.emoji ?? "");
+  const initialBudget = budget?.amountSatang
+    ? formatBaht(budget.amountSatang).replace(/,/g, "")
+    : "";
+  const [budgetText, setBudgetText] = useState(initialBudget);
+  const [hidden, setHidden] = useState(category.isHidden);
   const [busy, setBusy] = useState(false);
   const frozen = category.own && locked;
   const [error, setError] = useState<string | null>(null);
+  const history = useApi<{
+    series: { start: string; totalSatang: number }[];
+    averageSatang: number;
+  }>(historyOn ? `/api/budgets/history?categoryId=${category.id}` : null);
 
   async function save(e: FormEvent) {
     e.preventDefault();
@@ -815,6 +1168,8 @@ function EditSheet({
     if (category.own && emoji !== "" && !isSingleEmoji(emoji)) {
       return setError("ใส่ได้เป็นอีโมจิตัวเดียวเท่านั้นนะ");
     }
+    const parsed = parseAmount(budgetText);
+    if (budget && !budget.locked && !parsed.ok) return setError("จำนวนเงินไม่ถูกต้อง");
     setBusy(true);
     setError(null);
     try {
@@ -824,7 +1179,14 @@ function EditSheet({
         body.color = color;
         if (emoji !== (category.emoji ?? "")) body.emoji = emoji;
       }
+      if (hidden !== category.isHidden) body.isHidden = hidden;
       await api(`/api/categories/${category.id}`, { method: "PATCH", body: JSON.stringify(body) });
+      if (budget && !budget.locked && budgetText.trim() !== initialBudget && parsed.ok) {
+        await api("/api/budgets", {
+          method: "PUT",
+          body: JSON.stringify({ categories: [{ categoryId: category.id, amount: parsed.value }] }),
+        });
+      }
       onSaved("บันทึกแล้ว");
     } catch (err) {
       setError(err instanceof Error ? err.message : "บันทึกไม่สำเร็จ");
@@ -846,46 +1208,154 @@ function EditSheet({
     }
   }
 
+  const points = (history.data?.series ?? []).map((p) => ({
+    label: formatThaiMonthShort(new Date(p.start)),
+    value: p.totalSatang / 100,
+  }));
+
   return (
     <Sheet title="แก้ไขหมวด" onClose={onClose}>
-      <form onSubmit={save} className="space-y-3">
-        <input
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          disabled={!category.own || frozen}
-          maxLength={30}
-          aria-label="ชื่อหมวด"
-          className={cn(fieldClass, (!category.own || frozen) && "opacity-60")}
-        />
-        {frozen ? (
-          <p className="text-xs text-muted">
-            แก้หมวดของตัวเองได้ในแผน Professional ขึ้นไป{" "}
-            <Link href="/upgrade" className="font-semibold text-primary underline">
-              ดูแผน
-            </Link>{" "}
-            (ลบหมวดนี้ได้ตามปกติ)
-          </p>
+      <form onSubmit={save} className="space-y-4">
+        <div className="space-y-1.5">
+          <p className="text-xs font-semibold">ชื่อหมวดหมู่</p>
+          <div className="flex gap-2">
+            <Tile
+              c={{ ...category, emoji: category.own ? emoji || null : category.emoji }}
+              index={index}
+            />
+            <input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              disabled={!category.own || frozen}
+              maxLength={30}
+              aria-label="ชื่อหมวด"
+              className={cn(fieldClass, "h-10 text-sm", (!category.own || frozen) && "opacity-60")}
+            />
+          </div>
+          {frozen ? (
+            <p className="text-xs text-muted">
+              แก้หมวดของตัวเองได้ในแผน Professional ขึ้นไป{" "}
+              <Link href="/upgrade" className="font-semibold text-primary underline">
+                ดูแผน
+              </Link>{" "}
+              (ลบหมวดนี้ได้ตามปกติ)
+            </p>
+          ) : null}
+          {!category.own ? (
+            <p className="text-xs text-muted">หมวดมาตรฐานแก้ชื่อไม่ได้ แต่ปรับคำค้นได้นะ</p>
+          ) : null}
+        </div>
+
+        {budget ? (
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <label htmlFor="cat-budget" className="text-xs font-semibold">
+                งบประมาณประจำ{cycle === "weekly" ? "สัปดาห์" : "เดือน"}
+              </label>
+            </div>
+            <div className="relative">
+              <span
+                aria-hidden
+                className="num absolute left-4 top-1/2 -translate-y-1/2 text-sm font-bold text-muted"
+              >
+                ฿
+              </span>
+              <input
+                id="cat-budget"
+                value={budgetText}
+                onChange={(e) => setBudgetText(e.target.value)}
+                disabled={budget.locked}
+                inputMode="decimal"
+                placeholder="ไม่ตั้งงบประมาณ"
+                aria-label={`งบหมวด ${category.name}`}
+                className="num h-12 w-full rounded-2xl border border-border bg-background pl-9 pr-4 text-sm font-bold outline-none focus:border-primary disabled:opacity-60"
+              />
+            </div>
+            {budget.locked ? (
+              <PlusLock>งบแยกหมวดและการแจ้งเตือนเมื่อใช้ถึง 80% / เกินงบ</PlusLock>
+            ) : (
+              <>
+                <p className="text-[11px] text-muted">
+                  ปล่อยว่างไว้หากไม่ต้องการจำกัดงบสำหรับหมวดหมู่นี้
+                </p>
+                <QuickAmounts onAdd={(n) => setBudgetText((t) => addToAmount(t, n))} />
+              </>
+            )}
+          </div>
         ) : null}
-        {!category.own ? (
-          <p className="text-xs text-muted">หมวดมาตรฐานแก้ชื่อไม่ได้ แต่ปรับคำค้นได้นะ</p>
+
+        {historyOn ? (
+          <div className="space-y-2 rounded-2xl border border-border bg-background p-3.5">
+            <div className="flex items-center justify-between text-xs">
+              <span className="font-medium">ประวัติใช้จ่ายย้อนหลัง 6 เดือน</span>
+              {history.data ? (
+                <span className="num text-[11px] font-semibold text-primary">
+                  เฉลี่ย ฿{formatBaht(history.data.averageSatang)}/ด.
+                </span>
+              ) : null}
+            </div>
+            <div className="h-24 w-full">
+              {history.loading ? (
+                <Skeleton className="h-full w-full" />
+              ) : history.error ? (
+                <p className="text-xs text-muted">โหลดประวัติไม่สำเร็จ</p>
+              ) : (
+                <MiniBarChart points={points} />
+              )}
+            </div>
+          </div>
         ) : null}
-        <textarea
-          value={keywords}
-          onChange={(e) => setKeywords(e.target.value)}
-          placeholder="คำค้น คั่นด้วยคอมมา"
-          aria-label="คำค้น"
-          rows={3}
-          disabled={frozen}
-          className="w-full rounded-2xl border border-border bg-background p-4 outline-none focus:border-primary disabled:opacity-60"
-        />
+
+        <div className="space-y-1.5">
+          <label htmlFor="cat-keywords" className="text-xs font-semibold">
+            คำค้นสำหรับจัดหมวดอัตโนมัติ
+          </label>
+          <textarea
+            id="cat-keywords"
+            value={keywords}
+            onChange={(e) => setKeywords(e.target.value)}
+            placeholder="คำค้น คั่นด้วยคอมมา"
+            aria-label="คำค้น"
+            rows={3}
+            disabled={frozen}
+            className="w-full rounded-2xl border border-border bg-background p-4 outline-none focus:border-primary disabled:opacity-60"
+          />
+        </div>
         {category.own && !frozen ? <EmojiPicker value={emoji} onChange={setEmoji} /> : null}
         {category.own && !frozen ? <ColorPicker value={color} onChange={setColor} /> : null}
+
+        {!category.isFallback ? (
+          <button
+            type="button"
+            role="switch"
+            aria-checked={hidden}
+            onClick={() => setHidden((v) => !v)}
+            className="flex h-12 w-full items-center justify-between rounded-2xl border border-border px-4 text-sm"
+          >
+            <span>ซ่อนหมวดนี้จากรายการเลือก</span>
+            <span
+              aria-hidden
+              className={cn(
+                "relative h-6 w-11 rounded-full transition-colors",
+                hidden ? "bg-primary" : "bg-border",
+              )}
+            >
+              <span
+                className={cn(
+                  "absolute top-0.5 h-5 w-5 rounded-full bg-surface shadow transition-all",
+                  hidden ? "left-[1.375rem]" : "left-0.5",
+                )}
+              />
+            </span>
+          </button>
+        ) : null}
+
         {error ? (
           <p role="alert" className="text-sm text-expense">
             {error}
           </p>
         ) : null}
-        {frozen ? null : (
+        {frozen && !budget ? null : (
           <button
             type="submit"
             disabled={busy}

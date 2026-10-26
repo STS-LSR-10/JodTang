@@ -59,13 +59,13 @@ export function ProTeaser({ variant }: { variant: keyof typeof COPY }) {
 
       <section
         aria-label="ฟีเจอร์ของแผน Professional"
-        className="relative z-10 w-full space-y-4 rounded-3xl border border-amber-200 bg-surface/95 p-6 text-center shadow-card backdrop-blur"
+        className="relative z-10 w-full space-y-4 rounded-3xl border border-warn/30 bg-surface/95 p-6 text-center shadow-card backdrop-blur"
       >
-        <div className="inline-flex rounded-2xl border border-amber-200 bg-amber-50 p-3 text-amber-600">
+        <div className="inline-flex rounded-2xl border border-warn/30 bg-warn-soft p-3 text-warn">
           <Crown className="h-7 w-7" aria-hidden />
         </div>
         <div className="space-y-1">
-          <span className="inline-block rounded-full border border-amber-200 bg-amber-50 px-2.5 py-0.5 text-[11px] font-bold text-amber-700">
+          <span className="inline-block rounded-full border border-warn/30 bg-warn-soft px-2.5 py-0.5 text-[11px] font-bold text-warn">
             สำหรับแผน Professional
           </span>
           <h2 className="text-base font-bold">{copy.title}</h2>

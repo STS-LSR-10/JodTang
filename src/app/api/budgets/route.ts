@@ -33,7 +33,7 @@ export async function GET(request: Request): Promise<Response> {
     const range = cycleRange(new Date(), settings.budget_cycle, settings.cycle_start_day);
     const today = dayRange(new Date());
 
-    const [mode, budgets, categories, spend, spentToday] = await Promise.all([
+    const [mode, budgets, categories, spend, spentToday, incomeSpend] = await Promise.all([
       getBudgetMode(db, auth.userId),
       loadBudgets(db, auth.userId),
       loadCategories(db, auth.userId),
@@ -44,8 +44,16 @@ export async function GET(request: Request): Promise<Response> {
         p_type: "expense",
       }),
       expenseTotalSatang(db, { userId: auth.userId, from: today.from, to: today.to }),
+      // what came in this cycle, per income category (the income tab of the page)
+      db.rpc("spend_by_category", {
+        p_user: auth.userId,
+        p_from: range.from.toISOString(),
+        p_to: range.to.toISOString(),
+        p_type: "income",
+      }),
     ]);
     if (spend.error) throw new Error(`spend: ${spend.error.message}`);
+    if (incomeSpend.error) throw new Error(`income: ${incomeSpend.error.message}`);
 
     const spentBy = new Map<string | null, number>();
     let overallSpent = 0;
@@ -59,6 +67,7 @@ export async function GET(request: Request): Promise<Response> {
     return json({
       mode,
       cycle: settings.budget_cycle,
+      cycleStartDay: settings.cycle_start_day,
       range: { from: range.from.toISOString(), to: range.to.toISOString() },
       overall: { amountSatang: budgetBy.get(null) ?? null, spentSatang: overallSpent },
       daily: {
@@ -68,6 +77,9 @@ export async function GET(request: Request): Promise<Response> {
             : toSatang(settings.daily_budget),
         spentSatang: spentToday,
       },
+      income: ((incomeSpend.data ?? []) as SpendRow[])
+        .filter((r) => r.category_id !== null)
+        .map((r) => ({ categoryId: r.category_id as string, receivedSatang: toSatang(r.total) })),
       categories: categories
         .filter((c) => c.type === "expense" && !c.is_hidden)
         .sort((a, b) => a.sort_order - b.sort_order)

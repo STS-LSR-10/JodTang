@@ -11,6 +11,13 @@
   --muted: #64748b;
   --border: #e2e8f0;
   --radius: 16px;
+  /* a warning chip (near the budget): text and tint */
+  --warn: #b45309;
+  --warn-soft: #fef3c7;
+  /* the dark gradient card at the top of a page */
+  --hero-from: #0f766e;
+  --hero-to: #115e59;
+  --hero-glow: #fbbf24;
 }
 
 .dark {
@@ -24,6 +31,52 @@
   --foreground: #e2e8f0;
   --muted: #94a3b8;
   --border: #1e293b;
+  --warn: #fbbf24;
+  --warn-soft: #3a2c0a;
+  --hero-from: #115e59;
+  --hero-to: #0b3b38;
+  --hero-glow: #fbbf24;
+}
+
+/*
+ * The olive-and-turmeric look: switched on (data-theme on <html>) for the summary, analytics and
+ * budgets pages by <ThemeScope>. Every colour token is redefined, so the components keep using the
+ * same classes. Text colours are picked to stay at WCAG AA on white and on their own tints.
+ */
+[data-theme="olive"] {
+  --primary: #4c652d;
+  --primary-soft: #e9efe0;
+  --accent: #d49b28;
+  --expense: #b5402b;
+  --income: #44702a;
+  --background: #faf9f6;
+  --surface: #ffffff;
+  --foreground: #1f2617;
+  --muted: #5f6357;
+  --border: #e7e2d6;
+  --warn: #8a5f10;
+  --warn-soft: #fdf3da;
+  --hero-from: #4c652d;
+  --hero-to: #374921;
+  --hero-glow: #e5a52a;
+}
+
+.dark[data-theme="olive"] {
+  --primary: #9bbd72;
+  --primary-soft: #2a3818;
+  --accent: #e5a52a;
+  --expense: #f0846c;
+  --income: #9bbd72;
+  --background: #12150e;
+  --surface: #1a1f14;
+  --foreground: #ecefe6;
+  --muted: #a3a99a;
+  --border: #2f3626;
+  --warn: #f0c05a;
+  --warn-soft: #3a2c0a;
+  --hero-from: #4c652d;
+  --hero-to: #2a3818;
+  --hero-glow: #e5a52a;
 }
 
 body {

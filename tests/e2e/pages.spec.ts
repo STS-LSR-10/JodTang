@@ -279,8 +279,9 @@ test.describe("budgets page (360px)", () => {
     await page.goto("/budgets");
 
     await expect(page.getByRole("progressbar", { name: "การใช้งบ" })).toBeVisible();
-    await expect(page.getByText(/ใช้ไป ฿8,500 จาก ฿10,000 \(85%\)/)).toBeVisible();
-    await expect(page.getByText(/ใกล้ครบงบ/)).toBeVisible();
+    await expect(page.getByText("ใช้ไปแล้ว ฿8,500 (85%)")).toBeVisible();
+    await expect(page.getByText("เหลือ ฿1,500")).toBeVisible();
+    await expect(page.getByText("ใกล้ครบงบ")).toBeVisible();
     await expectNoHorizontalScroll(page);
   });
 
@@ -312,7 +313,7 @@ test.describe("category budgets are Professional and above (360px)", () => {
   };
   const FOOD = { items: [CATEGORIES.items[0]] };
 
-  test("Free: the แยกหมวด choice is off and the upgrade note shows; the overall budget works", async ({
+  test("Free: the แยกตามหมวด choice is off and the upgrade note shows; the overall budget works", async ({
     page,
   }) => {
     await mockApi(page, {
@@ -322,8 +323,10 @@ test.describe("category budgets are Professional and above (360px)", () => {
     });
     await page.goto("/budgets");
 
-    await expect(page.getByRole("radio", { name: "แยกหมวด" })).toBeDisabled();
-    await expect(page.getByRole("radio", { name: "งบรวม" })).toBeEnabled();
+    await page.getByRole("button", { name: /รวมก้อนเดียว/ }).click();
+    await expect(page.getByRole("menuitemradio", { name: "แยกตามหมวด" })).toBeDisabled();
+    await expect(page.getByRole("menuitemradio", { name: "รวมก้อนเดียว" })).toBeEnabled();
+    await page.keyboard.press("Escape");
     await expect(page.getByText("สำหรับแผน Professional").first()).toBeVisible();
     await expect(page.getByRole("progressbar", { name: "การใช้งบ" })).toBeVisible();
   });
@@ -336,13 +339,47 @@ test.describe("category budgets are Professional and above (360px)", () => {
     });
     await page.goto("/budgets");
 
-    const field = page.getByLabel("งบหมวด อาหาร");
+    await page.getByRole("button", { name: "แก้ไข อาหาร" }).click();
+    const field = page.getByLabel("งบหมวด อาหาร", { exact: true });
     await expect(field).toBeDisabled();
     await expect(field).toHaveValue("3000");
-    await expect(page.getByRole("radio", { name: "งบรวม" })).toBeEnabled();
   });
 
-  test("Professional: the แยกหมวด choice and the budget field are open", async ({ page }) => {
+  test("Professional: the แยกตามหมวด choice and the budget field are open, quick amounts add up", async ({
+    page,
+  }) => {
+    const bodies: unknown[] = [];
+    await mockApi(page, {
+      "GET /api/budgets": CATEGORY_MODE,
+      "GET /api/categories": FOOD,
+      "GET /api/me": ME_PLUS,
+      "PATCH /api/categories/a": { ok: true },
+      "PUT /api/budgets": async (route: Route) => {
+        bodies.push(route.request().postDataJSON());
+        return { ok: true };
+      },
+    });
+    await page.goto("/budgets");
+
+    await expect(page.getByText("จะแจ้งเตือนในแชทเมื่อใช้ถึง 80%")).toBeVisible();
+    await page.getByRole("button", { name: /แยกตามหมวด/ }).click();
+    await expect(page.getByRole("menuitemradio", { name: "แยกตามหมวด" })).toBeEnabled();
+    await page.keyboard.press("Escape");
+
+    await page.getByRole("button", { name: "แก้ไข อาหาร" }).click();
+    const dialog = page.getByRole("dialog", { name: "แก้ไขหมวด" });
+    const field = dialog.getByLabel("งบหมวด อาหาร");
+    await expect(field).toBeEnabled();
+    await dialog.getByRole("button", { name: "+฿500" }).click();
+    await expect(field).toHaveValue("3500");
+    await dialog.getByRole("button", { name: "บันทึก" }).click();
+    await expect.poll(() => bodies.length).toBe(1);
+    expect(bodies[0]).toEqual({ categories: [{ categoryId: "a", amount: "3500" }] });
+  });
+
+  test("the card shows spent / budget, what is left and a bar; the totals add up in the hero", async ({
+    page,
+  }) => {
     await mockApi(page, {
       "GET /api/budgets": CATEGORY_MODE,
       "GET /api/categories": FOOD,
@@ -350,9 +387,59 @@ test.describe("category budgets are Professional and above (360px)", () => {
     });
     await page.goto("/budgets");
 
-    await expect(page.getByRole("radio", { name: "แยกหมวด" })).toBeEnabled();
-    await expect(page.getByLabel("งบหมวด อาหาร")).toBeEnabled();
-    await expect(page.getByText("จะแจ้งเตือนในแชทเมื่อใช้ถึง 80%")).toBeVisible();
+    await expect(page.getByText("฿3,000").first()).toBeVisible(); // budget total = the one category
+    await expect(page.getByText("เหลือ ฿2,000")).toBeVisible(); // 3,000 − 1,000 on the card
+    await expect(page.getByRole("progressbar", { name: "การใช้งบหมวด อาหาร" })).toHaveAttribute(
+      "aria-valuenow",
+      "33",
+    );
+    await expectNoHorizontalScroll(page);
+  });
+
+  test("search filters the list; the sort button shows arrows", async ({ page }) => {
+    await mockApi(page, {
+      "GET /api/budgets": BUDGETS,
+      "GET /api/categories": CATEGORIES,
+      "GET /api/me": ME_PLUS,
+    });
+    await page.goto("/budgets");
+    await page.getByLabel("ค้นหาหมวดหมู่").fill("ข้าว"); // a keyword of อาหาร
+    await expect(page.getByRole("button", { name: "แก้ไข อาหาร" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "แก้ไข อื่นๆ" })).toHaveCount(0);
+    await page.getByLabel("ค้นหาหมวดหมู่").fill("zzz");
+    await expect(page.getByText("ไม่พบหมวดที่ค้นหา")).toBeVisible();
+    await page.getByLabel("ค้นหาหมวดหมู่").fill("");
+    await page.getByRole("button", { name: "จัดเรียง" }).click();
+    await expect(page.getByRole("button", { name: "เลื่อน อื่นๆ ขึ้น" })).toBeVisible();
+  });
+
+  test("income tab: what came in this cycle per category, no budget hero", async ({ page }) => {
+    await mockApi(page, {
+      "GET /api/budgets": {
+        ...BUDGETS,
+        income: [{ categoryId: "inc", receivedSatang: 3_500_000 }],
+      },
+      "GET /api/categories": {
+        items: [
+          {
+            id: "inc",
+            type: "income",
+            name: "เงินเดือน",
+            own: false,
+            keywords: [],
+            color: "#059669",
+            isHidden: false,
+            sortOrder: 1,
+            isFallback: false,
+          },
+        ],
+      },
+      "GET /api/me": ME_PLUS,
+    });
+    await page.goto("/budgets");
+    await page.getByRole("tab", { name: "หมวดรายรับ" }).click();
+    await expect(page.getByText("+฿35,000")).toBeVisible();
+    await expect(page.getByRole("region", { name: "งบประมาณ" })).toHaveCount(0);
   });
 });
 
