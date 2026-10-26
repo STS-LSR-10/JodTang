@@ -161,4 +161,27 @@ test.describe("summary page (360px)", () => {
     await expect.poll(() => seen.some((u) => u.includes("offset=-1"))).toBe(true);
     await expect(page.getByRole("button", { name: "รอบถัดไป" })).toBeEnabled();
   });
+
+  test("while loading it shows the shape of the page, not an empty screen or dots", async ({
+    page,
+  }) => {
+    await mockApi(page, {
+      "GET /api/summary": async () => {
+        await new Promise((r) => setTimeout(r, 1200));
+        return SUMMARY;
+      },
+      "GET /api/me": async () => {
+        await new Promise((r) => setTimeout(r, 1200));
+        return ME_FREE;
+      },
+    });
+    await page.goto("/summary");
+
+    const skeleton = page.getByRole("status", { name: "กำลังโหลด" });
+    await expect(skeleton).toBeVisible();
+    await expect(page.getByText("…")).toHaveCount(0);
+    await expectNoHorizontalScroll(page);
+    await expect(skeleton).toHaveCount(0);
+    await expect(page.getByText("฿12,500", { exact: true })).toBeVisible();
+  });
 });

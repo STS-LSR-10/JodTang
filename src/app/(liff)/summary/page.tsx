@@ -4,13 +4,7 @@ import { ChevronDown, ChevronLeft, ChevronRight, Lightbulb, Lock, Repeat } from 
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import {
-  EmptyState,
-  ErrorState,
-  LoadingBlock,
-  PageHeader,
-  Skeleton,
-} from "@/components/liff/states";
+import { EmptyState, ErrorState, PageHeader, Skeleton } from "@/components/liff/states";
 import { TxItem } from "@/components/liff/tx-item";
 import { useApi } from "@/components/liff/liff-provider";
 import { sliceColor } from "@/components/liff/slice-color";
@@ -110,14 +104,21 @@ export default function SummaryPage() {
               className="h-12 w-12 shrink-0 rounded-full border border-border object-cover"
             />
           ) : (
-            <div className="h-12 w-12 shrink-0 rounded-full bg-primary-soft" aria-hidden />
+            <Skeleton className="h-12 w-12 shrink-0 rounded-full" />
           )}
-          <div className="min-w-0 flex-1">
-            <p className="truncate font-bold">{me.data?.displayName ?? "…"}</p>
-            <span className="mt-0.5 inline-block rounded-full bg-primary-soft px-2 py-0.5 text-xs font-medium text-primary">
-              {me.data ? PLAN_LABEL[me.data.plan] : "…"}
-            </span>
-          </div>
+          {me.data ? (
+            <div className="min-w-0 flex-1">
+              <p className="truncate font-bold">{me.data.displayName}</p>
+              <span className="mt-0.5 inline-block rounded-full bg-primary-soft px-2 py-0.5 text-xs font-medium text-primary">
+                {PLAN_LABEL[me.data.plan]}
+              </span>
+            </div>
+          ) : (
+            <div className="flex-1 space-y-2" aria-hidden>
+              <Skeleton className="h-4 w-32 rounded-lg" />
+              <Skeleton className="h-4 w-20 rounded-full" />
+            </div>
+          )}
         </section>
 
         <section
@@ -133,9 +134,13 @@ export default function SummaryPage() {
           >
             <ChevronLeft className="h-5 w-5" aria-hidden />
           </button>
-          <p className="num text-sm font-semibold" aria-live="polite">
-            {rangeLabel ?? "…"}
-          </p>
+          {rangeLabel ? (
+            <p className="num text-sm font-semibold" aria-live="polite">
+              {rangeLabel}
+            </p>
+          ) : (
+            <Skeleton className="h-4 w-40 rounded-lg" />
+          )}
           <button
             type="button"
             aria-label="รอบถัดไป"
@@ -148,7 +153,7 @@ export default function SummaryPage() {
         </section>
 
         {summary.loading && !data ? (
-          <LoadingBlock rows={4} />
+          <SummarySkeleton />
         ) : summary.error && !data ? (
           <ErrorState message={summary.error} onRetry={summary.reload} />
         ) : data ? (
@@ -465,6 +470,61 @@ function Row({ label, value, tone }: { label: string; value: string; tone?: stri
     <div className="flex items-center justify-between gap-2">
       <dt className="text-muted">{label}</dt>
       <dd className={cn("num font-semibold", tone)}>{value}</dd>
+    </div>
+  );
+}
+
+/** The shape of the page while its numbers load: the same cards, with pale bars where the text goes. */
+function SummarySkeleton() {
+  const card = "rounded-2xl border border-border bg-surface p-4 shadow-card";
+  return (
+    <div role="status" aria-label="กำลังโหลด" className="space-y-4">
+      <div className="rounded-3xl border border-border bg-primary-soft p-5 shadow-card">
+        <div className="flex items-center justify-between">
+          <Skeleton className="h-4 w-28 rounded-lg bg-primary/15" />
+          <Skeleton className="h-8 w-16 rounded-full bg-primary/15" />
+        </div>
+        <Skeleton className="my-3 h-9 w-44 rounded-xl bg-primary/15" />
+        <Skeleton className="h-3 w-52 rounded-lg bg-primary/15" />
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        {[0, 1].map((i) => (
+          <div key={i} className={card}>
+            <Skeleton className="h-3 w-12 rounded-lg" />
+            <Skeleton className="mt-2 h-6 w-24 rounded-lg" />
+            <Skeleton className="mt-2 h-3 w-20 rounded-lg" />
+          </div>
+        ))}
+      </div>
+      <div className="rounded-3xl border border-border bg-surface p-5 shadow-card">
+        <Skeleton className="h-4 w-44 rounded-lg" />
+        <Skeleton className="mb-4 mt-2 h-3 w-32 rounded-lg" />
+        <div className="grid grid-cols-12 items-center gap-3">
+          <div className="col-span-5">
+            <Skeleton className="mx-auto h-28 w-28 rounded-full" />
+          </div>
+          <div className="col-span-7 space-y-3 pl-3">
+            {[0, 1, 2, 3].map((i) => (
+              <Skeleton key={i} className="h-3 w-full rounded-lg" />
+            ))}
+          </div>
+        </div>
+      </div>
+      <div>
+        <Skeleton className="mb-3 h-5 w-28 rounded-lg" />
+        <div className="space-y-3 rounded-2xl border border-border bg-surface p-3 shadow-card">
+          {[0, 1, 2].map((i) => (
+            <div key={i} className="flex items-center gap-3">
+              <Skeleton className="h-10 w-10 shrink-0 rounded-xl" />
+              <div className="flex-1 space-y-2">
+                <Skeleton className="h-3 w-3/5 rounded-lg" />
+                <Skeleton className="h-3 w-2/5 rounded-lg" />
+              </div>
+              <Skeleton className="h-4 w-14 rounded-lg" />
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
