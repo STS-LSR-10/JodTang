@@ -4,7 +4,7 @@ import { usePathname } from "next/navigation";
 import { useLayoutEffect } from "react";
 
 /** The pages drawn in the olive-and-turmeric look (see tokens.css). */
-const OLIVE_PAGES = ["/summary", "/analytics", "/budgets"];
+const OLIVE_PAGES = ["/summary", "/analytics", "/budgets", "/transactions"];
 
 /**
  * Puts data-theme="olive" on <html> while one of the olive pages (and the bottom bar under it) is

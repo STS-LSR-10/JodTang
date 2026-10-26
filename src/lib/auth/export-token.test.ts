@@ -39,4 +39,33 @@ describe("export token", () => {
     const token = await signExportToken(claims, SECRET, NOW);
     expect(await verifySession(token, SECRET, NOW)).toBeNull();
   });
+
+  it("carries the format, the chosen columns and the attachments option", async () => {
+    const full = {
+      ...claims,
+      format: "pdf" as const,
+      groups: ["date" as const, "amount" as const],
+      attachments: true,
+    };
+    const token = await signExportToken(full, SECRET, NOW);
+    expect(await verifyExportToken(token, SECRET, NOW)).toEqual(full);
+  });
+
+  it("a token with a column group or a format we do not know is refused", async () => {
+    const { SignJWT } = await import("jose");
+    const make = (payload: Record<string, unknown>) =>
+      new SignJWT(payload)
+        .setProtectedHeader({ alg: "HS256" })
+        .setSubject(claims.userId)
+        .setIssuer("jodtang")
+        .setAudience("jodtang-export")
+        .setIssuedAt(Math.floor(NOW.getTime() / 1000))
+        .setExpirationTime(Math.floor(NOW.getTime() / 1000) + 60)
+        .sign(new TextEncoder().encode(SECRET));
+    expect(
+      await verifyExportToken(await make({ fmt: "csv", g: ["nope"] }), SECRET, NOW),
+    ).toBeNull();
+    expect(await verifyExportToken(await make({ fmt: "docx" }), SECRET, NOW)).toBeNull();
+    expect(await verifyExportToken(await make({ fmt: "csv" }), SECRET, NOW)).not.toBeNull();
+  });
 });

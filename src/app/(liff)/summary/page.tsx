@@ -5,7 +5,7 @@ import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { EmptyState, ErrorState, PageHeader, Skeleton } from "@/components/liff/states";
-import { TxItem } from "@/components/liff/tx-item";
+import { TxCard } from "@/components/liff/tx-card";
 import { useApi } from "@/components/liff/liff-provider";
 import { sliceColor } from "@/components/liff/slice-color";
 import type { TxDto } from "@/lib/dto";
@@ -182,9 +182,9 @@ export default function SummaryPage() {
                   />
                 </div>
               ) : (
-                <ul className="divide-y divide-border rounded-2xl border border-border bg-surface shadow-card">
+                <ul className="space-y-2">
                   {data.recent.map((tx) => (
-                    <TxItem key={tx.id} tx={tx} />
+                    <TxCard key={tx.id} tx={tx} showDate />
                   ))}
                 </ul>
               )}

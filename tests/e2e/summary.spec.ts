@@ -136,7 +136,11 @@ test.describe("summary page (360px)", () => {
       "40",
     );
     await page.getByRole("button", { name: "ดูรายละเอียดหมวดหมู่" }).click();
-    await expect(page.getByText("อาหาร", { exact: true })).toBeVisible();
+    await expect(
+      page
+        .getByRole("region", { name: "สัดส่วนการใช้จ่ายและงบ" })
+        .getByText("อาหาร", { exact: true }),
+    ).toBeVisible();
     await expect(page.getByText("66.7%")).toBeVisible();
     await expectNoHorizontalScroll(page);
     await expectNoSeriousA11yViolations(page);

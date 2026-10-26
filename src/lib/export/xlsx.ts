@@ -1,4 +1,5 @@
 import ExcelJS from "exceljs";
+import { columnIndexes, type ColumnGroup } from "./columns";
 import { HEADERS, TYPE_LABEL, exportDate, exportTime, sourceLabel, type ExportRow } from "./rows";
 import type { TransferDto } from "@/lib/transfer";
 import { summarizeByCategory, summarizeByMonth } from "./summary";
@@ -23,14 +24,15 @@ const baht = (satang: number) => satang / 100; // display value only; sums are d
  */
 export async function buildXlsx(
   rows: ExportRow[],
-  options: { advanced: boolean; transfers?: TransferDto[] },
+  options: { advanced: boolean; transfers?: TransferDto[]; groups?: readonly ColumnGroup[] },
 ): Promise<Buffer> {
   const wb = new ExcelJS.Workbook();
   wb.creator = "JodTang";
   wb.created = new Date();
 
   const list = wb.addWorksheet("รายการ");
-  list.columns = [
+  // every column the sheet can have; the chosen groups decide which of them are kept
+  const all = [
     { header: HEADERS[0], key: "date", width: 12 },
     { header: HEADERS[1], key: "time", width: 8 },
     { header: HEADERS[2], key: "type", width: 10 },
@@ -43,6 +45,7 @@ export async function buildXlsx(
     { header: HEADERS[9], key: "orig", width: 14, style: { numFmt: MONEY_FORMAT } },
     { header: HEADERS[10], key: "rate", width: 14 },
   ];
+  list.columns = columnIndexes(options.groups).map((i) => all[i] as (typeof all)[number]);
   for (const r of rows) {
     list.addRow({
       date: exportDate(r.date),

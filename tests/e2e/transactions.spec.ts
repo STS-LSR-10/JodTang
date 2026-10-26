@@ -31,15 +31,55 @@ const LIST = {
 const CATEGORIES = { items: [{ id: "c1", type: "expense", name: "อาหาร", own: false }] };
 
 test.describe("transactions page (360px)", () => {
-  test("lists entries with delete and slip buttons, no sideways scroll", async ({ page }) => {
+  test("lists entries as cards grouped by day, with the day's total, no sideways scroll", async ({
+    page,
+  }) => {
     await mockApi(page, { "GET /api/transactions": LIST, "GET /api/me": ME_FREE });
     await page.goto("/transactions");
 
     await expect(page.getByText("น้ำมัน")).toBeVisible();
     await expect(page.getByText("#ทริปเหนือ #company")).toBeVisible();
-    await expect(page.getByRole("button", { name: "ลบ กาแฟ" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "ดูสลิป ร้านลุงหนวด" })).toBeVisible();
+    // the three entries are all on 15 Oct: one group, with their net total
+    const group = page.getByRole("region", { name: "15 ต.ค. 2569" });
+    await expect(group.getByText("รวม: -฿560")).toBeVisible();
+    await expect(group.getByRole("button", { name: "แก้ไข กาแฟ" })).toBeVisible();
+    // the card says it has a slip; delete and the slip live in the edit sheet
+    await expect(page.getByRole("img", { name: "มีสลิป" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "ลบ กาแฟ" })).toHaveCount(0);
     await expectNoHorizontalScroll(page);
+  });
+
+  test("entries on different days make separate groups, each with its own total", async ({
+    page,
+  }) => {
+    await mockApi(page, {
+      "GET /api/transactions": {
+        items: [
+          TX({
+            id: "a1",
+            title: "ข้าวเที่ยง",
+            amountSatang: 12_000,
+            occurredAt: "2026-10-16T05:00:00Z",
+          }),
+          TX({
+            id: "a2",
+            title: "เงินเดือน",
+            type: "income",
+            amountSatang: 3_500_000,
+            occurredAt: "2026-10-01T02:00:00Z",
+          }),
+        ],
+        hasMore: false,
+      },
+      "GET /api/me": ME_FREE,
+    });
+    await page.goto("/transactions");
+    await expect(
+      page.getByRole("region", { name: "16 ต.ค. 2569" }).getByText("รวม: -฿120"),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("region", { name: "1 ต.ค. 2569" }).getByText("รวม: +฿35,000"),
+    ).toBeVisible();
   });
 
   test("a foreign-currency entry shows the original amount and the rate under the title", async ({
@@ -63,7 +103,7 @@ test.describe("transactions page (360px)", () => {
     await page.goto("/transactions");
 
     await expect(page.getByText("1,500 JPY @ 0.2335")).toBeVisible();
-    await expect(page.getByText("-฿350.25")).toBeVisible();
+    await expect(page.getByText("-฿350.25", { exact: true })).toBeVisible();
     await expectNoHorizontalScroll(page);
   });
 
@@ -96,10 +136,9 @@ test.describe("transactions page (360px)", () => {
     });
     await page.goto("/transactions");
 
-    await expect(page.getByText(/คุณ · กองกลาง/)).toBeVisible();
-    await expect(page.getByText(/บ๊อบ · กองกลาง/)).toBeVisible();
-    await expect(page.getByRole("button", { name: "ลบ ข้าวเย็น" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "ลบ ค่าน้ำมัน" })).toHaveCount(0);
+    await expect(page.getByText("คุณ", { exact: true })).toBeVisible();
+    await expect(page.getByText("บ๊อบ", { exact: true })).toBeVisible();
+    await expect(page.getByText("กองกลาง", { exact: true })).toHaveCount(2); // the wallet chip on both
     await expect(page.getByRole("button", { name: "แก้ไข ค่าน้ำมัน" })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "แก้ไข ข้าวเย็น" })).toBeVisible();
     await expectNoHorizontalScroll(page);
@@ -125,7 +164,7 @@ test.describe("transactions page (360px)", () => {
     await expect.poll(() => seen.some((s) => s.includes("q=%23company"))).toBe(true);
   });
 
-  test("an entry with a photo shows a photo button that opens and can remove it", async ({
+  test("an entry with a photo is marked on its card; the edit sheet shows it and can remove it", async ({
     page,
   }) => {
     const id = "44444444-4444-4444-4444-444444444444";
@@ -138,18 +177,22 @@ test.describe("transactions page (360px)", () => {
       },
       [`GET /api/transactions/${id}/photo`]: { url: png, expiresIn: 60 },
       [`DELETE /api/transactions/${id}/photo`]: { ok: true },
-      "GET /api/me": ME_FREE,
+      "GET /api/categories": CATEGORIES,
+      "GET /api/wallets": { items: [] },
+      "GET /api/me": ME_PLUS,
     });
-    page.on("dialog", (d) => d.accept());
     await page.goto("/transactions");
 
-    await page.getByRole("button", { name: "ดูรูปแนบ ข้าวมันไก่" }).click();
-    await expect(page.getByRole("img", { name: "รูปแนบของรายการ ข้าวมันไก่" })).toBeVisible();
-    await page.getByRole("button", { name: "ลบรูปแนบ" }).click();
+    await expect(page.getByRole("img", { name: "มีรูปแนบ" })).toBeVisible();
+    await page.getByRole("button", { name: "แก้ไข ข้าวมันไก่" }).click();
+    const dialog = page.getByRole("dialog", { name: "แก้ไขรายการ" });
+    await expect(dialog.getByRole("img", { name: "รูปแนบ" })).toBeVisible();
+    await dialog.getByRole("button", { name: "เอารูปออก" }).click();
+    await dialog.getByRole("button", { name: "บันทึก" }).click();
     await expect
       .poll(() => seen.some((s) => s.includes(`DELETE /api/transactions/${id}/photo`)))
       .toBe(true);
-    await expect(page.getByText("ลบรูปแนบแล้ว")).toBeVisible();
+    await expect(page.getByText("บันทึกแล้ว")).toBeVisible();
   });
 
   test("a search link prefills the box, and Professional sees the totals of everything found", async ({
@@ -197,7 +240,8 @@ test.describe("transactions page (360px)", () => {
       "GET /api/me": ME_FREE,
     });
     await page.goto("/transactions");
-    await expect(page.getByText("🐱 ค่าอาหารแมว")).toBeVisible();
+    await expect(page.getByText("ค่าอาหารแมว", { exact: true })).toBeVisible();
+    await expect(page.getByText("🐱", { exact: true })).toBeVisible(); // on the card's tile
   });
 
   test("empty state", async ({ page }) => {
@@ -217,10 +261,15 @@ test.describe("transactions page (360px)", () => {
     });
     page.once("dialog", (d) => void d.accept());
     await page.goto("/transactions");
-    await page.getByRole("button", { name: "ลบ กาแฟ" }).click();
+    await page.getByRole("button", { name: "แก้ไข กาแฟ" }).click();
+    await page
+      .getByRole("dialog", { name: "แก้ไขรายการ" })
+      .getByRole("button", { name: "ลบรายการนี้" })
+      .click();
     await expect
       .poll(() => seen.some((s) => s.startsWith("DELETE /api/transactions/1111")))
       .toBe(true);
+    await expect(page.getByText("ลบแล้ว", { exact: true })).toBeVisible();
   });
 
   test("an entry added here that goes over the budget shows the warning on the page", async ({
@@ -263,25 +312,72 @@ test.describe("transactions page (360px)", () => {
     await page.goto("/transactions");
     await page.getByRole("button", { name: "ส่งออกไฟล์" }).click();
 
-    const dialog = page.getByRole("dialog", { name: "ส่งออกไฟล์" });
+    const dialog = page.getByRole("dialog", { name: "ส่งออกข้อมูลรายการ" });
     await expect(dialog).toBeVisible();
-    await expect(dialog.getByText("ส่งออก CSV / Excel สำหรับแผน Professional")).toBeVisible();
+    await expect(dialog.getByText("ส่งออก Excel / CSV / PDF สำหรับแผน Professional")).toBeVisible();
     await expect(dialog.getByRole("link", { name: "ดูแผน Professional" })).toHaveAttribute(
       "href",
       "/upgrade",
     );
-    await expect(page.getByRole("button", { name: "ดาวน์โหลด CSV" })).toHaveCount(0);
+    await expect(dialog.getByRole("button", { name: "สร้างไฟล์และส่งออก" })).toHaveCount(0);
     expect(seen.some((s) => s.includes("/api/export"))).toBe(false);
   });
 
-  test("export sheet explains the external download", async ({ page }) => {
-    await mockApi(page, { "GET /api/transactions": LIST, "GET /api/me": ME_PLUS });
+  test("export sheet: format, the filters in use, columns and the zip switch go into the link request", async ({
+    page,
+  }) => {
+    const bodies: unknown[] = [];
+    await mockApi(page, {
+      "GET /api/transactions": LIST,
+      "GET /api/me": ME_PLUS,
+      "POST /api/export/link": (route: Route) => {
+        bodies.push(route.request().postDataJSON());
+        return { url: "http://localhost/api/export/download?t=x", expiresIn: 120 };
+      },
+    });
     await page.goto("/transactions");
+    await page.getByRole("tab", { name: "รายจ่าย" }).click();
     await page.getByRole("button", { name: "ส่งออกไฟล์" }).click();
 
-    await expect(page.getByRole("dialog", { name: "ส่งออกไฟล์" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "ดาวน์โหลด CSV" })).toBeVisible();
-    await expect(page.getByRole("button", { name: /ดาวน์โหลด Excel/ })).toBeVisible();
+    const dialog = page.getByRole("dialog", { name: "ส่งออกข้อมูลรายการ" });
+    await expect(dialog.getByText("ทุกช่วงเวลา")).toBeVisible();
+    await expect(dialog.getByRole("radio", { name: "Excel (.xlsx)" })).toBeChecked();
+    await dialog.getByRole("radio", { name: "PDF สรุป" }).click();
+    await dialog.getByLabel("หมวดหมู่").uncheck();
+    await dialog.getByLabel("ที่มา (ข้อความ/สลิป)").uncheck();
+    await dialog.getByRole("switch", { name: "รวมไฟล์รูปสลิปและใบเสร็จ" }).click();
+    await expectNoSeriousA11yViolations(page);
+    await dialog.getByRole("button", { name: "สร้างไฟล์และส่งออก" }).click();
+
+    await expect.poll(() => bodies.length).toBe(1);
+    expect(bodies[0]).toMatchObject({
+      format: "pdf",
+      type: "expense",
+      attachments: true,
+      groups: ["date", "title", "amount", "type", "wallet", "fx"],
+    });
+  });
+
+  test("export sheet: the last column cannot be unticked, and all columns send no list", async ({
+    page,
+  }) => {
+    const bodies: Record<string, unknown>[] = [];
+    await mockApi(page, {
+      "GET /api/transactions": LIST,
+      "GET /api/me": ME_PLUS,
+      "POST /api/export/link": (route: Route) => {
+        bodies.push(route.request().postDataJSON() as Record<string, unknown>);
+        return { url: "http://localhost/api/export/download?t=x", expiresIn: 120 };
+      },
+    });
+    await page.goto("/transactions");
+    await page.getByRole("button", { name: "ส่งออกไฟล์" }).click();
+    const dialog = page.getByRole("dialog", { name: "ส่งออกข้อมูลรายการ" });
+    await dialog.getByRole("button", { name: "สร้างไฟล์และส่งออก" }).click();
+    await expect.poll(() => bodies.length).toBe(1);
+    expect(bodies[0]).toMatchObject({ format: "xlsx" });
+    expect(bodies[0]).not.toHaveProperty("groups");
+    expect(bodies[0]).not.toHaveProperty("attachments");
   });
 
   test("has no serious accessibility violations", async ({ page }) => {
@@ -437,7 +533,7 @@ test.describe("transactions page (360px)", () => {
     });
     page.once("dialog", (d) => void d.accept());
     await page.goto("/transactions");
-    await page.getByRole("button", { name: "เลือก", exact: true }).click();
+    await page.getByRole("button", { name: "เลือกหลายรายการ" }).click();
 
     const bar = page.getByRole("region", { name: "จัดการรายการที่เลือก" });
     await expect(bar.getByRole("button", { name: "ลบ" })).toBeDisabled();
@@ -473,7 +569,7 @@ test.describe("transactions page (360px)", () => {
       },
     });
     await page.goto("/transactions");
-    await page.getByRole("button", { name: "เลือก", exact: true }).click();
+    await page.getByRole("button", { name: "เลือกหลายรายการ" }).click();
     await page.getByRole("checkbox", { name: "เลือก กาแฟ" }).check();
     await page.getByRole("checkbox", { name: "เลือก น้ำมัน" }).check();
     await page.getByRole("button", { name: "ย้ายหมวด", exact: true }).click();
@@ -492,8 +588,91 @@ test.describe("transactions page (360px)", () => {
   test("select mode has no serious accessibility violations", async ({ page }) => {
     await mockApi(page, { "GET /api/transactions": LIST, "GET /api/me": ME_FREE });
     await page.goto("/transactions");
-    await page.getByRole("button", { name: "เลือก", exact: true }).click();
+    await page.getByRole("button", { name: "เลือกหลายรายการ" }).click();
     await page.getByRole("checkbox", { name: "เลือก กาแฟ" }).check();
     await expectNoSeriousA11yViolations(page);
+  });
+
+  test("the calendar: pick a first and last day, apply, and the list asks for that range", async ({
+    page,
+  }) => {
+    const { seen } = await mockApi(page, { "GET /api/transactions": LIST, "GET /api/me": ME_FREE });
+    await page.goto("/transactions");
+    await expect(page.getByText("ทุกช่วงเวลา")).toBeVisible();
+
+    await page.getByRole("button", { name: /ช่วงเวลาที่เลือก/ }).click();
+    const dialog = page.getByRole("dialog", { name: "เลือกช่วงวันที่" });
+    await expect(dialog.getByText("ยังไม่ได้เลือกช่วงวันที่")).toBeVisible();
+    await dialog.getByRole("button", { name: "เดือนนี้" }).click();
+    await expect(dialog.getByText(/^\d+ \S+ \d{4} — \d+ \S+ \d{4}$/)).toBeVisible();
+    // two taps of one's own: the 10th and the 12th of the month on show
+    const month = await dialog.getByRole("heading").innerText();
+    await dialog.getByRole("button", { name: new RegExp(`^10 ${month.split(" ")[0]}`) }).click();
+    await expect(dialog.getByText("เลือกวันสุดท้ายของช่วง")).toBeVisible();
+    await dialog.getByRole("button", { name: new RegExp(`^12 ${month.split(" ")[0]}`) }).click();
+    await expectNoSeriousA11yViolations(page);
+    await dialog.getByRole("button", { name: "ตกลง" }).click();
+
+    await expect.poll(() => seen.some((u) => u.includes("from=") && u.includes("to="))).toBe(true);
+    await expect(page.getByText(/10 .* — 12 /)).toBeVisible();
+    // "ทั้งหมด" in the calendar clears it again
+    await page.getByRole("button", { name: /ช่วงเวลาที่เลือก/ }).click();
+    await page
+      .getByRole("dialog", { name: "เลือกช่วงวันที่" })
+      .getByRole("button", { name: "ทั้งหมด" })
+      .click();
+    await expect(page.getByText("ทุกช่วงเวลา")).toBeVisible();
+  });
+
+  test("category chips filter the list by category, and switching the type clears the choice", async ({
+    page,
+  }) => {
+    const { seen } = await mockApi(page, {
+      "GET /api/transactions": LIST,
+      "GET /api/categories": {
+        items: [
+          { id: "c1", type: "expense", name: "อาหาร", emoji: null },
+          { id: "c2", type: "income", name: "เงินเดือน", emoji: null },
+        ],
+      },
+      "GET /api/me": ME_FREE,
+    });
+    await page.goto("/transactions");
+    const chips = page.getByRole("group", { name: "เลือกหมวดหมู่" });
+    await chips.getByRole("button", { name: "อาหาร" }).click();
+    await expect.poll(() => seen.some((u) => u.includes("categoryId=c1"))).toBe(true);
+    await expect(page.getByText("อาหาร").first()).toBeVisible();
+    await page.getByRole("tab", { name: "รายรับ" }).click();
+    await expect(chips.getByRole("button", { name: "อาหาร" })).toHaveCount(0); // not an income category
+    await expect(chips.getByRole("button", { name: "เงินเดือน" })).toBeVisible();
+    await expect(chips.getByRole("button", { name: "ทั้งหมด" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+  });
+
+  test("the buttons under the filters: select several, and the recurring link; + adds", async ({
+    page,
+  }) => {
+    await mockApi(page, {
+      "GET /api/transactions": LIST,
+      "GET /api/categories": CATEGORIES,
+      "GET /api/me": ME_PLUS,
+    });
+    await page.goto("/transactions");
+    await expect(page.getByRole("link", { name: "ตั้งรายการจดประจำ" })).toHaveAttribute(
+      "href",
+      "/settings#recurring",
+    );
+    await page.getByRole("button", { name: "เลือกหลายรายการ" }).click();
+    // while choosing: the + is gone and the bar with the actions is at the top
+    await expect(page.getByRole("button", { name: "เพิ่มรายการใหม่" })).toHaveCount(0);
+    await expect(page.getByRole("region", { name: "จัดการรายการที่เลือก" })).toBeVisible();
+    await page
+      .getByRole("region", { name: "จัดการรายการที่เลือก" })
+      .getByRole("button", { name: "ยกเลิก" })
+      .click();
+    await page.getByRole("button", { name: "เพิ่มรายการใหม่" }).click();
+    await expect(page.getByLabel("ชื่อรายการ", { exact: true })).toBeVisible();
   });
 });

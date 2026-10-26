@@ -4,6 +4,7 @@ import { signExportToken } from "@/lib/auth/export-token";
 import { requireUser } from "@/lib/auth/require-user";
 import { EXPORT_LINK_TTL_SECONDS } from "@/lib/config";
 import { getServerEnv } from "@/lib/env";
+import { COLUMN_GROUPS } from "@/lib/export/columns";
 import { requireFeature } from "@/lib/plan-server";
 import { LIMITS, limitOr429 } from "@/lib/rate-limit";
 import { getAdminClient } from "@/lib/supabase/admin";
@@ -12,7 +13,13 @@ import { txFilterSchema } from "@/lib/tx-query";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const bodySchema = txFilterSchema.extend({ format: z.enum(["csv", "xlsx"]) });
+const bodySchema = txFilterSchema.extend({
+  format: z.enum(["csv", "xlsx", "pdf"]),
+  /** Which columns to keep; at least one. */
+  groups: z.array(z.enum(COLUMN_GROUPS)).min(1).max(COLUMN_GROUPS.length).optional(),
+  /** Slip pictures and photos in a zip beside the file. */
+  attachments: z.boolean().optional(),
+});
 
 /**
  * POST /api/export/link { format, ...filters } -> { url } valid for two minutes.
@@ -37,10 +44,10 @@ export async function POST(request: Request): Promise<Response> {
 
     const parsed = bodySchema.safeParse(await request.json().catch(() => null));
     if (!parsed.success) return apiError("ตัวเลือกส่งออกไม่ถูกต้อง", 400);
-    const { format, ...filters } = parsed.data;
+    const { format, groups, attachments, ...filters } = parsed.data;
 
     const token = await signExportToken(
-      { userId: auth.userId, format, filters },
+      { userId: auth.userId, format, filters, groups, attachments },
       getServerEnv().SESSION_JWT_SECRET,
     );
     const url = new URL("/api/export/download", request.url);

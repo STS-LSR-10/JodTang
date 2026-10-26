@@ -1,16 +1,22 @@
 import { jwtVerify, SignJWT } from "jose";
 import { EXPORT_LINK_TTL_SECONDS } from "@/lib/config";
+import { COLUMN_GROUPS, type ColumnGroup } from "@/lib/export/columns";
 import { txFilterSchema, type TxFilters } from "@/lib/tx-query";
 
 const ISSUER = "jodtang";
 const AUDIENCE = "jodtang-export";
 
-export type ExportFormat = "csv" | "xlsx";
+export type ExportFormat = "csv" | "xlsx" | "pdf";
+const FORMATS: readonly string[] = ["csv", "xlsx", "pdf"];
 
 export interface ExportClaims {
   userId: string;
   format: ExportFormat;
   filters: TxFilters;
+  /** The column groups to keep (all when absent). */
+  groups?: ColumnGroup[];
+  /** Pack the slip pictures and photos of the entries into a zip with the file. */
+  attachments?: boolean;
 }
 
 const keyOf = (secret: string) => new TextEncoder().encode(secret);
@@ -27,7 +33,12 @@ export async function signExportToken(
   now: Date = new Date(),
 ): Promise<string> {
   const iat = Math.floor(now.getTime() / 1000);
-  return new SignJWT({ fmt: claims.format, f: claims.filters })
+  return new SignJWT({
+    fmt: claims.format,
+    f: claims.filters,
+    g: claims.groups,
+    att: claims.attachments === true ? 1 : undefined,
+  })
     .setProtectedHeader({ alg: "HS256" })
     .setSubject(claims.userId)
     .setIssuer(ISSUER)
@@ -50,10 +61,26 @@ export async function verifyExportToken(
       currentDate: now,
     });
     if (typeof payload.sub !== "string") return null;
-    if (payload.fmt !== "csv" && payload.fmt !== "xlsx") return null;
+    if (typeof payload.fmt !== "string" || !FORMATS.includes(payload.fmt)) return null;
     const filters = txFilterSchema.safeParse(payload.f ?? {});
     if (!filters.success) return null;
-    return { userId: payload.sub, format: payload.fmt, filters: filters.data };
+    let groups: ColumnGroup[] | undefined;
+    if (payload.g !== undefined && payload.g !== null) {
+      if (
+        !Array.isArray(payload.g) ||
+        !payload.g.every((g) => (COLUMN_GROUPS as readonly unknown[]).includes(g))
+      ) {
+        return null;
+      }
+      groups = payload.g as ColumnGroup[];
+    }
+    return {
+      userId: payload.sub,
+      format: payload.fmt as ExportFormat,
+      filters: filters.data,
+      groups,
+      attachments: payload.att === 1 ? true : undefined,
+    };
   } catch {
     return null;
   }

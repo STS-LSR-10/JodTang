@@ -1,14 +1,21 @@
 "use client";
 
 import {
-  CheckSquare,
-  Download,
-  FolderInput,
+  CalendarDays,
   Camera,
+  CheckSquare,
+  ChevronRight,
+  Download,
+  FileBarChart,
+  FileDown,
+  FileSpreadsheet,
+  FileText,
+  FolderInput,
   Image as ImageIcon,
   Lock,
   Plus,
   Receipt,
+  Repeat,
   Trash2,
   X,
 } from "lucide-react";
@@ -16,11 +23,20 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { Sheet } from "@/components/liff/sheet";
-import { EmptyState, ErrorState, LoadingBlock, PageHeader } from "@/components/liff/states";
-import { TxItem } from "@/components/liff/tx-item";
+import {
+  EmptyState,
+  ErrorState,
+  LoadingBlock,
+  PageHeader,
+  Skeleton,
+} from "@/components/liff/states";
+import { RangeCalendar, type DayRange } from "@/components/liff/range-calendar";
+import { TxCard } from "@/components/liff/tx-card";
 import { useApi, useLiff } from "@/components/liff/liff-provider";
 import { WALLET_KIND_EMOJI, type WalletKind } from "@/lib/wallet";
+import { addDays, formatRange, rangeToFilter, ymdKey, ymdOf } from "@/lib/date-range";
 import type { TxDto } from "@/lib/dto";
+import { COLUMN_GROUPS, GROUP_LABEL, type ColumnGroup } from "@/lib/export/columns";
 import { formatBaht } from "@/lib/money";
 import { satangToString } from "@/lib/money";
 import { normalizeThaiDigits } from "@/lib/parse/thai-number";
@@ -42,7 +58,7 @@ interface ListResponse {
 }
 
 interface CategoriesResponse {
-  items: { id: string; type: "expense" | "income"; name: string }[];
+  items: { id: string; type: "expense" | "income"; name: string; emoji?: string | null }[];
 }
 
 interface BulkResponse {
@@ -189,12 +205,14 @@ function TransactionsView() {
   const initialSearch = useSearchParams().get("q") ?? "";
   const [search, setSearch] = useState(initialSearch);
   const q = useDebounced(search.trim(), 300);
+  const [range, setRange] = useState<DayRange | null>(null);
+  const [categoryId, setCategoryId] = useState("");
+  const [calendarOpen, setCalendarOpen] = useState(false);
   const [extra, setExtra] = useState<TxDto[]>([]);
   const [extraMore, setExtraMore] = useState<boolean | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
   const [formOpen, setFormOpen] = useState(false);
   const [slipFor, setSlipFor] = useState<TxDto | null>(null);
-  const [photoFor, setPhotoFor] = useState<TxDto | null>(null);
   const [exportOpen, setExportOpen] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [editFor, setEditFor] = useState<TxDto | null>(null);
@@ -204,14 +222,31 @@ function TransactionsView() {
   const [bulkBusy, setBulkBusy] = useState(false);
   const [walletId, setWalletId] = useState("");
   const wallets = useApi<WalletsLite>("/api/wallets");
+  const categories = useApi<CategoriesResponse>("/api/categories");
+  const [now] = useState(() => new Date());
+
+  const filter = useMemo(() => {
+    const f: {
+      type?: "expense" | "income";
+      q?: string;
+      from?: string;
+      to?: string;
+      categoryId?: string;
+      accountId?: string;
+    } = {};
+    if (type !== "all") f.type = type;
+    if (q) f.q = q;
+    if (range) Object.assign(f, rangeToFilter(range.start, range.end));
+    if (categoryId) f.categoryId = categoryId;
+    if (walletId) f.accountId = walletId;
+    return f;
+  }, [type, q, range, categoryId, walletId]);
 
   const path = useMemo(() => {
     const p = new URLSearchParams({ limit: String(PAGE_SIZE) });
-    if (type !== "all") p.set("type", type);
-    if (q) p.set("q", q);
-    if (walletId) p.set("accountId", walletId);
+    for (const [k, v] of Object.entries(filter)) p.set(k, v);
     return `/api/transactions?${p.toString()}`;
-  }, [type, q, walletId]);
+  }, [filter]);
 
   const list = useApi<ListResponse>(path);
 
@@ -221,8 +256,33 @@ function TransactionsView() {
     setExtraMore(null);
   }, [path, list.data]);
 
-  const items = [...(list.data?.items ?? []), ...extra];
+  const items = useMemo(() => [...(list.data?.items ?? []), ...extra], [list.data, extra]);
   const hasMore = extraMore ?? list.data?.hasMore ?? false;
+  const filtered =
+    type !== "all" || q !== "" || range !== null || categoryId !== "" || walletId !== "";
+
+  // the categories of the chosen type (both when "all")
+  const chips = (categories.data?.items ?? []).filter((c) => type === "all" || c.type === type);
+  const chosen = chips.find((c) => c.id === categoryId);
+
+  // entries grouped by day (the list is newest first, so groups come out in order)
+  const groups = useMemo(() => {
+    const out: { key: string; date: Date; items: TxDto[]; netSatang: number }[] = [];
+    for (const tx of items) {
+      const date = new Date(tx.occurredAt);
+      const key = ymdKey(ymdOf(date));
+      let g = out.at(-1);
+      if (g?.key !== key) {
+        g = { key, date, items: [], netSatang: 0 };
+        out.push(g);
+      }
+      g.items.push(tx);
+      g.netSatang += tx.type === "income" ? tx.amountSatang : -tx.amountSatang;
+    }
+    return out;
+  }, [items]);
+  const todayKey = ymdKey(ymdOf(now));
+  const yesterdayKey = ymdKey(addDays(ymdOf(now), -1));
 
   async function loadMore() {
     setLoadingMore(true);
@@ -298,6 +358,7 @@ function TransactionsView() {
     if (!window.confirm(`ลบ "${tx.title}" ใช่ไหม?`)) return;
     try {
       await api(`/api/transactions/${tx.id}`, { method: "DELETE" });
+      setEditFor(null);
       setNotice("ลบแล้ว");
       list.reload();
     } catch (e) {
@@ -307,93 +368,204 @@ function TransactionsView() {
 
   return (
     <main>
-      <PageHeader
-        title="รายการ"
-        right={
-          <div className="flex gap-2">
-            {selecting ? (
+      <PageHeader title="รายการบันทึก" />
+
+      <div className="space-y-3.5 px-4 pb-28">
+        <button
+          type="button"
+          onClick={() => setCalendarOpen(true)}
+          className="flex w-full items-center justify-between rounded-2xl border border-border bg-surface px-4 py-3 text-left shadow-card"
+        >
+          <span className="flex items-center gap-2.5">
+            <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-primary-soft text-primary">
+              <CalendarDays className="h-4 w-4" aria-hidden />
+            </span>
+            <span>
+              <span className="block text-[10px] leading-tight text-muted">ช่วงเวลาที่เลือก</span>
+              <span className="num block text-xs font-bold">
+                {range ? formatRange(range.start, range.end) : "ทุกช่วงเวลา"}
+              </span>
+            </span>
+          </span>
+          <span className="flex items-center text-primary">
+            <span className="text-[11px] font-semibold">เปลี่ยน</span>
+            <ChevronRight className="h-4 w-4" aria-hidden />
+          </span>
+        </button>
+
+        <section
+          aria-label="ตัวกรอง"
+          className="space-y-3 rounded-2xl border border-border bg-surface p-3.5 shadow-card"
+        >
+          <div className="flex items-center gap-3">
+            <div
+              role="tablist"
+              aria-label="ประเภท"
+              className="flex flex-1 rounded-xl border border-border bg-background p-0.5"
+            >
+              {FILTERS.map((f) => (
+                <button
+                  key={f.value}
+                  role="tab"
+                  aria-selected={type === f.value}
+                  type="button"
+                  onClick={() => {
+                    setType(f.value);
+                    setCategoryId(""); // a category of the other type would show nothing
+                  }}
+                  className={cn(
+                    "h-9 flex-1 rounded-lg text-xs",
+                    type === f.value
+                      ? cn(
+                          "bg-surface font-semibold shadow-card",
+                          f.value === "expense"
+                            ? "text-expense"
+                            : f.value === "income"
+                              ? "text-income"
+                              : "text-primary",
+                        )
+                      : "text-muted",
+                  )}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
+            <button
+              type="button"
+              onClick={() => setExportOpen(true)}
+              aria-label="ส่งออกไฟล์"
+              className="flex h-10 shrink-0 items-center gap-1.5 rounded-xl border border-primary/30 bg-primary-soft px-3 text-xs font-semibold text-primary"
+            >
+              <Download className="h-3.5 w-3.5" aria-hidden />
+              ส่งออก
+            </button>
+          </div>
+
+          <input
+            type="search"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="ค้นหาชื่อรายการ หรือ #แท็ก"
+            aria-label="ค้นหาชื่อรายการหรือแท็ก"
+            className="h-11 w-full rounded-xl border border-border bg-background px-4 text-sm outline-none focus:border-primary"
+          />
+
+          {(wallets.data?.items.length ?? 0) > 1 ? (
+            <select
+              value={walletId}
+              onChange={(e) => setWalletId(e.target.value)}
+              aria-label="กระเป๋า"
+              className="h-10 w-full rounded-xl border border-border bg-background px-3 text-sm"
+            >
+              <option value="">ทุกกระเป๋า</option>
+              {wallets.data?.items.map((w) => (
+                <option key={w.id} value={w.id}>
+                  {WALLET_KIND_EMOJI[w.kind]} {w.name}
+                </option>
+              ))}
+            </select>
+          ) : null}
+
+          <div className="border-t border-border pt-2.5">
+            <div className="mb-2 flex items-center justify-between text-[11px] text-muted">
+              <span>หมวดหมู่</span>
+              <span className="font-medium text-primary">{chosen?.name ?? "ทุกหมวดหมู่"}</span>
+            </div>
+            <div
+              role="group"
+              aria-label="เลือกหมวดหมู่"
+              className="-mx-1 flex items-center gap-1.5 overflow-x-auto px-1 pb-1 text-xs [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+            >
+              <button
+                type="button"
+                aria-pressed={categoryId === ""}
+                onClick={() => setCategoryId("")}
+                className={cn(
+                  "h-9 shrink-0 whitespace-nowrap rounded-full px-3",
+                  categoryId === ""
+                    ? "bg-primary font-semibold text-surface"
+                    : "bg-background text-muted",
+                )}
+              >
+                ทั้งหมด
+              </button>
+              {chips.map((c) => (
+                <button
+                  key={c.id}
+                  type="button"
+                  aria-pressed={categoryId === c.id}
+                  onClick={() => setCategoryId(categoryId === c.id ? "" : c.id)}
+                  className={cn(
+                    "h-9 shrink-0 whitespace-nowrap rounded-full px-3",
+                    categoryId === c.id
+                      ? "bg-primary font-semibold text-surface"
+                      : "bg-background text-muted",
+                  )}
+                >
+                  {c.emoji ? `${c.emoji} ` : ""}
+                  {c.name}
+                </button>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {selecting ? (
+          <div
+            role="region"
+            aria-label="จัดการรายการที่เลือก"
+            className="flex items-center justify-between gap-2 rounded-2xl bg-gradient-to-r from-[var(--hero-from)] to-[var(--hero-to)] p-3 text-white shadow-card"
+          >
+            <p className="num text-xs font-semibold" aria-live="polite">
+              เลือกแล้ว {selected.size} รายการ
+            </p>
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                disabled={selected.size === 0 || bulkBusy}
+                onClick={() => setMoveOpen(true)}
+                className="flex h-9 items-center gap-1 rounded-lg bg-white/15 px-2.5 text-[11px] font-semibold disabled:opacity-50"
+              >
+                <FolderInput className="h-3.5 w-3.5" aria-hidden /> ย้ายหมวด
+              </button>
+              <button
+                type="button"
+                disabled={selected.size === 0 || bulkBusy}
+                onClick={bulkDelete}
+                className="flex h-9 items-center gap-1 rounded-lg bg-[#b5402b] px-2.5 text-[11px] font-semibold disabled:opacity-50"
+              >
+                <Trash2 className="h-3.5 w-3.5" aria-hidden /> ลบ
+              </button>
               <button
                 type="button"
                 onClick={stopSelecting}
-                className="flex h-11 items-center rounded-2xl border border-border bg-surface px-4 text-sm font-semibold"
+                className="h-9 rounded-lg bg-white/15 px-2.5 text-[11px] font-medium"
               >
                 ยกเลิก
               </button>
-            ) : null}
-            {!selecting && items.length > 0 ? (
-              <button
-                type="button"
-                onClick={() => setSelecting(true)}
-                className="flex h-11 items-center gap-1 rounded-2xl border border-border bg-surface px-3 text-sm font-semibold text-primary"
-              >
-                <CheckSquare className="h-4 w-4" aria-hidden /> เลือก
-              </button>
-            ) : null}
-            <button
-              type="button"
-              hidden={selecting}
-              onClick={() => setExportOpen(true)}
-              aria-label="ส่งออกไฟล์"
-              className="flex h-11 w-11 items-center justify-center rounded-2xl border border-border bg-surface text-primary"
-            >
-              <Download className="h-4 w-4" aria-hidden />
-            </button>
-            <button
-              type="button"
-              hidden={selecting}
-              onClick={() => setFormOpen(true)}
-              className="flex h-11 items-center gap-1 rounded-2xl bg-primary px-4 text-sm font-semibold text-surface"
-            >
-              <Plus className="h-4 w-4" aria-hidden /> เพิ่ม
-            </button>
+            </div>
           </div>
-        }
-      />
-
-      <div className={cn("space-y-3 px-4 pb-4", selecting && "pb-24")}>
-        <div role="tablist" aria-label="ประเภท" className="flex gap-2">
-          {FILTERS.map((f) => (
+        ) : (
+          <section className="flex items-center gap-2 text-xs">
             <button
-              key={f.value}
-              role="tab"
-              aria-selected={type === f.value}
               type="button"
-              onClick={() => setType(f.value)}
-              className={cn(
-                "h-10 flex-1 rounded-2xl border text-sm font-medium",
-                type === f.value
-                  ? "border-primary bg-primary-soft text-primary"
-                  : "border-border bg-surface text-muted",
-              )}
+              disabled={items.length === 0}
+              onClick={() => setSelecting(true)}
+              className="flex h-10 flex-1 items-center justify-center gap-1.5 rounded-xl border border-border bg-surface font-medium disabled:opacity-50"
             >
-              {f.label}
+              <CheckSquare className="h-3.5 w-3.5 text-primary" aria-hidden />
+              เลือกหลายรายการ
             </button>
-          ))}
-        </div>
-        {(wallets.data?.items.length ?? 0) > 1 ? (
-          <select
-            value={walletId}
-            onChange={(e) => setWalletId(e.target.value)}
-            aria-label="กระเป๋า"
-            className="h-10 w-full rounded-2xl border border-border bg-surface px-3 text-sm"
-          >
-            <option value="">ทุกกระเป๋า</option>
-            {wallets.data?.items.map((w) => (
-              <option key={w.id} value={w.id}>
-                {WALLET_KIND_EMOJI[w.kind]} {w.name}
-              </option>
-            ))}
-          </select>
-        ) : null}
-
-        <input
-          type="search"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="ค้นหาชื่อรายการ หรือ #แท็ก"
-          aria-label="ค้นหาชื่อรายการหรือแท็ก"
-          className="h-11 w-full rounded-2xl border border-border bg-surface px-4 text-sm outline-none focus:border-primary"
-        />
+            <Link
+              href="/settings#recurring"
+              className="flex h-10 flex-1 items-center justify-center gap-1.5 rounded-xl border border-border bg-surface font-medium"
+            >
+              <Repeat className="h-3.5 w-3.5 text-accent" aria-hidden />
+              ตั้งรายการจดประจำ
+            </Link>
+          </section>
+        )}
 
         {q && list.data?.totals ? (
           <div
@@ -429,84 +601,76 @@ function TransactionsView() {
           </p>
         ) : null}
 
-        {list.loading ? (
-          <LoadingBlock rows={5} />
+        {list.loading && items.length === 0 ? (
+          <TransactionsSkeleton />
         ) : list.error ? (
           <ErrorState message={list.error} onRetry={list.reload} />
         ) : items.length === 0 ? (
           <div className="rounded-2xl border border-border bg-surface shadow-card">
             <EmptyState
-              title={q || type !== "all" ? "ไม่พบรายการที่ค้นหา" : "ยังไม่มีรายการ"}
+              title={filtered ? "ไม่พบรายการที่ค้นหา" : "ยังไม่มีรายการ"}
               hint={
-                q || type !== "all"
+                filtered
                   ? "ลองเปลี่ยนตัวกรองหรือคำค้นหาดูนะ"
-                  : 'พิมพ์ "กาแฟ 30" ในแชท หรือกด "เพิ่ม" ด้านบนได้เลย'
+                  : 'พิมพ์ "กาแฟ 30" ในแชท หรือกดปุ่ม + เพื่อเพิ่มได้เลย'
               }
             />
           </div>
         ) : (
           <>
-            <ul className="divide-y divide-border rounded-2xl border border-border bg-surface shadow-card">
-              {items.map((tx) => (
-                <TxItem
-                  key={tx.id}
-                  tx={tx}
-                  // somebody else's entry in a shared wallet can be read but not changed
-                  onOpen={
-                    tx.mine === false
-                      ? undefined
-                      : selecting
-                        ? () => toggle(tx.id)
-                        : () => setEditFor(tx)
-                  }
-                  leading={
-                    selecting && tx.mine !== false ? (
-                      <input
-                        type="checkbox"
-                        checked={selected.has(tx.id)}
-                        onChange={() => toggle(tx.id)}
-                        aria-label={`เลือก ${tx.title}`}
-                        className="h-6 w-6 shrink-0 accent-[var(--primary)]"
+            <div className="space-y-4">
+              {groups.map((g) => (
+                <section key={g.key} aria-label={formatThaiDate(g.date)} className="space-y-2">
+                  <div className="flex items-center justify-between px-1">
+                    <div className="flex items-center gap-2">
+                      <h2 className="text-xs font-bold">{formatThaiDate(g.date)}</h2>
+                      {g.key === todayKey || g.key === yesterdayKey ? (
+                        <span className="text-[10px] text-muted">
+                          {g.key === todayKey ? "วันนี้" : "เมื่อวาน"}
+                        </span>
+                      ) : null}
+                    </div>
+                    <span
+                      className={cn(
+                        "num rounded-full border px-2 py-0.5 text-xs font-bold",
+                        g.netSatang < 0
+                          ? "border-expense/30 bg-expense/10 text-expense"
+                          : "border-income/30 bg-income/10 text-income",
+                      )}
+                    >
+                      รวม: {g.netSatang < 0 ? "-" : "+"}฿{formatBaht(Math.abs(g.netSatang))}
+                    </span>
+                  </div>
+                  <ul className="space-y-2">
+                    {g.items.map((tx) => (
+                      <TxCard
+                        key={tx.id}
+                        tx={tx}
+                        // somebody else's entry in a shared wallet can be read but not changed
+                        onOpen={
+                          tx.mine === false
+                            ? undefined
+                            : selecting
+                              ? () => toggle(tx.id)
+                              : () => setEditFor(tx)
+                        }
+                        leading={
+                          selecting && tx.mine !== false ? (
+                            <input
+                              type="checkbox"
+                              checked={selected.has(tx.id)}
+                              onChange={() => toggle(tx.id)}
+                              aria-label={`เลือก ${tx.title}`}
+                              className="h-5 w-5 shrink-0 accent-[var(--primary)]"
+                            />
+                          ) : null
+                        }
                       />
-                    ) : null
-                  }
-                  action={
-                    selecting || tx.mine === false ? null : (
-                      <div className="flex shrink-0">
-                        {tx.hasPhoto ? (
-                          <button
-                            type="button"
-                            onClick={() => setPhotoFor(tx)}
-                            aria-label={`ดูรูปแนบ ${tx.title}`}
-                            className="flex h-11 w-11 items-center justify-center rounded-2xl text-primary"
-                          >
-                            <ImageIcon className="h-4 w-4" aria-hidden />
-                          </button>
-                        ) : null}
-                        {tx.hasSlip ? (
-                          <button
-                            type="button"
-                            onClick={() => setSlipFor(tx)}
-                            aria-label={`ดูสลิป ${tx.title}`}
-                            className="flex h-11 w-11 items-center justify-center rounded-2xl text-primary"
-                          >
-                            <Receipt className="h-4 w-4" aria-hidden />
-                          </button>
-                        ) : null}
-                        <button
-                          type="button"
-                          onClick={() => remove(tx)}
-                          aria-label={`ลบ ${tx.title}`}
-                          className="flex h-11 w-11 items-center justify-center rounded-2xl text-muted"
-                        >
-                          <Trash2 className="h-4 w-4" aria-hidden />
-                        </button>
-                      </div>
-                    )
-                  }
-                />
+                    ))}
+                  </ul>
+                </section>
               ))}
-            </ul>
+            </div>
             {hasMore ? (
               <button
                 type="button"
@@ -521,34 +685,27 @@ function TransactionsView() {
         )}
       </div>
 
-      {selecting ? (
-        <div
-          role="region"
-          aria-label="จัดการรายการที่เลือก"
-          className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-surface pb-[env(safe-area-inset-bottom)]"
+      {selecting ? null : (
+        <button
+          type="button"
+          onClick={() => setFormOpen(true)}
+          aria-label="เพิ่มรายการใหม่"
+          className="fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] right-5 z-20 flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-tr from-[var(--hero-from)] to-[#7a9e48] text-white shadow-card"
         >
-          <div className="mx-auto flex max-w-md items-center gap-2 px-4 py-2">
-            <p className="num flex-1 text-sm font-semibold" aria-live="polite">
-              เลือกแล้ว {selected.size} รายการ
-            </p>
-            <button
-              type="button"
-              disabled={selected.size === 0 || bulkBusy}
-              onClick={() => setMoveOpen(true)}
-              className="flex h-11 items-center gap-1 rounded-2xl border border-primary px-4 text-sm font-semibold text-primary disabled:opacity-50"
-            >
-              <FolderInput className="h-4 w-4" aria-hidden /> ย้ายหมวด
-            </button>
-            <button
-              type="button"
-              disabled={selected.size === 0 || bulkBusy}
-              onClick={bulkDelete}
-              className="flex h-11 items-center gap-1 rounded-2xl bg-expense px-4 text-sm font-semibold text-surface disabled:opacity-50"
-            >
-              <Trash2 className="h-4 w-4" aria-hidden /> ลบ
-            </button>
-          </div>
-        </div>
+          <Plus className="h-6 w-6" aria-hidden />
+        </button>
+      )}
+
+      {calendarOpen ? (
+        <RangeCalendar
+          value={range}
+          now={now}
+          onClose={() => setCalendarOpen(false)}
+          onApply={(r) => {
+            setRange(r);
+            setCalendarOpen(false);
+          }}
+        />
       ) : null}
 
       {moveOpen ? (
@@ -569,26 +726,26 @@ function TransactionsView() {
             setNotice(warning ? `บันทึกแล้ว ${warning}` : "บันทึกแล้ว");
             list.reload();
           }}
+          onDelete={() => remove(editFor)}
+          onViewSlip={
+            editFor.hasSlip
+              ? () => {
+                  setSlipFor(editFor);
+                  setEditFor(null);
+                }
+              : undefined
+          }
         />
       ) : null}
 
       {slipFor ? <SlipSheet tx={slipFor} onClose={() => setSlipFor(null)} /> : null}
 
-      {photoFor ? (
-        <PhotoSheet
-          tx={photoFor}
-          onClose={() => setPhotoFor(null)}
-          onRemoved={() => {
-            setPhotoFor(null);
-            setNotice("ลบรูปแนบแล้ว");
-            list.reload();
-          }}
-        />
-      ) : null}
-
       {exportOpen ? (
         <ExportSheet
-          filters={{ type: type === "all" ? undefined : type, q: q || undefined }}
+          filters={filter}
+          rangeText={range ? formatRange(range.start, range.end) : "ทุกช่วงเวลา"}
+          typeText={type === "all" ? "ทั้งหมด" : type === "expense" ? "รายจ่าย" : "รายรับ"}
+          categoryText={chosen?.name ?? "ทุกหมวดหมู่"}
           onClose={() => setExportOpen(false)}
         />
       ) : null}
@@ -607,48 +764,100 @@ function TransactionsView() {
   );
 }
 
+/** The cards while the entries load. */
+function TransactionsSkeleton() {
+  return (
+    <div role="status" aria-label="กำลังโหลด" className="space-y-4">
+      <div className="space-y-2">
+        <div className="flex items-center justify-between px-1">
+          <Skeleton className="h-4 w-24 rounded-lg" />
+          <Skeleton className="h-5 w-24 rounded-full" />
+        </div>
+        {[0, 1, 2].map((i) => (
+          <Skeleton key={i} className="h-[4.25rem] w-full" />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 /**
- * Export what the list currently shows. The file link is opened in the phone's own browser
+ * Export what the list currently shows: the file's format, which columns to keep, and whether to
+ * pack the slip pictures and photos in a zip. The file link is opened in the phone's own browser
  * because the LINE in-app browser cannot download files.
  */
 function ExportSheet({
   filters,
+  rangeText,
+  typeText,
+  categoryText,
   onClose,
 }: {
-  filters: { type?: "expense" | "income"; q?: string };
+  filters: Record<string, string>;
+  rangeText: string;
+  typeText: string;
+  categoryText: string;
   onClose: () => void;
 }) {
   const { api, openExternal } = useLiff();
   const me = useApi<{ features: Record<string, boolean> }>("/api/me");
-  const [busy, setBusy] = useState<"csv" | "xlsx" | null>(null);
+  const [format, setFormat] = useState<"xlsx" | "csv" | "pdf">("xlsx");
+  const [groups, setGroups] = useState<Set<ColumnGroup>>(new Set(COLUMN_GROUPS));
+  const [attachments, setAttachments] = useState(false);
+  const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const allowed = me.data?.features.export === true;
+  const zipAllowed = me.data?.features.advancedExport === true;
+  const all = groups.size === COLUMN_GROUPS.length;
 
-  async function start(format: "csv" | "xlsx") {
-    setBusy(format);
+  function toggleGroup(g: ColumnGroup) {
+    setGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(g)) {
+        if (next.size > 1) next.delete(g); // a file with no column says nothing
+      } else {
+        next.add(g);
+      }
+      return next;
+    });
+  }
+
+  async function start() {
+    setBusy(true);
     setError(null);
     try {
       const res = await api<{ url: string }>("/api/export/link", {
         method: "POST",
-        body: JSON.stringify({ format, ...filters }),
+        body: JSON.stringify({
+          format,
+          ...filters,
+          ...(all ? {} : { groups: [...groups] }),
+          ...(attachments ? { attachments: true } : {}),
+        }),
       });
       await openExternal(res.url);
       onClose();
     } catch (e) {
       setError(e instanceof Error ? e.message : "ส่งออกไม่สำเร็จ");
-      setBusy(null);
+      setBusy(false);
     }
   }
 
+  const FORMATS = [
+    { value: "xlsx", label: "Excel (.xlsx)", Icon: FileSpreadsheet },
+    { value: "csv", label: "CSV", Icon: FileText },
+    { value: "pdf", label: "PDF สรุป", Icon: FileBarChart },
+  ] as const;
+
   return (
-    <Sheet title="ส่งออกไฟล์" onClose={onClose}>
+    <Sheet title="ส่งออกข้อมูลรายการ" onClose={onClose}>
       {me.loading ? (
         <LoadingBlock rows={2} />
       ) : me.error ? (
         <ErrorState message={me.error} onRetry={me.reload} />
       ) : !allowed ? (
         <div className="space-y-3 text-center">
-          <p className="text-base font-semibold">ส่งออก CSV / Excel สำหรับแผน Professional</p>
+          <p className="text-base font-semibold">ส่งออก Excel / CSV / PDF สำหรับแผน Professional</p>
           <p className="text-sm text-muted">
             ดาวน์โหลดรายการไปทำบัญชีต่อในคอมพิวเตอร์หรือ Google Sheets ลองใช้ฟรี 7
             วันได้ที่หน้าอัปเกรด
@@ -661,35 +870,133 @@ function ExportSheet({
           </Link>
         </div>
       ) : (
-        <div className="space-y-3">
-          <p className="text-sm text-muted">
-            ส่งออกตามตัวกรองที่เลือกอยู่ (สูงสุด 5,000 แถว)
-            ไฟล์จะเปิดในเบราว์เซอร์ของเครื่องเพื่อดาวน์โหลด ลิงก์ใช้ได้ 2 นาที
-          </p>
-          <button
-            type="button"
-            disabled={busy !== null}
-            onClick={() => start("csv")}
-            className="h-12 w-full rounded-2xl border border-primary text-base font-semibold text-primary disabled:opacity-60"
-          >
-            {busy === "csv" ? "กำลังเตรียมไฟล์..." : "ดาวน์โหลด CSV"}
-          </button>
-          <button
-            type="button"
-            disabled={busy !== null}
-            onClick={() => start("xlsx")}
-            className="h-12 w-full rounded-2xl bg-primary text-base font-semibold text-surface disabled:opacity-60"
-          >
-            {busy === "xlsx" ? "กำลังเตรียมไฟล์..." : "ดาวน์โหลด Excel (.xlsx)"}
-          </button>
-          <p className="text-xs text-muted">
-            ไฟล์ Excel มีชีตสรุปตามหมวดและสรุปรายเดือนเพิ่มให้ด้วย
+        <div className="space-y-4 text-xs">
+          <div className="space-y-1.5">
+            <p className="font-semibold">รูปแบบไฟล์</p>
+            <div role="radiogroup" aria-label="รูปแบบไฟล์" className="grid grid-cols-3 gap-2">
+              {FORMATS.map(({ value, label, Icon }) => (
+                <button
+                  key={value}
+                  type="button"
+                  role="radio"
+                  aria-checked={format === value}
+                  onClick={() => setFormat(value)}
+                  className={cn(
+                    "flex min-h-11 flex-col items-center justify-center gap-1 rounded-xl border px-1 py-2 text-center",
+                    format === value
+                      ? "border-primary bg-primary-soft font-semibold text-primary"
+                      : "border-border text-muted",
+                  )}
+                >
+                  <Icon className="h-4 w-4" aria-hidden />
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="space-y-1">
+            <p className="font-semibold">ตัวกรองที่ใช้ส่งออก</p>
+            <dl className="space-y-1 rounded-xl border border-border bg-background p-3">
+              <div className="flex justify-between gap-2">
+                <dt className="text-muted">ช่วงเวลา</dt>
+                <dd className="num font-medium">{rangeText}</dd>
+              </div>
+              <div className="flex justify-between gap-2">
+                <dt className="text-muted">ประเภท</dt>
+                <dd className="font-medium">{typeText}</dd>
+              </div>
+              <div className="flex justify-between gap-2">
+                <dt className="text-muted">หมวดหมู่</dt>
+                <dd className="font-medium">{categoryText}</dd>
+              </div>
+            </dl>
+          </div>
+
+          <fieldset className="space-y-2">
+            <legend className="flex w-full items-center justify-between">
+              <span className="font-semibold">คอลัมน์ข้อมูลที่ต้องการส่งออก</span>
+              <button
+                type="button"
+                onClick={() => setGroups(new Set(all ? [COLUMN_GROUPS[0]] : COLUMN_GROUPS))}
+                className="text-[10px] font-medium text-primary"
+              >
+                {all ? "เหลือคอลัมน์เดียว" : `เลือกทั้งหมด ${COLUMN_GROUPS.length} รายการ`}
+              </button>
+            </legend>
+            <div className="grid grid-cols-2 gap-2">
+              {COLUMN_GROUPS.map((g) => (
+                <label
+                  key={g}
+                  className="flex min-h-11 cursor-pointer items-center gap-2 rounded-xl border border-border bg-background px-2.5"
+                >
+                  <input
+                    type="checkbox"
+                    checked={groups.has(g)}
+                    onChange={() => toggleGroup(g)}
+                    className="h-4 w-4 accent-[var(--primary)]"
+                  />
+                  <span>{GROUP_LABEL[g]}</span>
+                </label>
+              ))}
+            </div>
+          </fieldset>
+
+          <div className="flex items-center justify-between gap-3 rounded-2xl border border-warn/30 bg-warn-soft p-3">
+            <div className="min-w-0">
+              <p className="flex items-center gap-1.5 font-bold">
+                รวมไฟล์รูปสลิป / ใบเสร็จ
+                <span className="rounded-full border border-warn/30 px-1.5 text-[9px] font-bold text-warn">
+                  ★ PRO
+                </span>
+              </p>
+              <p className="text-[10px] text-muted">
+                บีบอัดเป็นไฟล์ ZIP พร้อมรูปภาพหลักฐาน (สูงสุด 150 รูป)
+              </p>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={attachments}
+              aria-label="รวมไฟล์รูปสลิปและใบเสร็จ"
+              disabled={!zipAllowed}
+              onClick={() => setAttachments((v) => !v)}
+              className={cn(
+                "relative h-6 w-11 shrink-0 rounded-full transition-colors disabled:opacity-40",
+                attachments ? "bg-primary" : "bg-border",
+              )}
+            >
+              <span
+                className={cn(
+                  "absolute top-0.5 h-5 w-5 rounded-full bg-surface shadow transition-all",
+                  attachments ? "left-[1.375rem]" : "left-0.5",
+                )}
+              />
+            </button>
+          </div>
+
+          <p className="text-[11px] text-muted">
+            ส่งออกสูงสุด 5,000 แถว ไฟล์จะเปิดในเบราว์เซอร์ของเครื่องเพื่อดาวน์โหลด ลิงก์ใช้ได้ 2
+            นาที
+            {format === "xlsx" ? " · ไฟล์ Excel มีชีตสรุปตามหมวดและสรุปรายเดือนเพิ่มให้ด้วย" : ""}
+            {format === "pdf"
+              ? " · PDF พิมพ์ตารางได้สูงสุด 2,000 รายการ (ยอดรวมนับครบทุกรายการ)"
+              : ""}
           </p>
           {error ? (
             <p role="alert" className="text-sm text-expense">
               {error}
             </p>
           ) : null}
+          <button
+            type="button"
+            disabled={busy}
+            onClick={start}
+            className="flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-primary text-sm font-semibold text-surface disabled:opacity-60"
+          >
+            <FileDown className="h-4 w-4" aria-hidden />
+            {busy ? "กำลังเตรียมไฟล์..." : "สร้างไฟล์และส่งออก"}
+          </button>
         </div>
       )}
     </Sheet>
@@ -712,68 +1019,6 @@ function SlipSheet({ tx, onClose }: { tx: TxDto; onClose: () => void }) {
           alt={`สลิปของรายการ ${tx.title}`}
           className="mx-auto max-h-[70vh] w-full rounded-2xl border border-border object-contain"
         />
-      )}
-    </Sheet>
-  );
-}
-
-/** Shows the photo attached to an entry, and lets the person remove it. */
-function PhotoSheet({
-  tx,
-  onClose,
-  onRemoved,
-}: {
-  tx: TxDto;
-  onClose: () => void;
-  onRemoved: () => void;
-}) {
-  const { api } = useLiff();
-  const photo = useApi<{ url: string }>(`/api/transactions/${tx.id}/photo`);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  async function remove() {
-    if (!window.confirm("ลบรูปแนบนี้ใช่ไหม? ลบแล้วกู้คืนไม่ได้")) return;
-    setBusy(true);
-    setError(null);
-    try {
-      await api(`/api/transactions/${tx.id}/photo`, { method: "DELETE" });
-      onRemoved();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "ลบรูปไม่สำเร็จ");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <Sheet title={`รูปแนบ: ${tx.title}`} onClose={onClose}>
-      {photo.loading ? (
-        <LoadingBlock rows={2} />
-      ) : photo.error || !photo.data ? (
-        <ErrorState message={photo.error ?? "เปิดรูปไม่สำเร็จ"} onRetry={photo.reload} />
-      ) : (
-        <div className="space-y-3">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={photo.data.url}
-            alt={`รูปแนบของรายการ ${tx.title}`}
-            className="mx-auto max-h-[60vh] w-full rounded-2xl border border-border object-contain"
-          />
-          {error ? (
-            <p role="alert" className="text-sm text-expense">
-              {error}
-            </p>
-          ) : null}
-          <button
-            type="button"
-            onClick={remove}
-            disabled={busy}
-            className="flex h-11 w-full items-center justify-center gap-2 rounded-2xl border border-border text-sm font-semibold text-expense disabled:opacity-60"
-          >
-            <Trash2 className="h-4 w-4" aria-hidden /> {busy ? "กำลังลบ..." : "ลบรูปแนบ"}
-          </button>
-        </div>
       )}
     </Sheet>
   );
@@ -1002,19 +1247,47 @@ function Field({ label, children }: { label: ReactNode; children: ReactNode }) {
   );
 }
 
-/** Edit one confirmed entry in a bottom sheet (the entries list). */
+/** Edit one confirmed entry in a bottom sheet (the entries list), with delete and the slip. */
 function EditSheet({
   tx,
   onClose,
   onSaved,
+  onDelete,
+  onViewSlip,
 }: {
   tx: TxDto;
   onClose: () => void;
   onSaved: (warning?: string) => void;
+  onDelete: () => void;
+  onViewSlip?: () => void;
 }) {
   return (
     <Sheet title="แก้ไขรายการ" onClose={onClose}>
-      <EditForm tx={tx} onCancel={onClose} onSaved={onSaved} />
+      <EditForm
+        tx={tx}
+        onCancel={onClose}
+        onSaved={onSaved}
+        extra={
+          <>
+            {onViewSlip ? (
+              <button
+                type="button"
+                onClick={onViewSlip}
+                className="flex h-12 w-full items-center justify-center gap-2 rounded-2xl border border-border text-sm font-semibold text-primary"
+              >
+                <Receipt className="h-4 w-4" aria-hidden /> ดูสลิป
+              </button>
+            ) : null}
+            <button
+              type="button"
+              onClick={onDelete}
+              className="flex h-12 w-full items-center justify-center gap-2 rounded-2xl border border-expense text-sm font-semibold text-expense"
+            >
+              <Trash2 className="h-4 w-4" aria-hidden /> ลบรายการนี้
+            </button>
+          </>
+        }
+      />
     </Sheet>
   );
 }
@@ -1024,10 +1297,13 @@ function EditForm({
   tx,
   onCancel,
   onSaved,
+  extra,
 }: {
   tx: TxDto;
   onCancel: () => void;
   onSaved: (warning?: string) => void;
+  /** More actions under the save button (the list adds delete and "see slip"). */
+  extra?: ReactNode;
 }) {
   const { api } = useLiff();
   const categories = useApi<CategoriesResponse>("/api/categories");
@@ -1338,6 +1614,7 @@ function EditForm({
       >
         {saving ? "กำลังบันทึก..." : "บันทึก"}
       </button>
+      {extra}
     </form>
   );
 }

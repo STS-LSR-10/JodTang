@@ -50,7 +50,7 @@ export function RecurringCard({ me }: { me: Me }) {
   }
 
   return (
-    <section className={cardClass} aria-label="รายการประจำ">
+    <section id="recurring" className={cn(cardClass, "scroll-mt-4")} aria-label="รายการประจำ">
       <div className="flex items-center justify-between gap-3">
         <div>
           <h2 className="font-semibold">รายการประจำ</h2>

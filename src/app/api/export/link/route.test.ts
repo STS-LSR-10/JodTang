@@ -54,6 +54,20 @@ describe("POST /api/export/link", () => {
 
   it("an unknown format is still a 400 for a paid user", async () => {
     plan = "plus";
-    expect((await post({ format: "pdf" })).status).toBe(400);
+    expect((await post({ format: "docx" })).status).toBe(400);
+  });
+
+  it("passes the columns and the attachments option into the signed link; an empty column list is refused", async () => {
+    plan = "plus";
+    expect(
+      (await post({ format: "pdf", groups: ["date", "amount"], attachments: true })).status,
+    ).toBe(200);
+    expect((sign.mock.calls[0] as unknown[] | undefined)?.[0]).toMatchObject({
+      format: "pdf",
+      groups: ["date", "amount"],
+      attachments: true,
+    });
+    expect((await post({ format: "csv", groups: [] })).status).toBe(400);
+    expect((await post({ format: "csv", groups: ["nope"] })).status).toBe(400);
   });
 });

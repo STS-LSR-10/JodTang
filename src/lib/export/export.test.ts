@@ -1,6 +1,10 @@
 import ExcelJS from "exceljs";
 import { describe, expect, it } from "vitest";
+import { unzipSync } from "fflate";
+import { collectAttachments, buildZip, safeName } from "./attachments";
+import { columnIndexes } from "./columns";
 import { csvCell, toCsv } from "./csv";
+import { buildPdf, MAX_PDF_ROWS } from "./pdf";
 import { exportDate, exportTime, HEADERS, rowCells, type ExportRow } from "./rows";
 import { summarizeByCategory, summarizeByMonth } from "./summary";
 import { buildXlsx } from "./xlsx";
@@ -182,5 +186,133 @@ describe("the foreign-currency columns", () => {
     expect(
       rowCells({ ...base, origCurrency: "JPY", origAmountMinor: 150000, fxRate: 0.2335 }).slice(-3),
     ).toEqual(["JPY", "1500.00", "0.2335"]);
+  });
+});
+
+describe("column groups", () => {
+  it("keep the columns of the chosen groups, in the file's own order; none chosen means all", () => {
+    expect(columnIndexes()).toHaveLength(HEADERS.length);
+    expect(columnIndexes([])).toHaveLength(HEADERS.length);
+    expect(columnIndexes(["amount", "date"]).map((i) => HEADERS[i])).toEqual([
+      "วันที่",
+      "เวลา",
+      "จำนวนเงิน (บาท)",
+    ]);
+    expect(columnIndexes(["fx"]).map((i) => HEADERS[i])).toEqual([
+      "สกุลเงินเดิม",
+      "ยอดเดิม",
+      "อัตราแลกเปลี่ยน",
+    ]);
+  });
+
+  it("CSV and Excel carry only those columns", async () => {
+    const csv = toCsv([row()], ["title", "amount"]).replace("\uFEFF", "").trim().split("\r\n");
+    expect(csv).toEqual(["ชื่อรายการ,จำนวนเงิน (บาท)", "กาแฟ,30.50"]);
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(
+      (await buildXlsx([row()], { advanced: false, groups: ["title", "amount"] })) as never,
+    );
+    const sheet = wb.getWorksheet("รายการ");
+    expect(sheet?.getRow(1).values).toEqual([undefined, "ชื่อรายการ", "จำนวนเงิน (บาท)"]);
+    expect(sheet?.getRow(2).values).toEqual([undefined, "กาแฟ", 30.5]);
+  });
+});
+
+describe("buildPdf", () => {
+  const options = { periodLabel: "ทุกช่วงเวลา", generatedAt: new Date("2026-10-20T03:00:00Z") };
+  const pages = (pdf: Uint8Array) =>
+    (
+      Buffer.from(pdf)
+        .toString("latin1")
+        .match(/\/Type \/Page\b/g) ?? []
+    ).length;
+
+  it("makes a PDF with Thai text, for few rows and for none", async () => {
+    const rows = [row(), row({ type: "income", title: "เงินเดือน", amountSatang: 3_500_000 })];
+    const pdf = await buildPdf(rows, options);
+    expect(pdf.subarray(0, 5).toString()).toBe("%PDF-");
+    expect(pages(pdf)).toBe(1);
+    expect((await buildPdf([], options)).subarray(0, 5).toString()).toBe("%PDF-");
+  });
+
+  it("goes on to more pages for many rows, and cuts the table at the limit", async () => {
+    const many = Array.from({ length: 120 }, (_, i) => row({ title: `รายการ ${i}` }));
+    expect(pages(await buildPdf(many, options))).toBeGreaterThan(1);
+    const huge = Array.from({ length: MAX_PDF_ROWS + 10 }, () => row());
+    expect((await buildPdf(huge, options)).byteLength).toBeGreaterThan(1000);
+  }, 30_000);
+
+  it("works with any column choice", async () => {
+    const pdf = await buildPdf([row()], { ...options, groups: ["fx"] });
+    expect(pdf.subarray(0, 5).toString()).toBe("%PDF-");
+  });
+});
+
+describe("attachments", () => {
+  it("safeName keeps Thai and drops what file systems refuse", () => {
+    expect(safeName('ข้าว/น้ำ: "พิเศษ"?')).toBe("ข้าว_น้ำ_ _พิเศษ__");
+    expect(safeName("   ")).toBe("รายการ");
+    expect(Array.from(safeName("ก".repeat(100)))).toHaveLength(40);
+  });
+
+  it("buildZip: the file at the top, numbered pictures in a folder, a note when some were left out", () => {
+    const zip = buildZip(
+      { name: "jodtang.csv", data: new TextEncoder().encode("a,b") },
+      [
+        { name: "2026-10-15 1430 ก (สลิป).jpg", data: new Uint8Array([1, 2, 3]) },
+        { name: "2026-10-15 1430 ก (สลิป).jpg", data: new Uint8Array([4, 5]) },
+      ],
+      3,
+    );
+    const names = Object.keys(unzipSync(zip));
+    expect(names).toContain("jodtang.csv");
+    expect(names.filter((n) => n.startsWith("รูปสลิปและใบเสร็จ/"))).toHaveLength(2); // same name twice, both kept
+    expect(names).toContain("อ่านก่อน.txt");
+  });
+
+  it("collectAttachments: finds slip pictures by id and photos by path, skips what will not fit or fails", async () => {
+    const files: Record<string, Uint8Array> = {
+      "u/slip-1.jpg": new Uint8Array(10),
+      "u/photo-1.png": new Uint8Array(10),
+      "u/photo-big.jpg": new Uint8Array(100),
+    };
+    const db = {
+      from: () => ({
+        select: () => ({
+          eq: () => ({
+            in: async () => ({ data: [{ id: "s1", storage_path: "u/slip-1.jpg" }], error: null }),
+          }),
+        }),
+      }),
+      storage: {
+        from: () => ({
+          download: async (path: string) =>
+            files[path]
+              ? { data: new Blob([files[path] as Uint8Array<ArrayBuffer>]), error: null }
+              : { data: null, error: { message: "gone" } },
+        }),
+      },
+    };
+    const when = new Date("2026-10-15T07:30:00Z");
+    const sources = [
+      { date: when, title: "ข้าว", slipId: "s1", photoPath: "u/photo-1.png" },
+      { date: when, title: "ใหญ่", slipId: null, photoPath: "u/photo-big.jpg" },
+      { date: when, title: "หาย", slipId: null, photoPath: "u/missing.jpg" },
+    ];
+    const out = await collectAttachments(db as never, "u1", sources, {
+      maxFiles: 10,
+      maxBytes: 50,
+    });
+    expect(out.files.map((f) => f.name)).toEqual([
+      "2026-10-15 1430 ข้าว (รูปแนบ).png",
+      "2026-10-15 1430 ข้าว (สลิป).jpg",
+    ]);
+    expect(out.skipped).toBe(2); // one too big, one that could not be read
+    const capped = await collectAttachments(db as never, "u1", sources, {
+      maxFiles: 1,
+      maxBytes: 1000,
+    });
+    expect(capped.files).toHaveLength(1);
+    expect(capped.skipped).toBe(3); // two beyond the file limit + the missing one
   });
 });
