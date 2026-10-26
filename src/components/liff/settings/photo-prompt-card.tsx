@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 import { useLiff } from "@/components/liff/liff-provider";
-import { cn } from "@/lib/utils";
 import { PlusLock } from "./plus-lock";
+import { Switch } from "./switch";
 import { cardClass, type Me, type Settings } from "./types";
 
 /** "Offer me a photo after I record something" (the camera and album buttons under the card). */
@@ -48,25 +48,12 @@ export function PhotoPromptCard({
             หลังจดรายการ บอทมีปุ่มถ่ายรูป/เลือกจากอัลบั้มให้แนบใบเสร็จหรือสินค้าต่อท้าย
           </p>
         </div>
-        <button
-          type="button"
-          role="switch"
-          aria-checked={enabled && !locked}
-          aria-label="ชวนแนบรูปหลังจด"
+        <Switch
+          checked={enabled && !locked}
+          label="ชวนแนบรูปหลังจด"
           disabled={busy || locked}
-          onClick={() => void toggle()}
-          className={cn(
-            "relative h-8 w-14 shrink-0 rounded-full transition-colors disabled:opacity-50",
-            enabled && !locked ? "bg-primary" : "bg-border",
-          )}
-        >
-          <span
-            className={cn(
-              "absolute top-1 h-6 w-6 rounded-full bg-surface shadow transition-all",
-              enabled && !locked ? "left-7" : "left-1",
-            )}
-          />
-        </button>
+          onChange={() => void toggle()}
+        />
       </div>
       {locked ? <PlusLock>แนบรูปใบเสร็จหรือสินค้ากับรายการ</PlusLock> : null}
       {notice ? (

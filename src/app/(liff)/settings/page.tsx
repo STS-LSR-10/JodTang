@@ -1,6 +1,19 @@
 "use client";
 
-import { useState } from "react";
+import {
+  Brain,
+  CalendarClock,
+  Clock,
+  Coins,
+  Crown,
+  Languages,
+  PiggyBank,
+  Plus,
+  Receipt,
+  Repeat,
+  Wallet,
+} from "lucide-react";
+import { useEffect, useState } from "react";
 import { useApi, useLiff } from "@/components/liff/liff-provider";
 import { DeleteCard } from "@/components/liff/settings/delete-card";
 import { PersonalizeCard } from "@/components/liff/settings/personalize-card";
@@ -10,14 +23,20 @@ import { ResetCard } from "@/components/liff/settings/reset-card";
 import { MemoryCard } from "@/components/liff/settings/memory-card";
 import { PlanCard } from "@/components/liff/settings/plan-card";
 import { ReferralCard } from "@/components/liff/settings/referral-card";
-import { ReminderCard } from "@/components/liff/settings/reminder-card";
-import { SummaryCard } from "@/components/liff/settings/summary-card";
+import {
+  MenuButton,
+  MenuGroup,
+  MenuHeading,
+  MenuInfo,
+  MenuLink,
+} from "@/components/liff/settings/menu";
+import { NotificationsCard } from "@/components/liff/settings/notifications-card";
+import { PaymentHistorySheet } from "@/components/liff/settings/payment-history-sheet";
 import { RecurringCard } from "@/components/liff/settings/recurring-card";
 import { cardClass, type Me, type Settings } from "@/components/liff/settings/types";
+import { Sheet } from "@/components/liff/sheet";
 import { ErrorState, LoadingBlock, PageHeader } from "@/components/liff/states";
 import { cn } from "@/lib/utils";
-import { CalendarClock, PiggyBank, Wallet } from "lucide-react";
-import Link from "next/link";
 
 const CONFIRM_OPTIONS: { value: Settings["confirm_style"]; label: string; hint: string }[] = [
   { value: "full", label: "เต็ม", hint: "การ์ดพร้อมปุ่มแก้ไข/ลบ" },
@@ -39,6 +58,12 @@ export default function SettingsPage() {
   const [override, setOverride] = useState<Settings | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [sheet, setSheet] = useState<"recurring" | "memory" | "payments" | null>(null);
+
+  // /settings#recurring (from the entries page) opens the recurring list straight away
+  useEffect(() => {
+    if (window.location.hash === "#recurring") setSheet("recurring");
+  }, []);
 
   const current = override ?? settings.data;
 
@@ -69,7 +94,7 @@ export default function SettingsPage() {
   return (
     <main>
       <PageHeader title="ตั้งค่า" />
-      <div className="space-y-4 px-4 pb-4">
+      <div className="space-y-3.5 px-4 pb-4">
         {loading ? (
           <LoadingBlock rows={4} />
         ) : error || !current || !me.data ? (
@@ -82,10 +107,17 @@ export default function SettingsPage() {
           />
         ) : (
           <>
-            <PlanCard me={me.data} onChanged={me.reload} />
+            <PlanCard
+              me={me.data}
+              onChanged={me.reload}
+              onOpenHistory={() => setSheet("payments")}
+            />
 
             <section className={cardClass}>
-              <h2 className="font-semibold">การ์ดยืนยันหลังจด</h2>
+              <div>
+                <h2 className="font-semibold">การ์ดยืนยันหลังจด</h2>
+                <p className="text-xs text-muted">รูปแบบข้อความสรุปหลังจดบันทึกใน LINE</p>
+              </div>
               <div className="grid grid-cols-3 gap-2" role="radiogroup" aria-label="รูปแบบการ์ด">
                 {CONFIRM_OPTIONS.map((o) => (
                   <button
@@ -110,7 +142,10 @@ export default function SettingsPage() {
             </section>
 
             <section className={cardClass}>
-              <h2 className="font-semibold">รอบงบ</h2>
+              <div>
+                <h2 className="font-semibold">รอบงบ</h2>
+                <p className="text-xs text-muted">ระยะเวลาการคำนวณสรุปยอดรายรับและรายจ่าย</p>
+              </div>
               <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="ชนิดรอบงบ">
                 {CYCLE_OPTIONS.map((o) => (
                   <button
@@ -132,13 +167,13 @@ export default function SettingsPage() {
                 ))}
               </div>
               {current.budget_cycle === "monthly" ? (
-                <label className="flex items-center justify-between gap-3 text-sm">
-                  <span>เริ่มรอบทุกวันที่</span>
+                <label className="flex items-center justify-between gap-3 border-t border-border pt-3 text-sm">
+                  <span className="font-medium">เริ่มรอบทุกวันที่</span>
                   <select
                     value={current.cycle_start_day}
                     disabled={saving}
                     onChange={(e) => save({ cycle_start_day: Number(e.target.value) })}
-                    className="num h-11 w-24 rounded-2xl border border-border bg-background px-3"
+                    className="num h-11 w-24 rounded-2xl border border-border bg-background px-3 text-center"
                   >
                     {START_DAYS.map((d) => (
                       <option key={d} value={d}>
@@ -148,7 +183,9 @@ export default function SettingsPage() {
                   </select>
                 </label>
               ) : (
-                <p className="text-xs text-muted">รอบสัปดาห์เริ่มทุกวันจันทร์</p>
+                <p className="border-t border-border pt-3 text-xs text-muted">
+                  รอบสัปดาห์เริ่มทุกวันจันทร์
+                </p>
               )}
             </section>
 
@@ -161,75 +198,112 @@ export default function SettingsPage() {
               </p>
             ) : null}
 
-            <ReminderCard me={me.data} settings={current} onSaved={setOverride} />
-            <SummaryCard me={me.data} settings={current} onSaved={setOverride} />
+            <NotificationsCard me={me.data} settings={current} onSaved={setOverride} />
             <PersonalizeCard me={me.data} settings={current} onSaved={setOverride} />
             <PhotoPromptCard me={me.data} settings={current} onSaved={setOverride} />
-            <Link
-              href="/wallets"
-              className={`${cardClass} flex items-center gap-3 !space-y-0`}
-              aria-label="กระเป๋าเงิน"
-            >
-              <Wallet className="h-5 w-5 text-primary" aria-hidden />
-              <span className="flex-1">
-                <span className="block font-semibold">กระเป๋าเงิน</span>
-                <span className="block text-xs text-muted">
-                  แยกเงินสด บัญชี บัตร เงินเก็บ · มีได้ {me.data.limits.wallets} ใบ
-                </span>
-              </span>
-            </Link>
-            <Link
-              href="/goals"
-              className={`${cardClass} flex items-center gap-3 !space-y-0`}
-              aria-label="เป้าหมายการออม"
-            >
-              <PiggyBank className="h-5 w-5 text-primary" aria-hidden />
-              <span className="flex-1">
-                <span className="block font-semibold">เป้าหมายการออม</span>
-                <span className="block text-xs text-muted">
-                  กระปุกออมสิน ตั้งเป้า ดูความคืบหน้า · Professional ขึ้นไป
-                </span>
-              </span>
-            </Link>
-            <Link
-              href="/bills"
-              className={`${cardClass} flex items-center gap-3 !space-y-0`}
-              aria-label="บิลที่ต้องจ่าย"
-            >
-              <CalendarClock className="h-5 w-5 text-primary" aria-hidden />
-              <span className="flex-1">
-                <span className="block font-semibold">เตือนจ่ายบิล</span>
-                <span className="block text-xs text-muted">
-                  บอทเตือนก่อนวันครบกำหนด · แผน Ultimate
-                </span>
-              </span>
-            </Link>
-            <RecurringCard me={me.data} />
-            <MemoryCard me={me.data} />
+
+            <MenuGroup label="จัดการฟีเจอร์">
+              <MenuLink
+                href="/wallets"
+                ariaLabel="กระเป๋าเงิน"
+                icon={<Wallet className="h-[18px] w-[18px]" />}
+                title="กระเป๋าเงิน"
+                sub={`แยกเงินสด บัญชี บัตร เงินเก็บ · มีได้ ${me.data.limits.wallets} ใบ`}
+              />
+              <MenuLink
+                href="/goals"
+                ariaLabel="เป้าหมายการออม"
+                icon={<PiggyBank className="h-[18px] w-[18px]" />}
+                title="เป้าหมายการออม"
+                sub="กระปุกออมสิน ตั้งเป้า ดูความคืบหน้า · Professional ขึ้นไป"
+              />
+              <MenuLink
+                href="/bills"
+                ariaLabel="บิลที่ต้องจ่าย"
+                icon={<CalendarClock className="h-[18px] w-[18px]" />}
+                title="เตือนจ่ายบิล"
+                sub="บอทเตือนก่อนวันครบกำหนด · แผน Ultimate"
+              />
+              <MenuButton
+                onClick={() => setSheet("recurring")}
+                ariaLabel="รายการประจำ"
+                icon={<Repeat className="h-[18px] w-[18px]" />}
+                title="รายการประจำ"
+                sub="จดให้อัตโนมัติ เช่น ค่าเน็ต ค่าเช่า เงินเดือน"
+                badge={
+                  <span className="flex items-center gap-0.5 rounded-md bg-primary-soft px-2 py-0.5 text-xs font-semibold text-primary">
+                    <Plus className="h-3 w-3" aria-hidden /> เพิ่ม
+                  </span>
+                }
+              />
+              <MenuButton
+                onClick={() => setSheet("memory")}
+                ariaLabel="จัดหมวดด้วยความจำ"
+                icon={<Brain className="h-[18px] w-[18px]" />}
+                title="จัดหมวดด้วยความจำ"
+                sub={'เมื่อแก้หมวดสลิป บอทจะจำคู่ "ผู้รับ → หมวด" ไว้ใช้ครั้งต่อไป'}
+              />
+            </MenuGroup>
+
+            <MenuHeading>สมาชิก</MenuHeading>
+            <MenuGroup label="สมาชิก">
+              <MenuLink
+                href="/upgrade"
+                tone="warm"
+                icon={<Crown className="h-[18px] w-[18px]" />}
+                title="อัปเกรด"
+                sub="ปลดล็อกฟีเจอร์พรีเมียมทั้งหมด"
+              />
+              <MenuButton
+                onClick={() => setSheet("payments")}
+                icon={<Receipt className="h-[18px] w-[18px]" />}
+                title="ประวัติการชำระเงิน"
+                sub="ดูใบเสร็จและรอบต่ออายุสมาชิก"
+              />
+            </MenuGroup>
+
+            <MenuHeading>ทั่วไป</MenuHeading>
+            <MenuGroup label="ทั่วไป">
+              <MenuInfo
+                icon={<Languages className="h-[18px] w-[18px]" />}
+                title="ภาษา"
+                value="ไทย"
+              />
+              <MenuInfo
+                icon={<Coins className="h-[18px] w-[18px]" />}
+                title="สกุลเงิน"
+                sub="ตอนนี้ใช้เงินบาท ตัวเลือกสกุลอื่นกำลังจะมา"
+                value="บาท (฿)"
+              />
+              <MenuInfo
+                icon={<Clock className="h-[18px] w-[18px]" />}
+                title="โซนเวลา"
+                sub="ตอนนี้ใช้เวลาไทย ตัวเลือกโซนอื่นกำลังจะมา"
+                value="Bangkok"
+              />
+            </MenuGroup>
+
             <ReferralCard me={me.data} onChanged={me.reload} />
             <PinCard />
             <ResetCard />
             <DeleteCard />
-
-            <section className={`${cardClass} text-sm`}>
-              <dl className="space-y-2">
-                <div className="flex justify-between">
-                  <dt className="text-muted">ภาษา</dt>
-                  <dd>ไทย</dd>
-                </div>
-                <div className="flex justify-between">
-                  <dt className="text-muted">สกุลเงิน</dt>
-                  <dd>บาท (THB)</dd>
-                </div>
-                <div className="flex justify-between">
-                  <dt className="text-muted">เขตเวลา</dt>
-                  <dd>Asia/Bangkok</dd>
-                </div>
-              </dl>
-            </section>
           </>
         )}
       </div>
+
+      {sheet === "recurring" && me.data ? (
+        <Sheet title="รายการประจำ" onClose={() => setSheet(null)}>
+          <RecurringCard me={me.data} embedded />
+        </Sheet>
+      ) : null}
+      {sheet === "memory" && me.data ? (
+        <Sheet title="จัดหมวดด้วยความจำ" onClose={() => setSheet(null)}>
+          <MemoryCard me={me.data} embedded />
+        </Sheet>
+      ) : null}
+      {sheet === "payments" && me.data ? (
+        <PaymentHistorySheet items={me.data.payments.history} onClose={() => setSheet(null)} />
+      ) : null}
     </main>
   );
 }

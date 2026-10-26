@@ -1,3 +1,12 @@
+/** One payment in the history (integer satang). */
+export interface PaymentItem {
+  id: string;
+  amountSatang: number;
+  status: "pending" | "paid" | "failed" | "refunded";
+  createdAt: string;
+  paidAt: string | null;
+}
+
 /** Shape of GET /api/me as the settings sections use it. */
 export interface Me {
   displayName: string | null;
@@ -13,7 +22,7 @@ export interface Me {
   referralCode: string;
   referred: boolean;
   limits: { recurringRules: number; wallets: number };
-  payments: { available: boolean; history: unknown[] };
+  payments: { available: boolean; history: PaymentItem[] };
 }
 
 export interface Settings {

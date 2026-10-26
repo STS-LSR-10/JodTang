@@ -30,7 +30,7 @@ interface CategoriesResponse {
 const WEEKDAYS = ["อาทิตย์", "จันทร์", "อังคาร", "พุธ", "พฤหัสบดี", "ศุกร์", "เสาร์"];
 const AMOUNT_PATTERN = /^\d{1,9}(\.\d{1,2})?$/;
 
-export function RecurringCard({ me }: { me: Me }) {
+export function RecurringCard({ me, embedded = false }: { me: Me; embedded?: boolean }) {
   const { api } = useLiff();
   const rules = useApi<{ items: Rule[]; limit: number }>("/api/recurring");
   const [adding, setAdding] = useState(false);
@@ -50,10 +50,13 @@ export function RecurringCard({ me }: { me: Me }) {
   }
 
   return (
-    <section id="recurring" className={cn(cardClass, "scroll-mt-4")} aria-label="รายการประจำ">
+    <section
+      aria-label="รายการประจำ"
+      className={embedded ? "space-y-3" : cn(cardClass, "scroll-mt-4")}
+    >
       <div className="flex items-center justify-between gap-3">
         <div>
-          <h2 className="font-semibold">รายการประจำ</h2>
+          {embedded ? null : <h2 className="font-semibold">รายการประจำ</h2>}
           <p className="text-xs text-muted">จดให้อัตโนมัติ เช่น ค่าเน็ต ค่าเช่า เงินเดือน</p>
         </div>
         <button

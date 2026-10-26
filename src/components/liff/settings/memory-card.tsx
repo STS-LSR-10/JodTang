@@ -15,7 +15,7 @@ interface MemoryItem {
 }
 
 /** "Recipient / word -> category" mappings the bot learned from the user's corrections. */
-export function MemoryCard({ me }: { me: Me }) {
+export function MemoryCard({ me, embedded = false }: { me: Me; embedded?: boolean }) {
   const { api } = useLiff();
   const locked = !me.features.merchantMemory;
   // null path = nothing to fetch while the feature is locked
@@ -35,9 +35,9 @@ export function MemoryCard({ me }: { me: Me }) {
   }
 
   return (
-    <section className={cardClass} aria-label="จัดหมวดด้วยความจำ">
+    <section className={embedded ? "space-y-3" : cardClass} aria-label="จัดหมวดด้วยความจำ">
       <div>
-        <h2 className="font-semibold">จัดหมวดด้วยความจำ</h2>
+        {embedded ? null : <h2 className="font-semibold">จัดหมวดด้วยความจำ</h2>}
         <p className="text-xs text-muted">
           เมื่อคุณแก้หมวดของสลิป บอทจะจำ &quot;ผู้รับ → หมวด&quot; ไว้ใช้ครั้งต่อไป
         </p>

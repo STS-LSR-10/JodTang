@@ -9,7 +9,15 @@ import { formatThaiDate } from "@/lib/thai-date";
 import { cn } from "@/lib/utils";
 import { cardClass, type Me } from "./types";
 
-export function PlanCard({ me, onChanged }: { me: Me; onChanged: () => void }) {
+export function PlanCard({
+  me,
+  onChanged,
+  onOpenHistory,
+}: {
+  me: Me;
+  onChanged: () => void;
+  onOpenHistory: () => void;
+}) {
   const { api } = useLiff();
   const [days, setDays] = useState(1);
   const [busy, setBusy] = useState(false);
@@ -47,19 +55,19 @@ export function PlanCard({ me, onChanged }: { me: Me; onChanged: () => void }) {
             alt=""
             width={48}
             height={48}
-            className="h-12 w-12 rounded-full border border-border object-cover"
+            className="h-[52px] w-[52px] rounded-full border-2 border-primary-soft object-cover"
           />
         ) : (
-          <div className="h-12 w-12 rounded-full bg-primary-soft" aria-hidden />
+          <div className="h-[52px] w-[52px] rounded-full bg-primary-soft" aria-hidden />
         )}
         <div className="min-w-0 flex-1">
-          <p className="truncate font-semibold">{me.displayName ?? "ผู้ใช้"}</p>
+          <p className="truncate text-base font-semibold">{me.displayName ?? "ผู้ใช้"}</p>
           <p className="text-xs text-muted">
             แผน{" "}
             <span
               className={cn(
                 "rounded-full px-2 py-0.5 font-semibold",
-                plus ? "bg-accent/20 text-foreground" : "bg-primary-soft text-primary",
+                plus ? "bg-primary-soft text-primary" : "bg-background text-muted",
               )}
             >
               {PLAN_LABEL[me.plan]}
@@ -100,17 +108,19 @@ export function PlanCard({ me, onChanged }: { me: Me; onChanged: () => void }) {
       ) : null}
 
       <div className="grid grid-cols-2 gap-3">
-        <div className="rounded-2xl bg-background p-3">
-          <p className="flex items-center gap-1 text-xs text-muted">
-            <Sparkles className="h-3 w-3" aria-hidden /> ตังสะสม
+        <div className="rounded-xl bg-primary-soft px-3.5 py-2.5">
+          <p className="flex items-center gap-1.5 text-xs text-muted">
+            <Sparkles className="h-3.5 w-3.5 text-accent" aria-hidden /> ตังสะสม
           </p>
-          <p className="num text-xl font-bold">{me.points}</p>
+          <p className="num text-xl font-bold text-primary">{me.points}</p>
         </div>
-        <div className="rounded-2xl bg-background p-3">
-          <p className="flex items-center gap-1 text-xs text-muted">
-            <Flame className="h-3 w-3" aria-hidden /> จดต่อเนื่อง
+        <div className="rounded-xl bg-primary-soft px-3.5 py-2.5">
+          <p className="flex items-center gap-1.5 text-xs text-muted">
+            <Flame className="h-3.5 w-3.5 text-expense" aria-hidden /> จดต่อเนื่อง
           </p>
-          <p className="num text-xl font-bold">{me.streak} วัน</p>
+          <p className="num text-xl font-bold text-primary">
+            {me.streak} <span className="text-xs font-normal text-muted">วัน</span>
+          </p>
         </div>
       </div>
 
@@ -155,10 +165,14 @@ export function PlanCard({ me, onChanged }: { me: Me; onChanged: () => void }) {
         </Link>
       ) : null}
 
-      <p className="text-xs text-muted">
+      <button
+        type="button"
+        onClick={onOpenHistory}
+        className="text-xs text-muted underline underline-offset-2"
+      >
         ประวัติการชำระเงิน:{" "}
         {me.payments.history.length === 0 ? "ยังไม่มี" : `${me.payments.history.length} รายการ`}
-      </p>
+      </button>
 
       {notice ? (
         <p role="status" className="rounded-2xl bg-primary-soft px-4 py-2 text-sm text-primary">

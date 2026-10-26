@@ -25,7 +25,10 @@ test.describe("settings page (360px)", () => {
     await expect(page.getByRole("switch", { name: "เปิดเตือนจดประจำวัน" })).toBeDisabled();
     await expect(page.getByRole("switch", { name: "เปิดสรุปรายสัปดาห์" })).toBeDisabled();
     await expect(page.getByRole("switch", { name: "เปิดสรุปรายเดือน" })).toBeDisabled();
-    await expect(page.getByRole("button", { name: "เพิ่ม" })).toBeDisabled();
+    await page.getByRole("button", { name: "รายการประจำ" }).click();
+    const dialog = page.getByRole("dialog", { name: "รายการประจำ" });
+    await expect(dialog.getByRole("button", { name: "เพิ่ม" })).toBeDisabled();
+    await dialog.getByRole("button", { name: "ปิด" }).click();
     await expectNoHorizontalScroll(page);
   });
 
@@ -38,7 +41,14 @@ test.describe("settings page (360px)", () => {
     await page.goto("/settings");
 
     await expect(page.getByRole("switch", { name: "เปิดเตือนจดประจำวัน" })).toBeEnabled();
-    await expect(page.getByRole("button", { name: "เพิ่ม" })).toBeEnabled();
+    await page.getByRole("button", { name: "รายการประจำ" }).click();
+    await expect(
+      page.getByRole("dialog", { name: "รายการประจำ" }).getByRole("button", { name: "เพิ่ม" }),
+    ).toBeEnabled();
+    await page
+      .getByRole("dialog", { name: "รายการประจำ" })
+      .getByRole("button", { name: "ปิด" })
+      .click();
     await expect(page.getByRole("progressbar", { name: "โควตาสลิปเดือนนี้" })).toBeVisible();
     await expect(page.getByText("3 / 5")).toBeVisible();
   });
@@ -216,6 +226,96 @@ test.describe("settings page (360px)", () => {
     await mockApi(page, { ...COMMON, "GET /api/me": ME_FREE });
     await page.goto("/settings");
     await expect(page.getByText("สมชาย ทดสอบ")).toBeVisible();
+    await expectNoSeriousA11yViolations(page);
+  });
+
+  test("the reminder and the summaries are one card; the time shows only while the reminder is on", async ({
+    page,
+  }) => {
+    const bodies: unknown[] = [];
+    await mockApi(page, {
+      ...COMMON,
+      "GET /api/me": ME_PLUS,
+      "GET /api/memory": { items: [] },
+      "PATCH /api/settings": (route: Route) => {
+        const body = route.request().postDataJSON();
+        bodies.push(body);
+        return { ...SETTINGS, ...body };
+      },
+    });
+    await page.goto("/settings");
+    const card = page.getByRole("region", { name: "การแจ้งเตือนและสรุปอัตโนมัติ" });
+    await expect(card.getByRole("switch", { name: "เปิดสรุปรายสัปดาห์" })).toBeVisible();
+    await expect(card.getByLabel("เวลาที่เตือน")).toHaveCount(0);
+    await card.getByRole("switch", { name: "เปิดเตือนจดประจำวัน" }).click();
+    await expect.poll(() => bodies.length).toBe(1);
+    expect(bodies[0]).toMatchObject({ daily_reminder_enabled: true });
+    await expect(card.getByLabel("เวลาที่เตือน")).toBeVisible();
+  });
+
+  test("recurring and memory open as sheets; /settings#recurring opens the recurring one at once", async ({
+    page,
+  }) => {
+    await mockApi(page, {
+      ...COMMON,
+      "GET /api/me": ME_PLUS,
+      "GET /api/memory": {
+        items: [{ id: "m1", text: "ร้านลุงหนวด", categoryName: "อาหาร", hits: 3 }],
+      },
+    });
+    await page.goto("/settings#recurring");
+    await expect(page.getByRole("dialog", { name: "รายการประจำ" })).toBeVisible();
+    await page
+      .getByRole("dialog", { name: "รายการประจำ" })
+      .getByRole("button", { name: "ปิด" })
+      .click();
+    await page.getByRole("button", { name: "จัดหมวดด้วยความจำ" }).click();
+    await expect(
+      page.getByRole("dialog", { name: "จัดหมวดด้วยความจำ" }).getByText("ร้านลุงหนวด"),
+    ).toBeVisible();
+  });
+
+  test("payment history opens as a sheet with the real payments; the member and general groups are there", async ({
+    page,
+  }) => {
+    await mockApi(page, {
+      ...COMMON,
+      "GET /api/me": {
+        ...ME_PLUS,
+        payments: {
+          ...ME_PLUS.payments,
+          history: [
+            {
+              id: "p1",
+              amountSatang: 3_900,
+              status: "paid",
+              createdAt: "2026-10-01T03:00:00Z",
+              paidAt: "2026-10-01T03:01:00Z",
+            },
+            {
+              id: "p2",
+              amountSatang: 29_900,
+              status: "refunded",
+              createdAt: "2026-08-01T03:00:00Z",
+              paidAt: null,
+            },
+          ],
+        },
+      },
+      "GET /api/memory": { items: [] },
+    });
+    await page.goto("/settings");
+    await expect(page.getByRole("link", { name: "อัปเกรด" })).toHaveAttribute("href", "/upgrade");
+    // general: only what the app really supports, shown as information
+    const general = page.getByRole("list", { name: "ทั่วไป" });
+    await expect(general.getByText("ไทย", { exact: true })).toBeVisible();
+    await expect(general.getByText("บาท (฿)")).toBeVisible();
+    await expect(general.getByText("Bangkok")).toBeVisible();
+    await page.getByRole("button", { name: "ประวัติการชำระเงิน" }).last().click();
+    const dialog = page.getByRole("dialog", { name: "ประวัติการชำระเงิน" });
+    await expect(dialog.getByText("฿39")).toBeVisible();
+    await expect(dialog.getByText("ชำระแล้ว")).toBeVisible();
+    await expect(dialog.getByText("คืนเงินแล้ว")).toBeVisible();
     await expectNoSeriousA11yViolations(page);
   });
 });
