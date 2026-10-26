@@ -33,7 +33,6 @@ export function Splash() {
   // the video can have its metadata before this page is hydrated (cached): its event is gone by then
   useEffect(() => {
     if (video.current && video.current.readyState >= 1) onLoadedMetadata();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (

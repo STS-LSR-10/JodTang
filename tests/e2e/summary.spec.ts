@@ -4,6 +4,7 @@ import {
   expectNoSeriousA11yViolations,
   mockApi,
   ME_FREE,
+  ME_PLUS,
   TX,
 } from "./helpers";
 
@@ -13,7 +14,11 @@ const SUMMARY = {
   incomeSatang: 2_000_000,
   expenseSatang: 750_000,
   balanceSatang: 1_250_000,
+  accumulatedSatang: 3_456_700,
   count: 3,
+  offset: 0,
+  budgetSatang: null,
+  categories: null,
   recent: [
     TX(),
     TX({
@@ -30,10 +35,10 @@ test.describe("summary page (360px)", () => {
     await mockApi(page, { "GET /api/summary": SUMMARY, "GET /api/me": ME_FREE });
     await page.goto("/summary");
 
-    await expect(page.getByRole("heading", { name: "สรุป" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "สรุปภาพรวม" })).toBeVisible();
     await expect(page.getByText("฿12,500", { exact: true })).toBeVisible(); // balance
     await expect(page.getByText("฿7,500", { exact: true })).toBeVisible(); // expense
-    await expect(page.getByText("กาแฟ")).toBeVisible();
+    await expect(page.getByText("กาแฟ", { exact: true })).toBeVisible();
     await expect(page.getByText("เงินเดือน")).toBeVisible();
     await expectNoHorizontalScroll(page);
   });
@@ -54,6 +59,7 @@ test.describe("summary page (360px)", () => {
         incomeSatang: 0,
         expenseSatang: 0,
         balanceSatang: 0,
+        accumulatedSatang: 0,
         count: 0,
         recent: [],
       },
@@ -80,7 +86,79 @@ test.describe("summary page (360px)", () => {
   test("has no serious accessibility violations", async ({ page }) => {
     await mockApi(page, { "GET /api/summary": SUMMARY, "GET /api/me": ME_FREE });
     await page.goto("/summary");
-    await expect(page.getByText("กาแฟ")).toBeVisible();
+    await expect(page.getByText("กาแฟ", { exact: true })).toBeVisible();
     await expectNoSeriousA11yViolations(page);
+  });
+
+  test("Free: profile with plan badge, budget not set, category chart locked", async ({ page }) => {
+    await mockApi(page, { "GET /api/summary": SUMMARY, "GET /api/me": ME_FREE });
+    await page.goto("/summary");
+
+    const profile = page.getByRole("region", { name: "โปรไฟล์" });
+    await expect(profile.getByText("แพลนฟรี")).toBeVisible();
+    await expect(page.getByText("ยังไม่ตั้ง")).toBeVisible();
+    await expect(page.getByRole("link", { name: "ตั้งงบ" })).toBeVisible();
+    await expect(page.getByText("ใช้ได้ในแผน Professional ขึ้นไป")).toBeVisible();
+    await expectNoHorizontalScroll(page);
+  });
+
+  test("Professional: ring, budget status, category details and the goal bar", async ({ page }) => {
+    await mockApi(page, {
+      "GET /api/summary": {
+        ...SUMMARY,
+        budgetSatang: 800_000,
+        categories: [
+          { categoryId: "a", name: "อาหาร", color: "#0F766E", totalSatang: 500_000 },
+          { categoryId: "b", name: "เดินทาง", color: "#0369A1", totalSatang: 250_000 },
+        ],
+      },
+      "GET /api/me": { ...ME_PLUS, features: { ...ME_PLUS.features, savingsGoal: true } },
+      "GET /api/goals": {
+        items: [
+          {
+            id: "g1",
+            name: "เที่ยวญี่ปุ่น",
+            emoji: "✈️",
+            percent: 40,
+            targetSatang: 5_000_000,
+            archived: false,
+            done: false,
+          },
+        ],
+      },
+    });
+    await page.goto("/summary");
+
+    await expect(page.getByText("ใกล้เต็มงบ")).toBeVisible(); // 7,500 of 8,000
+    await expect(page.getByText("+฿500", { exact: true })).toBeVisible();
+    await expect(page.getByRole("progressbar", { name: /เที่ยวญี่ปุ่น/ })).toHaveAttribute(
+      "aria-valuenow",
+      "40",
+    );
+    await page.getByRole("button", { name: "ดูรายละเอียดหมวดหมู่" }).click();
+    await expect(page.getByText("อาหาร", { exact: true })).toBeVisible();
+    await expect(page.getByText("66.7%")).toBeVisible();
+    await expectNoHorizontalScroll(page);
+    await expectNoSeriousA11yViolations(page);
+  });
+
+  test("the accumulate button swaps the balance for the all-time one", async ({ page }) => {
+    await mockApi(page, { "GET /api/summary": SUMMARY, "GET /api/me": ME_FREE });
+    await page.goto("/summary");
+    await expect(page.getByText("เหลือเก็บรอบนี้")).toBeVisible();
+    await page.getByRole("button", { name: "สะสม" }).click();
+    await expect(page.getByText("เหลือเก็บสะสม")).toBeVisible();
+    await expect(page.getByText("฿34,567", { exact: true })).toBeVisible();
+  });
+
+  test("the arrows step back through the cycles, and never forward past this one", async ({
+    page,
+  }) => {
+    const { seen } = await mockApi(page, { "GET /api/summary": SUMMARY, "GET /api/me": ME_FREE });
+    await page.goto("/summary");
+    await expect(page.getByRole("button", { name: "รอบถัดไป" })).toBeDisabled();
+    await page.getByRole("button", { name: "รอบก่อนหน้า" }).click();
+    await expect.poll(() => seen.some((u) => u.includes("offset=-1"))).toBe(true);
+    await expect(page.getByRole("button", { name: "รอบถัดไป" })).toBeEnabled();
   });
 });

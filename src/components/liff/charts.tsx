@@ -88,6 +88,30 @@ export function CategoryDonutChart({ slices }: { slices: DonutSlice[] }) {
   );
 }
 
+/** The small ring on the summary page (the share of each category in the spending). */
+export function MiniDonut({ slices }: { slices: DonutSlice[] }) {
+  return (
+    <ResponsiveContainer width="100%" height="100%">
+      <PieChart>
+        <Pie
+          data={slices}
+          dataKey="value"
+          nameKey="name"
+          innerRadius="68%"
+          outerRadius="100%"
+          paddingAngle={2}
+          stroke="none"
+          isAnimationActive={false}
+        >
+          {slices.map((s, i) => (
+            <Cell key={s.key} fill={sliceColor(s.color, i)} />
+          ))}
+        </Pie>
+      </PieChart>
+    </ResponsiveContainer>
+  );
+}
+
 export interface SavingsPoint {
   label: string;
   net: number; // baht kept in the period
