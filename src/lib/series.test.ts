@@ -36,6 +36,33 @@ describe("bucketStarts", () => {
   });
 });
 
+describe("bucketStarts: stepping back whole windows", () => {
+  it("months: -1 is the six months before the latest six, and it ends where that one starts", () => {
+    const now = bucketStarts(NOW, "month");
+    const back = bucketStarts(NOW, "month", -1);
+    expect(back.starts).toHaveLength(6);
+    expect(back.starts[0]!.toISOString()).toBe("2025-10-31T17:00:00.000Z"); // 1 พ.ย. 2025
+    expect(back.starts[5]!.toISOString()).toBe("2026-03-31T17:00:00.000Z"); // 1 เม.ย. 2026
+    expect(back.to.toISOString()).toBe(now.starts[0]!.toISOString());
+  });
+
+  it("weeks and days: -1 ends where the latest window starts", () => {
+    for (const bucket of ["week", "day"] as const) {
+      const now = bucketStarts(NOW, bucket);
+      const back = bucketStarts(NOW, bucket, -1);
+      expect(back.starts).toHaveLength(now.starts.length);
+      expect(back.to.toISOString()).toBe(now.starts[0]!.toISOString());
+    }
+  });
+
+  it("0, a positive number and a fraction never move forward", () => {
+    const base = bucketStarts(NOW, "month").to.toISOString();
+    expect(bucketStarts(NOW, "month", 0).to.toISOString()).toBe(base);
+    expect(bucketStarts(NOW, "month", 2).to.toISOString()).toBe(base);
+    expect(bucketStarts(NOW, "month", -0.5).to.toISOString()).toBe(base);
+  });
+});
+
 describe("fillSeries", () => {
   it("fills empty buckets with zeros and keeps order", () => {
     const { starts } = bucketStarts(NOW, "month");

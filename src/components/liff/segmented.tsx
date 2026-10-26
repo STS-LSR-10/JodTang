@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
 
 /** Pill-style tab selector used by the analytics page. */
@@ -8,7 +9,7 @@ export function Segmented<T extends string>({
   onChange,
 }: {
   label: string;
-  options: { value: T; label: string }[];
+  options: { value: T; label: ReactNode }[];
   value: T;
   onChange: (v: T) => void;
 }) {

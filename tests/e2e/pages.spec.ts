@@ -8,7 +8,7 @@ import {
 } from "./helpers";
 
 const SERIES = Array.from({ length: 6 }, (_, i) => ({
-  start: `2026-0${i + 5}-01T00:00:00Z`,
+  start: `2026-${String(i + 5).padStart(2, "0")}-01T00:00:00Z`,
   label: ["พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค."][i] ?? "",
   incomeSatang: 2_000_000,
   expenseSatang: 1_200_000 + i * 50_000,
@@ -17,10 +17,11 @@ const SERIES = Array.from({ length: 6 }, (_, i) => ({
 const ANALYTICS = {
   view: "month",
   scope: "cycle",
+  offset: 0,
   series: SERIES,
   categories: [
-    { categoryId: "a", name: "อาหาร", color: "#0F766E", totalSatang: 300_000 },
-    { categoryId: "b", name: "เดินทาง", color: "#0369A1", totalSatang: 150_000 },
+    { categoryId: "a", name: "อาหาร", color: "#0F766E", icon: "🍜", totalSatang: 300_000 },
+    { categoryId: "b", name: "เดินทาง", color: "#0369A1", icon: null, totalSatang: 150_000 },
   ],
   categoriesTotalSatang: 450_000,
 };
@@ -73,7 +74,7 @@ test.describe("analytics page (360px)", () => {
     await expectNoHorizontalScroll(page);
   });
 
-  test("Free sees a locked page with an upgrade link and never calls the analytics API", async ({
+  test("Free sees the locked teaser with the real price and never calls the analytics API", async ({
     page,
   }) => {
     const { seen } = await mockApi(page, {
@@ -82,16 +83,52 @@ test.describe("analytics page (360px)", () => {
     });
     await page.goto("/analytics");
 
-    await expect(page.getByText("กราฟและตารางวิเคราะห์สำหรับแผน Professional")).toBeVisible();
-    await expect(page.getByRole("link", { name: /ดูแผน Professional/ })).toHaveAttribute(
-      "href",
-      "/upgrade",
-    );
-    await expect(page.getByText("สรุปเดือนนี้ · สรุปหมวด · ล่าสุด")).toBeVisible();
+    const teaser = page.getByRole("region", { name: "ฟีเจอร์ของแผน Professional" });
+    await expect(teaser.getByText("สำหรับแผน Professional")).toBeVisible();
+    await expect(
+      teaser.getByRole("link", { name: /อัปเกรดเป็น Professional เริ่มต้น ฿\d+\/เดือน/ }),
+    ).toHaveAttribute("href", "/upgrade");
     await expect(page.getByRole("region", { name: "กราฟรายรับรายจ่าย" })).toHaveCount(0);
     expect(seen.some((s) => s.includes("/api/analytics"))).toBe(false);
+    // the savings tab gets its own teaser
+    await page.getByRole("tab", { name: /เก็บออม/ }).click();
+    await expect(teaser.getByText('ปลดล็อกระบบ "วางแผนเก็บออม"')).toBeVisible();
     await expectNoHorizontalScroll(page);
     await expectNoSeriousA11yViolations(page);
+  });
+
+  test("shows the range, the averages per bar and the category bars", async ({ page }) => {
+    await mockApi(page, { "GET /api/analytics": ANALYTICS, "GET /api/me": ME_PLUS });
+    await page.goto("/analytics");
+
+    await expect(page.getByText("พ.ค. – ต.ค. 2569")).toBeVisible();
+    await expect(page.getByText("รายรับเฉลี่ย / เดือน")).toBeVisible();
+    await expect(page.getByText("฿20,000", { exact: true }).first()).toBeVisible(); // 6 × 20,000 ÷ 6
+    await expect(page.getByText("2 หมวดหมู่")).toBeVisible();
+    await expect(page.getByRole("progressbar", { name: "อาหาร 67%" })).toHaveAttribute(
+      "aria-valuenow",
+      "67",
+    );
+    await expect(page.getByText("🍜")).toBeVisible();
+  });
+
+  test("the arrows step back through earlier windows and never forward past the latest", async ({
+    page,
+  }) => {
+    const { seen } = await mockApi(page, {
+      "GET /api/analytics": ANALYTICS,
+      "GET /api/me": ME_PLUS,
+    });
+    await page.goto("/analytics");
+    await expect(page.getByRole("button", { name: "ช่วงถัดไป" })).toBeDisabled();
+    await page.getByRole("button", { name: "ช่วงก่อนหน้า" }).click();
+    await expect.poll(() => seen.some((u) => u.includes("offset=-1"))).toBe(true);
+    await expect(page.getByRole("button", { name: "ช่วงถัดไป" })).toBeEnabled();
+    // changing the view starts again from the latest window
+    await page.getByRole("tab", { name: "รายสัปดาห์" }).click();
+    await expect
+      .poll(() => seen.some((u) => u.includes("view=week&scope=cycle&offset=0")))
+      .toBe(true);
   });
 
   test("savings tab shows the real chart for Plus", async ({ page }) => {
@@ -105,6 +142,8 @@ test.describe("analytics page (360px)", () => {
     await mockApi(page, { "GET /api/analytics": ANALYTICS, "GET /api/me": ME_PLUS });
     await page.goto("/analytics");
     await expect(page.getByRole("region", { name: "กราฟรายรับรายจ่าย" })).toBeVisible();
+    // let the chart animation and fades finish: contrast is measured on settled colours
+    await page.waitForTimeout(1200);
     await expectNoSeriousA11yViolations(page);
   });
 });

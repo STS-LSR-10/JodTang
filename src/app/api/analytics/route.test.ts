@@ -19,11 +19,13 @@ vi.mock("@/lib/slip-repo", () => ({
 vi.mock("@/lib/repo", async (original) => ({
   ...(await original<typeof import("@/lib/repo")>()),
   getSettings: async () => ({ budget_cycle: "monthly", cycle_start_day: 1 }),
+  loadCategories: async () => [{ id: "food", name: "อาหาร", icon: "🍜" }],
 }));
 
 import { GET } from "./route";
 
-const get = () => GET(new Request("https://app.example.com/api/analytics?view=month&scope=cycle"));
+const get = (qs = "") =>
+  GET(new Request(`https://app.example.com/api/analytics?view=month&scope=cycle${qs}`));
 
 beforeEach(() => {
   plan = "free";
@@ -46,5 +48,21 @@ describe("GET /api/analytics", () => {
     expect(body.series).toHaveLength(6);
     expect(body.categories[0]?.name).toBe("อาหาร");
     expect(rpc).toHaveBeenCalledTimes(2);
+  });
+
+  it("offset steps back a whole window; out-of-range values are refused", async () => {
+    plan = "plus";
+    const now = (await (await get()).json()) as { series: { start: string }[] };
+    const back = (await (await get("&offset=-1")).json()) as {
+      offset: number;
+      series: { start: string }[];
+    };
+    expect(back.offset).toBe(-1);
+    expect(back.series).toHaveLength(6);
+    expect(new Date(back.series[5]!.start).getTime()).toBeLessThan(
+      new Date(now.series[0]!.start).getTime(),
+    );
+    expect((await get("&offset=1")).status).toBe(400);
+    expect((await get("&offset=-13")).status).toBe(400);
   });
 });

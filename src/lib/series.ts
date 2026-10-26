@@ -23,24 +23,30 @@ export interface SeriesRow {
   expense: number | string;
 }
 
-/** Bucket start instants (oldest first) ending with the bucket that contains `now`, plus the end bound. */
-export function bucketStarts(now: Date, bucket: Bucket): { starts: Date[]; to: Date } {
+/**
+ * Bucket start instants (oldest first) ending with the bucket that contains `now`, plus the end
+ * bound. `windows` (0, -1, -2…) moves the whole list back by that many lists (6 months, 8 weeks or
+ * 14 days each), so the page can step through earlier stretches of time.
+ */
+export function bucketStarts(now: Date, bucket: Bucket, windows = 0): { starts: Date[]; to: Date } {
   const p = bangkokParts(now);
   const n = BUCKET_COUNTS[bucket];
+  const back = Math.min(0, Math.trunc(windows)) * n; // buckets to move back (<= 0)
   const starts: Date[] = [];
 
   if (bucket === "month") {
-    for (let i = n - 1; i >= 0; i--) starts.push(fromBangkok(p.year, p.month - i, 1));
-    return { starts, to: fromBangkok(p.year, p.month + 1, 1) };
+    for (let i = n - 1; i >= 0; i--) starts.push(fromBangkok(p.year, p.month + back - i, 1));
+    return { starts, to: fromBangkok(p.year, p.month + back + 1, 1) };
   }
   if (bucket === "week") {
     const sinceMonday = (p.weekday + 6) % 7;
-    const monday = p.day - sinceMonday;
+    const monday = p.day - sinceMonday + 7 * back;
     for (let i = n - 1; i >= 0; i--) starts.push(fromBangkok(p.year, p.month, monday - 7 * i));
     return { starts, to: fromBangkok(p.year, p.month, monday + 7) };
   }
-  for (let i = n - 1; i >= 0; i--) starts.push(fromBangkok(p.year, p.month, p.day - i));
-  return { starts, to: fromBangkok(p.year, p.month, p.day + 1) };
+  const day = p.day + back;
+  for (let i = n - 1; i >= 0; i--) starts.push(fromBangkok(p.year, p.month, day - i));
+  return { starts, to: fromBangkok(p.year, p.month, day + 1) };
 }
 
 function labelOf(start: Date, bucket: Bucket): string {
