@@ -195,12 +195,12 @@ CSV ใส่ BOM ให้ Excel อ่านภาษาไทยถูกต�
 ## Rich Menu
 
 ```bash
-pnpm richmenu --dry-run   # สร้างภาพ assets/richmenu.png อย่างเดียว (ไม่ยิงเครือข่าย)
+pnpm richmenu --dry-run   # สร้างภาพ assets/richmenu.jpg อย่างเดียว (ไม่ยิงเครือข่าย)
 pnpm richmenu --replace   # สร้างเมนู อัปโหลดภาพ ตั้งเป็นค่าเริ่มต้น (ลบเมนู jodtang-main และ meetang-main เดิมก่อน)
 ```
 
 สคริปต์อ่าน `LINE_CHANNEL_ACCESS_TOKEN` และ `NEXT_PUBLIC_LIFF_ID` จาก `.env.local`
-(ไฟล์นี้ไม่ถูก commit) ภาพเมนู 2500×1686 สไตล์พาสเทลมิ้นต์ อยู่ใน `scripts/richmenu-design.ts`
+(ไฟล์นี้ไม่ถูก commit) ภาพเมนู 2500×1686 ตัดจากรูปวาด `assets/richmenu-art.webp` (กล่องกดของแต่ละปุ่มวัดบนรูปนั้น อยู่ใน `scripts/richmenu-design.ts` ถ้าเปลี่ยนรูปต้องวัดกล่องใหม่)
 (SVG วาดเอง — แก้ภาพ/ตำแหน่งที่ไฟล์นี้แล้วรันใหม่ ตำแหน่งปุ่มใช้ค่าเดียวกับพื้นที่กด)
 
 | ช่อง                                          | เมื่อกด                                                                                                                                                                                                                                                                      |

@@ -1,7 +1,7 @@
 /**
  * Create and publish the JodTang Rich Menu.
  *
- *   pnpm richmenu --dry-run     render assets/richmenu.png only (no network)
+ *   pnpm richmenu --dry-run     render assets/richmenu.jpg only (no network)
  *   pnpm richmenu               create the menu, upload the image, set it as default
  *   pnpm richmenu --replace     same, but first delete earlier "jodtang-main" / "meetang-main" menus
  *
@@ -11,7 +11,9 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import sharp from "sharp";
 import {
-  buildRichMenuSvg,
+  ART_CROP,
+  ART_FILE,
+  ART_WIDTH,
   RICH_MENU_HEIGHT,
   RICH_MENU_WIDTH,
   TILES,
@@ -23,7 +25,7 @@ const MENU_NAME = "jodtang-main";
 const REPLACEABLE_NAMES = new Set([MENU_NAME, "meetang-main"]);
 const API = "https://api.line.me/v2/bot";
 const API_DATA = "https://api-data.line.me/v2/bot";
-const IMAGE_PATH = resolve("assets/richmenu.png");
+const IMAGE_PATH = resolve("assets/richmenu.jpg");
 
 // Tiles that open a LIFF page: tile key -> path (LIFF appends it to the endpoint URL)
 const LIFF_PAGES: Partial<Record<TileKey, string>> = {
@@ -43,15 +45,18 @@ function fail(message: string): never {
 }
 
 async function renderImage(): Promise<Buffer> {
-  const png = await sharp(Buffer.from(buildRichMenuSvg()))
-    .resize(RICH_MENU_WIDTH, RICH_MENU_HEIGHT)
-    .png({ compressionLevel: 9, palette: true })
+  // the picture, cut to the menu's proportions and brought to 2500x1686 (LINE takes up to 1 MB)
+  const jpg = await sharp(resolve(ART_FILE))
+    .extract({ left: 0, top: ART_CROP.top, width: ART_WIDTH, height: ART_CROP.height })
+    .resize(RICH_MENU_WIDTH, RICH_MENU_HEIGHT, { fit: "fill", kernel: "lanczos3" })
+    .sharpen({ sigma: 0.6 })
+    .jpeg({ quality: 88, mozjpeg: true })
     .toBuffer();
-  if (png.length > 1_000_000) fail(`image is ${png.length} bytes; LINE's limit is 1 MB`);
+  if (jpg.length > 1_000_000) fail(`image is ${jpg.length} bytes; LINE's limit is 1 MB`);
   await mkdir(dirname(IMAGE_PATH), { recursive: true });
-  await writeFile(IMAGE_PATH, png);
-  console.log(`✓ rendered ${IMAGE_PATH} (${Math.round(png.length / 1024)} KB)`);
-  return png;
+  await writeFile(IMAGE_PATH, jpg);
+  console.log(`✓ rendered ${IMAGE_PATH} (${Math.round(jpg.length / 1024)} KB)`);
+  return jpg;
 }
 
 async function line(
@@ -81,7 +86,7 @@ async function main() {
     // no .env.local: rely on variables already in the environment
   }
   const args = new Set(process.argv.slice(2));
-  const png = await renderImage();
+  const image = await renderImage();
   if (args.has("--dry-run")) return;
 
   const token = process.env.LINE_CHANNEL_ACCESS_TOKEN;
@@ -159,8 +164,8 @@ async function main() {
 
   await line(token, `${API_DATA}/richmenu/${created.richMenuId}/content`, {
     method: "POST",
-    headers: { "Content-Type": "image/png" },
-    body: new Uint8Array(png),
+    headers: { "Content-Type": "image/jpeg" },
+    body: new Uint8Array(image),
   });
   console.log("✓ uploaded image");
 
