@@ -163,8 +163,8 @@ describe("compose card", () => {
     const msg = buildComposeCard();
     const json = JSON.stringify(msg);
     expect(msg.type).toBe("flex");
-    expect(json).toContain("ข้าวมันไก่ 50");
-    expect(json).toContain("เงินเดือน 20000");
+    expect(json).toContain("กระเพราหมูกรอบ 65");
+    expect(json).toContain("เงินเดือน 25000");
     expect(json).toContain("ระบบจะช่วยจดและแยกหมวดหมู่อัตโนมัติทันทีครับ");
     expect(json).toContain('"inputOption":"openKeyboard"');
     expect(json).not.toContain("fillInText");

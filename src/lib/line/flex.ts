@@ -449,7 +449,7 @@ export function buildComposeCard(): LineMessage {
   });
   return {
     type: "flex",
-    altText: "พิมพ์บอกจดตังค์ได้เลย เช่น ข้าวมันไก่ 50 · เงินเดือน 20000",
+    altText: "พิมพ์บอกจดตังค์ได้เลย เช่น กระเพราหมูกรอบ 65 · เงินเดือน 25000",
     // pick a category first, then only the amount is left to type (see buildCategoryKeyboardList);
     // or pick a past day first (see buildDatePicker)
     quickReply: {
@@ -519,7 +519,7 @@ export function buildComposeCard(): LineMessage {
             backgroundColor: "#F6F9F8",
             cornerRadius: "14px",
             paddingAll: "16px",
-            contents: [bullet("ข้าวมันไก่ 50"), bullet("เงินเดือน 20000")],
+            contents: [bullet("กระเพราหมูกรอบ 65"), bullet("เงินเดือน 25000")],
           },
           {
             type: "text",
