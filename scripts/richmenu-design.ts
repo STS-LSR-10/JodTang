@@ -254,11 +254,9 @@ export function buildRichMenuSvg(): string {
     small("invite", C.skyTile, "invite", "ชวนเพื่อน", true),
   ];
   parts.push(
-    // footer: logo + name + pill, centred as one group
-    logoMark(672, 1544, 112),
-    `<text x="814" y="1620" font-family="${FONT}" font-size="76" font-weight="800" fill="${C.ink}">JodTang (จดตังค์)</text>`,
-    `<rect x="1447" y="1558" width="380" height="84" rx="42" fill="${C.white}" fill-opacity="0.92"/>`,
-    `<text x="1637" y="1617" text-anchor="middle" font-family="${FONT}" font-size="46" font-weight="800" fill="${C.ink}" letter-spacing="2">SMART BOT</text>`,
+    // footer: logo + name, centred as one group
+    logoMark(855, 1544, 112),
+    `<text x="997" y="1620" font-family="${FONT}" font-size="76" font-weight="800" fill="${C.ink}">JodTang (จดตังค์)</text>`,
     spark(2380, 1620, 24, 0.6),
     spark(120, 1630, 18, 0.6),
     "</svg>",
