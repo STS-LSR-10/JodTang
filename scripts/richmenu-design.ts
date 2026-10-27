@@ -4,13 +4,13 @@
  * measured on the picture itself (ART_*) and carried over to the menu with the same crop and scale,
  * so changing the picture means changing the boxes below.
  *
- *   ┌───────────────────────────────────────┐
- *   │   logo · "จดบันทึก" panel with mascot   │  compose
- *   ├────┬────┬────┬────┬───────────────────┤
- *   │สรุป│วิเคราะห์│หมวด/งบ│รายการ│  (mascot)       │
- *   ├────┼────┼────┼────┴───────────┬──────┤
- *   │ชวนเพื่อน│วิธีใช้งาน│ตั้งค่า│  อัปเกรด Pro · Elite │ mascot │
- *   └────┴────┴────┴────────────────┴──────┘
+ *   ┌──────────────────────────────────────┐
+ *   │ logo · "จดบันทึก" panel with the piggy bank │  compose
+ *   ├────┬────┬────┬────┬──────────────────────┤
+ *   │สรุป│วิเคราะห์│หมวด/งบ│รายการ│   (decoration)         │
+ *   ├────┼────┼────┼────┴────────────┬─────────┤
+ *   │ชวนเพื่อน│วิธีใช้งาน│ตั้งค่า│ อัปเกรด Pro · Elite │ (deco)  │
+ *   └────┴────┴────┴─────────────────┴─────────┘
  */
 export const RICH_MENU_WIDTH = 2500;
 export const RICH_MENU_HEIGHT = 1686;
@@ -26,10 +26,11 @@ export const ART_HEIGHT = 1083;
 export const ART_CROP = { top: 20, height: 1031 } as const;
 
 /**
- * The painting is toned down to pastel: less colour, a little lighter, shadows lifted. Still dark
- * enough for the labels to read (the next step, "soft", started to wash out the "Elite!" text).
+ * Optional toning of the painting (less colour, lighter, shadows lifted). The current picture is
+ * already pastel, so this is neutral; the earlier picture used saturation 0.7, brightness 1.06,
+ * contrast 0.86 and lift 26 (further than that washed out the labels).
  */
-export const PASTEL = { saturation: 0.7, brightness: 1.06, contrast: 0.86, lift: 26 } as const;
+export const PASTEL = { saturation: 1, brightness: 1, contrast: 1, lift: 0 } as const;
 
 export interface Bounds {
   x: number;
@@ -72,17 +73,15 @@ export function toMenuBounds([left, top, right, bottom]: Box): Bounds {
 
 // ── the tiles of the picture ──
 const BOXES: { key: TileKey; label: string; box: Box }[] = [
-  { key: "compose", label: "จดบันทึก", box: [50, 150, 1380, 560] },
-  { key: "summary", label: "สรุป", box: [57, 578, 270, 790] },
-  { key: "analytics", label: "วิเคราะห์", box: [285, 578, 495, 790] },
-  { key: "budgets", label: "หมวด/งบ", box: [508, 578, 718, 790] },
-  { key: "transactions", label: "รายการ", box: [732, 578, 945, 790] },
-  { key: "invite", label: "ชวนเพื่อน", box: [57, 800, 270, 1008] },
-  { key: "help", label: "วิธีใช้งาน", box: [285, 800, 495, 1008] },
-  { key: "settings", label: "ตั้งค่า", box: [508, 800, 718, 1008] },
-  // the upgrade banner, and the mascot that stands beside it (a tap on him is a tap on the banner)
-  { key: "upgrade", label: "อัปเกรด", box: [730, 797, 1452, 1083] },
-  { key: "upgrade", label: "อัปเกรด", box: [950, 562, 1452, 797] },
+  { key: "compose", label: "จดบันทึก", box: [60, 155, 1390, 545] },
+  { key: "summary", label: "สรุป", box: [65, 582, 268, 795] },
+  { key: "analytics", label: "วิเคราะห์", box: [290, 582, 492, 795] },
+  { key: "budgets", label: "หมวด/งบ", box: [515, 582, 716, 795] },
+  { key: "transactions", label: "รายการ", box: [738, 582, 940, 795] },
+  { key: "invite", label: "ชวนเพื่อน", box: [65, 818, 268, 1027] },
+  { key: "help", label: "วิธีใช้งาน", box: [290, 818, 492, 1027] },
+  { key: "settings", label: "ตั้งค่า", box: [515, 818, 716, 1027] },
+  { key: "upgrade", label: "อัปเกรด", box: [735, 818, 1158, 1027] },
 ];
 
 export const TILES: Tile[] = BOXES.map(({ key, label, box }) => ({
