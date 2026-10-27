@@ -21,7 +21,7 @@ const schema = z.object({
 });
 
 /**
- * POST /api/pin/set { pin, confirmPin, current? } — set a PIN (Professional and above), or change it
+ * POST /api/pin/set { pin, confirmPin, current? } — set a PIN (Pro and above), or change it
  * (the current one must be typed, counted like any other try). The new PIN is 4–6 digits and not an
  * easy one. Answers with an unlock token so the person is not locked out of what they just set.
  */

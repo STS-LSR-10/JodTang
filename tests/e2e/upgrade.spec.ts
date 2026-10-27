@@ -17,8 +17,8 @@ test.describe("upgrade page (360px)", () => {
 
     const plans = page.getByRole("radiogroup", { name: "เลือกแผน" });
     await expect(plans.getByText("Free", { exact: true })).toBeVisible();
-    const pro = plans.getByRole("radio", { name: /^Professional/ });
-    const ultimate = plans.getByRole("radio", { name: /Ultimate/ });
+    const pro = plans.getByRole("radio", { name: /^Pro/ });
+    const ultimate = plans.getByRole("radio", { name: /Elite/ });
     await expect(pro).toContainText("ราคาเปิดตัว ถึง 31 ธ.ค. 2569");
     await expect(pro).toContainText("฿299"); // yearly launch
     await expect(pro).toContainText("฿339"); // yearly normal (struck through)
@@ -40,13 +40,13 @@ test.describe("upgrade page (360px)", () => {
     await page.goto("/upgrade");
 
     const plans = page.getByRole("radiogroup", { name: "เลือกแผน" });
-    const pro = plans.getByRole("radio", { name: /^Professional/ });
+    const pro = plans.getByRole("radio", { name: /^Pro/ });
     await expect(pro).toContainText("฿339");
     await expect(pro).not.toContainText("ราคาเปิดตัว");
-    await expect(plans.getByRole("radio", { name: /Ultimate/ })).toContainText("฿799");
+    await expect(plans.getByRole("radio", { name: /Elite/ })).toContainText("฿799");
     await page.getByRole("radio", { name: /รายเดือน/ }).click();
     await expect(pro).toContainText("฿59");
-    await expect(plans.getByRole("radio", { name: /Ultimate/ })).toContainText("฿139");
+    await expect(plans.getByRole("radio", { name: /Elite/ })).toContainText("฿139");
   });
 
   test("the prices the server sends win over the phone's clock", async ({ page }) => {
@@ -64,9 +64,7 @@ test.describe("upgrade page (360px)", () => {
     });
     await page.goto("/upgrade");
     await expect(
-      page
-        .getByRole("radiogroup", { name: "เลือกแผน" })
-        .getByRole("radio", { name: /^Professional/ }),
+      page.getByRole("radiogroup", { name: "เลือกแผน" }).getByRole("radio", { name: /^Pro/ }),
     ).toContainText("ราคาเปิดตัว");
   });
 
@@ -101,9 +99,9 @@ test.describe("upgrade page (360px)", () => {
       },
     });
     await page.goto("/upgrade");
-    await page.getByRole("radio", { name: /Ultimate/ }).click();
+    await page.getByRole("radio", { name: /Elite/ }).click();
     await page.getByRole("radio", { name: /พร้อมเพย์/ }).click();
-    await page.getByRole("button", { name: /ชำระเงิน · Ultimate/ }).click();
+    await page.getByRole("button", { name: /ชำระเงิน · Elite/ }).click();
 
     await expect.poll(() => bodies.length).toBe(1);
     expect(bodies[0]).toEqual({
@@ -159,17 +157,17 @@ test.describe("upgrade page (360px)", () => {
     // a subscriber can only change the running subscription, so the payment method is not asked
     await expect(page.getByRole("radiogroup", { name: "ช่องทางชำระเงิน" })).toHaveCount(0);
 
-    // default view: Professional + yearly = switch the monthly subscription to yearly
-    const change = page.getByRole("button", { name: /อัปเกรดแผน · Professional \(รายปี\)/ });
+    // default view: Pro + yearly = switch the monthly subscription to yearly
+    const change = page.getByRole("button", { name: /อัปเกรดแผน · Pro \(รายปี\)/ });
     await expect(change).toBeEnabled();
     await expect(page.getByText(/จ่ายเฉพาะส่วนต่าง/)).toBeVisible();
 
     // upgrade the tier instead, still monthly
-    await page.getByRole("radio", { name: /^Ultimate/ }).click();
+    await page.getByRole("radio", { name: /^Elite/ }).click();
     await page.getByRole("radio", { name: /รายเดือน/ }).click();
-    const toUltimate = page.getByRole("button", { name: /อัปเกรดแผน · Ultimate \(รายเดือน\)/ });
-    await expect(toUltimate).toBeEnabled();
-    await toUltimate.click();
+    const toElite = page.getByRole("button", { name: /อัปเกรดแผน · Elite \(รายเดือน\)/ });
+    await expect(toElite).toBeEnabled();
+    await toElite.click();
 
     await expect.poll(() => bodies.length).toBe(1);
     expect(bodies[0]).toEqual({ plan: "ultimate", period: "monthly" });
@@ -194,11 +192,9 @@ test.describe("upgrade page (360px)", () => {
       "POST /api/plan/portal": { available: false, message: "ยังไม่เปิด" },
     });
     await page.goto("/upgrade");
-    await page.getByRole("radio", { name: /รายเดือน/ }).click(); // Professional + monthly = what they have
+    await page.getByRole("radio", { name: /รายเดือน/ }).click(); // Pro + monthly = what they have
     await expect(page.getByText(/คุณใช้แผนนี้อยู่แล้ว/)).toBeVisible();
-    await expect(
-      page.getByRole("button", { name: /(ชำระเงิน|ต่ออายุ) · Professional/ }),
-    ).toBeDisabled();
+    await expect(page.getByRole("button", { name: /(ชำระเงิน|ต่ออายุ) · Pro/ })).toBeDisabled();
 
     await page.getByRole("button", { name: /จัดการการชำระเงิน/ }).click();
     await expect.poll(() => seen.some((s) => s.startsWith("POST /api/plan/portal"))).toBe(true);
@@ -232,17 +228,15 @@ test.describe("upgrade page (360px)", () => {
 
     // mixing with a card is refused by the server, so the page does not offer it at all
     await expect(page.getByRole("radiogroup", { name: "ช่องทางชำระเงิน" })).toHaveCount(0);
-    await expect(page.getByRole("button", { name: /ต่ออายุ · Professional/ })).toBeEnabled();
-    await page.getByRole("radio", { name: /^Ultimate/ }).click();
-    await expect(page.getByRole("button", { name: /ชำระเงิน · Ultimate/ })).toBeEnabled();
+    await expect(page.getByRole("button", { name: /ต่ออายุ · Pro/ })).toBeEnabled();
+    await page.getByRole("radio", { name: /^Elite/ }).click();
+    await expect(page.getByRole("button", { name: /ชำระเงิน · Elite/ })).toBeEnabled();
   });
-  test("an Ultimate user cannot buy the cheaper plan", async ({ page }) => {
+  test("an Elite user cannot buy the cheaper plan", async ({ page }) => {
     await mockApi(page, { "GET /api/me": { ...ME_PLUS, plan: "ultimate" } });
     await page.goto("/upgrade");
     await expect(page.getByText("คุณใช้แผนที่สูงกว่านี้อยู่แล้ว")).toBeVisible();
-    await expect(
-      page.getByRole("button", { name: /ต่ออายุ · Professional|ชำระเงิน · Professional/ }),
-    ).toBeDisabled();
+    await expect(page.getByRole("button", { name: /ต่ออายุ · Pro|ชำระเงิน · Pro/ })).toBeDisabled();
   });
   test("a new user can start a 7-day free trial of either paid tier", async ({ page }) => {
     const bodies: unknown[] = [];
@@ -254,17 +248,15 @@ test.describe("upgrade page (360px)", () => {
       },
     });
     await page.goto("/upgrade");
-    await expect(
-      page.getByRole("button", { name: "ทดลองใช้ Professional ฟรี 7 วัน" }),
-    ).toBeVisible();
+    await expect(page.getByRole("button", { name: "ทดลองใช้ Pro ฟรี 7 วัน" })).toBeVisible();
     await expect(page.getByText(/ไม่ต้องใช้บัตร/)).toBeVisible();
 
-    await page.getByRole("radio", { name: /^Ultimate/ }).click();
-    await page.getByRole("button", { name: "ทดลองใช้ Ultimate ฟรี 7 วัน" }).click();
+    await page.getByRole("radio", { name: /^Elite/ }).click();
+    await page.getByRole("button", { name: "ทดลองใช้ Elite ฟรี 7 วัน" }).click();
     await expect.poll(() => bodies.length).toBe(1);
     expect(bodies[0]).toEqual({ plan: "ultimate" });
     await expect(
-      page.getByRole("status").filter({ hasText: "เริ่มทดลองใช้ Ultimate ฟรี 7 วันแล้ว" }),
+      page.getByRole("status").filter({ hasText: "เริ่มทดลองใช้ Elite ฟรี 7 วันแล้ว" }),
     ).toBeVisible();
   });
 
@@ -273,9 +265,9 @@ test.describe("upgrade page (360px)", () => {
       "GET /api/me": { ...ME_FREE, trial: { days: 7, available: { plus: false, ultimate: true } } },
     });
     await page.goto("/upgrade");
-    await expect(page.getByRole("button", { name: /ทดลองใช้ Professional/ })).toHaveCount(0);
-    await page.getByRole("radio", { name: /^Ultimate/ }).click();
-    await expect(page.getByRole("button", { name: /ทดลองใช้ Ultimate/ })).toBeVisible();
+    await expect(page.getByRole("button", { name: /ทดลองใช้ Pro/ })).toHaveCount(0);
+    await page.getByRole("radio", { name: /^Elite/ }).click();
+    await expect(page.getByRole("button", { name: /ทดลองใช้ Elite/ })).toBeVisible();
 
     const plus = await page.context().newPage();
     await mockApi(plus, { "GET /api/me": ME_PLUS });
@@ -309,12 +301,12 @@ test.describe("upgrade page (360px)", () => {
     // same tier: only the normal top-up, no difference offer
     await expect(page.getByRole("button", { name: /อัปเกรดส่วนที่เหลือ/ })).toHaveCount(0);
 
-    await page.getByRole("radio", { name: /^Ultimate/ }).click();
+    await page.getByRole("radio", { name: /^Elite/ }).click();
     // (139 - 59) / 30 * 15 days = ฿40
     const diff = page.getByRole("button", { name: "อัปเกรดส่วนที่เหลือ · จ่ายส่วนต่าง ฿40" });
     await expect(diff).toBeVisible();
     await expect(page.getByText(/อีก 15 วัน/)).toBeVisible();
-    await expect(page.getByRole("button", { name: /ชำระเงิน · Ultimate/ })).toBeEnabled(); // full new period
+    await expect(page.getByRole("button", { name: /ชำระเงิน · Elite/ })).toBeEnabled(); // full new period
 
     await diff.click();
     await expect.poll(() => bodies.length).toBe(1);
@@ -325,8 +317,8 @@ test.describe("upgrade page (360px)", () => {
   }) => {
     await mockApi(page, { "GET /api/me": ME_FREE });
     await page.goto("/upgrade");
-    const pro = page.getByRole("radio", { name: /^Professional/ });
-    const ultimate = page.getByRole("radio", { name: /^Ultimate/ });
+    const pro = page.getByRole("radio", { name: /^Pro/ });
+    const ultimate = page.getByRole("radio", { name: /^Elite/ });
     const isGreen = (c: string | null) =>
       /border-primary/.test(c ?? "") && /bg-primary-soft/.test(c ?? "");
 

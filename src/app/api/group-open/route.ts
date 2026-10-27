@@ -14,7 +14,7 @@ export const dynamic = "force-dynamic";
 /**
  * GET /api/group-open — can this person open a group ledger? The "เปิดสมุดกลุ่ม" button of the welcome
  * card opens a page that asks this first: opening needs the person to be a friend of the bot (otherwise
- * LINE gives the bot no name for them) and an Ultimate member. `friend` is null when LINE could not tell.
+ * LINE gives the bot no name for them) and an Elite member. `friend` is null when LINE could not tell.
  */
 export async function GET(request: Request): Promise<Response> {
   return guard(async () => {

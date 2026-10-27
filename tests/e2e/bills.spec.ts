@@ -71,11 +71,11 @@ test.describe("bills page (360px)", () => {
     await expect(page.getByText("ยังไม่มีบิลที่ตั้งเตือน")).toBeVisible();
   });
 
-  test("not Ultimate: an upgrade note, buttons off, no add button", async ({ page }) => {
+  test("not Elite: an upgrade note, buttons off, no add button", async ({ page }) => {
     await mockApi(page, { "GET /api/me": ME_PLUS, "GET /api/bills": LIST });
     await page.goto("/bills");
 
-    await expect(page.getByText("สำหรับแผน Ultimate")).toBeVisible();
+    await expect(page.getByText("สำหรับแผน Elite")).toBeVisible();
     await expect(page.getByRole("button", { name: "เพิ่มบิล" })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "แก้ไข ค่าไฟ" })).toBeDisabled();
   });

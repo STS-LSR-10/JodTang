@@ -10,6 +10,7 @@ import { useApi } from "@/components/liff/liff-provider";
 import { sliceColor } from "@/components/liff/slice-color";
 import type { TxDto } from "@/lib/dto";
 import { formatBaht } from "@/lib/money";
+import { PLAN_LABEL } from "@/lib/plan";
 import { formatThaiDate } from "@/lib/thai-date";
 import { cn } from "@/lib/utils";
 
@@ -54,12 +55,11 @@ interface GoalsResponse {
   }[];
 }
 
-const PLAN_LABEL = { free: "แพลนฟรี", plus: "Professional", ultimate: "Ultimate" } as const;
 const MAX_BACK = 24;
 
 const TIPS = [
   'พิมพ์ "กาแฟ 60" ในแชท บอทจะจดและจัดหมวดให้ทันที',
-  'พิมพ์ "เมื่อวาน ข้าว 80" เพื่อจดย้อนหลัง (Professional ขึ้นไป)',
+  'พิมพ์ "เมื่อวาน ข้าว 80" เพื่อจดย้อนหลัง (Pro ขึ้นไป)',
   'พิมพ์ "สรุปเดือนนี้" ในแชท เพื่อดูภาพรวมได้ทุกเมื่อ',
   "ส่งรูปสลิปโอนเงินในแชท บอทอ่านยอดให้โดยไม่ต้องพิมพ์",
 ];
@@ -419,7 +419,7 @@ function Spending({
           <Lock className="h-5 w-5 shrink-0 text-muted" aria-hidden />
           <span className="min-w-0 flex-1">
             <span className="block text-sm font-semibold">กราฟสัดส่วนตามหมวด</span>
-            <span className="block text-xs text-muted">ใช้ได้ในแผน Professional ขึ้นไป</span>
+            <span className="block text-xs text-muted">ใช้ได้ในแผน Pro ขึ้นไป</span>
           </span>
           <span className="text-sm font-semibold text-primary">ดูแผน</span>
         </Link>

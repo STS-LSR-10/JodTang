@@ -106,7 +106,7 @@ export async function runReminders(
       if (mark.error) throw new Error(`mark reminded: ${mark.error.message}`);
 
       const messages: LineMessage[] = [{ type: "text", text: reminderText(now, streak) }];
-      // Ultimate: debts that are overdue or due soon ride along (a failure here must not stop the nudge)
+      // Elite: debts that are overdue or due soon ride along (a failure here must not stop the nudge)
       if (can(effectivePlan(user.plan, user.plan_expires_at, now), "debts")) {
         const note = await listDebts(db, user.id)
           .then((debts) => dueDebtsText(debts, now))

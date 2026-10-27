@@ -94,7 +94,7 @@ beforeEach(() => {
 });
 
 describe("runSummaries and the AI Insight", () => {
-  it("Ultimate gets the AI Insight on the end of the monthly summary, in the same push", async () => {
+  it("Elite gets the AI Insight on the end of the monthly summary, in the same push", async () => {
     const result = await runSummaries(fakeDb("ultimate"), push, NOW, undefined, {
       insightWriter: writer,
     });
@@ -106,14 +106,14 @@ describe("runSummaries and the AI Insight", () => {
     expect(write).toHaveBeenCalledTimes(1);
   });
 
-  it("Professional gets the summary only, and no AI is called", async () => {
+  it("Pro gets the summary only, and no AI is called", async () => {
     await runSummaries(fakeDb("plus"), push, NOW, undefined, { insightWriter: writer });
     expect(sentMessages()).toHaveLength(1);
     expect(write).not.toHaveBeenCalled();
     expect(loadFacts).not.toHaveBeenCalled();
   });
 
-  it("without an AI configured Ultimate still gets observations written by plain code", async () => {
+  it("without an AI configured Elite still gets observations written by plain code", async () => {
     await runSummaries(fakeDb("ultimate"), push, NOW);
     expect(sentMessages()).toHaveLength(2);
     expect(JSON.stringify(sentMessages()[1])).toContain("สรุปจากตัวเลขของคุณ");

@@ -85,7 +85,7 @@ describe("POST /api/wallets: how many each plan may have", () => {
     expect(created).toHaveLength(0);
   });
 
-  it("Professional can reach five, not six", async () => {
+  it("Pro can reach five, not six", async () => {
     plan = "plus";
     existing = wallets(4);
     expect((await post({ name: "ใบที่ 5" })).status).toBe(201);
@@ -95,7 +95,7 @@ describe("POST /api/wallets: how many each plan may have", () => {
     expect(await res.json()).toMatchObject({ upgrade: true });
   });
 
-  it("Ultimate is not limited to five", async () => {
+  it("Elite is not limited to five", async () => {
     plan = "ultimate";
     existing = wallets(8);
     expect((await post({ name: "ใบที่ 9" })).status).toBe(201);
@@ -141,7 +141,7 @@ describe("GET /api/wallets", () => {
 });
 
 describe("POST /api/wallets: credit-card fields", () => {
-  it("Professional saves the limit and the two days on a card", async () => {
+  it("Pro saves the limit and the two days on a card", async () => {
     plan = "plus";
     existing = wallets(1);
     const res = await post({
@@ -232,7 +232,7 @@ describe("shared wallets in the wallets API", () => {
     expect(sharedCreated).toHaveLength(0);
   });
 
-  it("Professional starts one (a new wallet, with its opening balance); a second needs Ultimate", async () => {
+  it("Pro starts one (a new wallet, with its opening balance); a second needs Elite", async () => {
     plan = "plus";
     existing = [wallet(1)];
     const res = await post({
@@ -256,7 +256,7 @@ describe("shared wallets in the wallets API", () => {
     expect(await second.json()).toMatchObject({ upgrade: true });
   });
 
-  it("Ultimate may own several", async () => {
+  it("Elite may own several", async () => {
     plan = "ultimate";
     existing = [wallet(1)];
     sharedOwned = 4;

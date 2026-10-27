@@ -209,7 +209,7 @@ describe("the bot joining and leaving", () => {
     // two buttons: open the ledger (a LIFF page when the LIFF id is known), and how to use it
     expect(card).toContain('"label":"📒 เปิดสมุดกลุ่ม"');
     expect(card).toContain('"label":"📖 วิธีใช้งาน","text":"วิธีใช้งาน"');
-    expect(card).toContain("Ultimate");
+    expect(card).toContain("Elite");
     expect(card).toContain('"type":"carousel"'); // small cards to swipe, not one tall card
 
     ({ deps, reply } = setup());
@@ -235,19 +235,19 @@ describe("the welcome card's open button", () => {
 });
 
 describe("เปิดสมุดกลุ่ม", () => {
-  it("an Ultimate member opens it and becomes the owner", async () => {
+  it("an Elite member opens it and becomes the owner", async () => {
     const { deps, reply } = setup();
     await handleEvent(inGroup("Uowner", "เปิดสมุดกลุ่ม"), deps);
     expect(opened).toEqual([{ lineGroupId: GID, owner: "app-Uowner" }]);
     expect(said(reply)).toContain("เปิดสมุดกลุ่มแล้ว");
   });
 
-  it("a member who is not Ultimate is told it needs Ultimate", async () => {
+  it("a member who is not Elite is told it needs Elite", async () => {
     userPlan = "plus";
     const { deps, reply } = setup();
     await handleEvent(inGroup("Uplus", "เปิดสมุดกลุ่ม"), deps);
     expect(opened).toHaveLength(0);
-    expect(said(reply)).toContain("Ultimate");
+    expect(said(reply)).toContain("Elite");
   });
 
   it("already open by the same person, or by someone else with a running plan", async () => {
@@ -262,7 +262,7 @@ describe("เปิดสมุดกลุ่ม", () => {
     expect(said(reply)).toContain("มีเจ้าของสมุดอยู่แล้ว");
   });
 
-  it("when the owner's Ultimate has run out another Ultimate member may take over", async () => {
+  it("when the owner's Elite has run out another Elite member may take over", async () => {
     openBook();
     ownerPlan = "free";
     const { deps } = setup();
@@ -394,7 +394,7 @@ describe("จด", () => {
     expect(said(reply)).toContain("เปิดสมุดกลุ่ม");
   });
 
-  it("when the owner's Ultimate has run out, writing stops but the summary still works", async () => {
+  it("when the owner's Elite has run out, writing stops but the summary still works", async () => {
     entries = [
       {
         id: "e0",

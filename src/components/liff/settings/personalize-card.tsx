@@ -16,7 +16,7 @@ import { cn } from "@/lib/utils";
 import { PlusLock } from "./plus-lock";
 import { cardClass, type Me, type Settings } from "./types";
 
-/** Pick the colour of the cards the bot sends and the way it talks (Professional and above). */
+/** Pick the colour of the cards the bot sends and the way it talks (Pro and above). */
 export function PersonalizeCard({
   me,
   settings,

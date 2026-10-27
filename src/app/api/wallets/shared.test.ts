@@ -118,7 +118,7 @@ describe("POST /api/wallets/:id/invite", () => {
       { userId: OWNER, name: "แอน", role: "owner" },
       { userId: BOB, name: "บ๊อบ", role: "member" },
     ];
-    const res = await INVITE(req(), params); // Professional: 2 people
+    const res = await INVITE(req(), params); // Pro: 2 people
     expect(res.status).toBe(403);
     expect(await res.json()).toMatchObject({ upgrade: true });
     plan = "ultimate";

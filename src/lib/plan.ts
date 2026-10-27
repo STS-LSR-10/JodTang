@@ -1,16 +1,16 @@
 /**
- * Single place for plan limits and feature flags (Free / Professional / Ultimate).
- * Payments are a stub for now; plan_expires_at is also how redeemed points grant Professional days.
+ * Single place for plan limits and feature flags (Free / Pro / Elite).
+ * Payments are a stub for now; plan_expires_at is also how redeemed points grant Pro days.
  *
- * The stored id "plus" is the Professional tier (kept so no data has to be migrated); show
+ * The stored id "plus" is the Pro tier (kept so no data has to be migrated); show
  * `PLAN_LABEL[plan]` to people, never the id.
  */
 export type Plan = "free" | "plus" | "ultimate";
 
 export const PLAN_LABEL: Record<Plan, string> = {
   free: "Free",
-  plus: "Professional",
-  ultimate: "Ultimate",
+  plus: "Pro",
+  ultimate: "Elite",
 };
 
 /** How many wallets a person can have, by plan. Null means no plan limit (the guard below still applies). */
@@ -28,8 +28,8 @@ const GOAL_LIMIT: Record<Plan, number> = { free: 0, plus: 5, ultimate: 20 };
 export const goalCapacity = (plan: Plan): number => GOAL_LIMIT[plan];
 
 /**
- * People on one shared wallet (the owner included), by the OWNER's plan: Professional two (a
- * couple), Ultimate up to ten. A free plan cannot start a shared wallet (but can be invited to one).
+ * People on one shared wallet (the owner included), by the OWNER's plan: Pro two (a
+ * couple), Elite up to ten. A free plan cannot start a shared wallet (but can be invited to one).
  */
 const SHARED_MEMBER_LIMIT: Record<Plan, number> = { free: 0, plus: 2, ultimate: 10 };
 export const sharedMemberLimit = (plan: Plan): number => SHARED_MEMBER_LIMIT[plan];
@@ -56,7 +56,7 @@ export const SLIP_LIMIT: Record<Plan, number | null> = {
 };
 
 /**
- * "Unlimited" on Ultimate means normal use. Past these a month, the paid-per-use AI calls stop until
+ * "Unlimited" on Elite means normal use. Past these a month, the paid-per-use AI calls stop until
  * the 1st (typing still works). Shown on the upgrade page as a footnote, so nobody is surprised.
  */
 export const FAIR_USE = { slips: 300, voice: 200, smartParse: 300 } as const;
@@ -105,7 +105,7 @@ export type Feature =
   | "pinLock"
   | "personalize";
 
-/** The lowest tier that has each feature (Ultimate always includes everything Professional has). */
+/** The lowest tier that has each feature (Elite always includes everything Pro has). */
 export const MIN_PLAN: Record<Feature, "plus" | "ultimate"> = {
   savingsChart: "plus",
   recurring: "plus",
@@ -150,7 +150,7 @@ export function isPaidPlan(plan: Plan): boolean {
 
 /**
  * The plan in force right now. A future `plan_expires_at` means a paid plan (the stored tier, or
- * Professional for redeemed days on a free row); a past one means the period ended and the user is
+ * Pro for redeemed days on a free row); a past one means the period ended and the user is
  * back on Free.
  */
 export function effectivePlan(

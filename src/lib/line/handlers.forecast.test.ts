@@ -77,17 +77,17 @@ beforeEach(() => {
 
 describe("พยากรณ์", () => {
   it.each(["free", "plus"])(
-    "is for Ultimate only: %s gets the upsell and nothing is loaded",
+    "is for Elite only: %s gets the upsell and nothing is loaded",
     async (p) => {
       plan = p;
       const { deps, reply } = setup();
       await handleEvent(say("พยากรณ์"), deps);
-      expect(first(reply).text).toContain("Ultimate");
+      expect(first(reply).text).toContain("Elite");
       expect(loadCalls).toHaveLength(0);
     },
   );
 
-  it("Ultimate gets a card for the current budget cycle", async () => {
+  it("Elite gets a card for the current budget cycle", async () => {
     plan = "ultimate";
     const { deps, reply } = setup();
     await handleEvent(say("พยากรณ์ปลายเดือน"), deps);

@@ -9,7 +9,7 @@ const CHECK = {
 };
 
 test.describe("open the group ledger page (360px)", () => {
-  test("a friend on Ultimate gets the open button; outside LINE it explains what to type", async ({
+  test("a friend on Elite gets the open button; outside LINE it explains what to type", async ({
     page,
   }) => {
     await mockApi(page, { "GET /api/group-open": CHECK });
@@ -36,10 +36,10 @@ test.describe("open the group ledger page (360px)", () => {
     await expectNoSeriousA11yViolations(page);
   });
 
-  test("a friend without Ultimate is told, with a link to the plans", async ({ page }) => {
+  test("a friend without Elite is told, with a link to the plans", async ({ page }) => {
     await mockApi(page, { "GET /api/group-open": { ...CHECK, plan: "free", canOpen: false } });
     await page.goto("/group-open");
-    await expect(page.getByRole("heading", { name: /ต้องเป็นแผน Ultimate/ })).toBeVisible();
+    await expect(page.getByRole("heading", { name: /ต้องเป็นแผน Elite/ })).toBeVisible();
     await expect(page.getByRole("link", { name: /ดูแผนและทดลองใช้ฟรี/ })).toHaveAttribute(
       "href",
       "/upgrade",

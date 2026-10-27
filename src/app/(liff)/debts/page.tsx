@@ -118,7 +118,7 @@ export default function DebtsPage() {
           <>
             {locked ? (
               <div className="rounded-2xl bg-primary-soft px-4 py-3 text-sm text-primary">
-                <span className="font-semibold">สำหรับแผน Ultimate</span> · จดให้ยืม/ยืม
+                <span className="font-semibold">สำหรับแผน Elite</span> · จดให้ยืม/ยืม
                 และตัดยอดกระเป๋าให้อัตโนมัติ{" "}
                 <Link href="/upgrade" className="font-semibold underline">
                   ดูแผนอัปเกรด

@@ -117,7 +117,7 @@ test.describe("wallets page (360px)", () => {
     await expect(page.getByRole("button", { name: "ลองอีกครั้ง" })).toBeVisible();
   });
 
-  test("Professional: transfer between wallets sends both ids and the amount", async ({ page }) => {
+  test("Pro: transfer between wallets sends both ids and the amount", async ({ page }) => {
     let body: unknown = null;
     await mockApi(page, {
       "GET /api/me": ME_PLUS,
@@ -162,7 +162,7 @@ test.describe("wallets page (360px)", () => {
     await page.goto("/wallets");
 
     await expect(page.getByRole("button", { name: "โอน", exact: true })).toBeDisabled();
-    await expect(page.getByText("สำหรับแผน Professional")).toBeVisible();
+    await expect(page.getByText("สำหรับแผน Pro")).toBeVisible();
   });
 
   test("the same wallet on both sides is refused before sending", async ({ page }) => {
@@ -232,7 +232,7 @@ test.describe("credit-card wallets (360px)", () => {
     await expectNoSeriousA11yViolations(page);
   });
 
-  test("Professional: saving a card sends the limit and the two days", async ({ page }) => {
+  test("Pro: saving a card sends the limit and the two days", async ({ page }) => {
     let body: unknown = null;
     await mockApi(page, {
       "GET /api/me": ME_PLUS,
@@ -269,7 +269,7 @@ test.describe("credit-card wallets (360px)", () => {
 
     await page.getByRole("button", { name: "แก้ไข KTC" }).click();
     await expect(page.getByLabel("วงเงิน", { exact: true })).toHaveCount(0);
-    await expect(page.getByText("สำหรับแผน Professional").last()).toBeVisible();
+    await expect(page.getByText("สำหรับแผน Pro").last()).toBeVisible();
   });
 });
 
@@ -376,9 +376,7 @@ test.describe("shared wallets (360px)", () => {
     await expect(page.getByRole("region", { name: "โอนระหว่างกระเป๋า" })).toHaveCount(0);
   });
 
-  test("a new wallet can be made shared (Professional), and Free is told it needs Professional", async ({
-    page,
-  }) => {
+  test("a new wallet can be made shared (Pro), and Free is told it needs Pro", async ({ page }) => {
     let body: unknown = null;
     await mockApi(page, {
       "GET /api/me": ME_PLUS,
@@ -405,7 +403,7 @@ test.describe("shared wallets (360px)", () => {
     });
     await page.goto("/wallets");
     await page.getByRole("button", { name: "เพิ่มกระเป๋า" }).click();
-    await expect(page.getByText("สำหรับแผน Professional").last()).toBeVisible();
+    await expect(page.getByText("สำหรับแผน Pro").last()).toBeVisible();
     await expect(page.getByLabel("กระเป๋าร่วมกับคนอื่น", { exact: false })).toHaveCount(0);
   });
 

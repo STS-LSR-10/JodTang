@@ -93,7 +93,7 @@ beforeEach(() => {
 });
 
 describe("a long sentence", () => {
-  it("is read by the AI on Ultimate and saved as PENDING with a check card", async () => {
+  it("is read by the AI on Elite and saved as PENDING with a check card", async () => {
     const { deps, sent } = setup();
     await handleEvent(textEvent(SENTENCE), deps);
     expect(structure).toHaveBeenCalledTimes(1);
@@ -112,7 +112,7 @@ describe("a long sentence", () => {
     expect(JSON.stringify(out[1])).toContain("a=ax&id=t1");
   });
 
-  it("is not sent to the AI on Professional (the rules handle it as before)", async () => {
+  it("is not sent to the AI on Pro (the rules handle it as before)", async () => {
     plan = "plus";
     const { deps } = setup();
     await handleEvent(textEvent(SENTENCE), deps);
@@ -153,7 +153,7 @@ describe("a long sentence", () => {
 });
 
 describe("a short clear message", () => {
-  it("never reaches the AI, even on Ultimate, and is saved straight away", async () => {
+  it("never reaches the AI, even on Elite, and is saved straight away", async () => {
     const { deps } = setup();
     await handleEvent(textEvent("กาแฟ 30"), deps);
     expect(structure).not.toHaveBeenCalled();

@@ -60,7 +60,7 @@ export async function GET(request: Request): Promise<Response> {
     if (error) throw new Error(`list transactions: ${error.message}`);
     const rows = data ?? [];
 
-    // While searching, the first page also carries the totals of everything found (Professional and
+    // While searching, the first page also carries the totals of everything found (Pro and
     // above). They are added up by the database, so they cover more than the page that is shown.
     let totals: Awaited<ReturnType<typeof loadSearchTotals>> | null = null;
     const target: SearchTarget | null = f.q

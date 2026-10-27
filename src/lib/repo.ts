@@ -24,12 +24,12 @@ export interface SettingsRow {
   daily_reminder_enabled: boolean;
   /** "HH:MM:SS" (Bangkok time) or null */
   daily_reminder_time: string | null;
-  /** Automatic summary in the chat (Professional and above), Monday 09:00 / cycle start day 09:00 */
+  /** Automatic summary in the chat (Pro and above), Monday 09:00 / cycle start day 09:00 */
   weekly_summary_enabled: boolean;
   monthly_summary_enabled: boolean;
-  /** Limit for one day, all categories together (Professional and above); null = none. */
+  /** Limit for one day, all categories together (Pro and above); null = none. */
   daily_budget?: number | string | null;
-  /** Card colour theme and the bot's manner (Professional and above); unknown values read as the defaults. */
+  /** Card colour theme and the bot's manner (Pro and above); unknown values read as the defaults. */
   card_theme?: string;
   bot_persona?: string;
   /** After a plain save, offer the camera / album buttons to attach a photo (default on). */

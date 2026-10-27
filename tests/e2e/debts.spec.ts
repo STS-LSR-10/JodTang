@@ -79,7 +79,7 @@ test.describe("debts page (360px)", () => {
     await expect(page.getByText("ยังไม่มีหนี้ค้าง")).toBeVisible();
   });
 
-  test("not Ultimate: a note with an upgrade link and the add button is off", async ({ page }) => {
+  test("not Elite: a note with an upgrade link and the add button is off", async ({ page }) => {
     await mockApi(page, {
       "GET /api/me": ME_PLUS,
       "GET /api/debts": LIST,
@@ -87,7 +87,7 @@ test.describe("debts page (360px)", () => {
     });
     await page.goto("/debts");
 
-    await expect(page.getByText("สำหรับแผน Ultimate")).toBeVisible();
+    await expect(page.getByText("สำหรับแผน Elite")).toBeVisible();
     await expect(page.getByRole("button", { name: "เพิ่มหนี้" })).toBeDisabled();
   });
 

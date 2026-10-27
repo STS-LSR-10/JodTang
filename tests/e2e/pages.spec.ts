@@ -83,10 +83,10 @@ test.describe("analytics page (360px)", () => {
     });
     await page.goto("/analytics");
 
-    const teaser = page.getByRole("region", { name: "ฟีเจอร์ของแผน Professional" });
-    await expect(teaser.getByText("สำหรับแผน Professional")).toBeVisible();
+    const teaser = page.getByRole("region", { name: "ฟีเจอร์ของแผน Pro" });
+    await expect(teaser.getByText("สำหรับแผน Pro")).toBeVisible();
     await expect(
-      teaser.getByRole("link", { name: /อัปเกรดเป็น Professional เริ่มต้น ฿\d+\/เดือน/ }),
+      teaser.getByRole("link", { name: /อัปเกรดเป็น Pro เริ่มต้น ฿\d+\/เดือน/ }),
     ).toHaveAttribute("href", "/upgrade");
     await expect(page.getByRole("region", { name: "กราฟรายรับรายจ่าย" })).toHaveCount(0);
     expect(seen.some((s) => s.includes("/api/analytics"))).toBe(false);
@@ -177,14 +177,14 @@ test.describe("custom categories (360px)", () => {
     await expectNoHorizontalScroll(page);
   });
 
-  test("Free: adding shows the Professional lock and sends nothing", async ({ page }) => {
+  test("Free: adding shows the Pro lock and sends nothing", async ({ page }) => {
     const { seen } = await mockApi(page, { ...BASE, "GET /api/me": ME_FREE });
     await page.goto("/budgets");
     await page.getByRole("button", { name: /เพิ่มหมวด/ }).click();
 
     const dialog = page.getByRole("dialog", { name: "หมวดของตัวเอง" });
-    await expect(dialog.getByText("สร้างหมวดของตัวเองสำหรับแผน Professional")).toBeVisible();
-    await expect(dialog.getByRole("link", { name: "ดูแผน Professional" })).toHaveAttribute(
+    await expect(dialog.getByText("สร้างหมวดของตัวเองสำหรับแผน Pro")).toBeVisible();
+    await expect(dialog.getByRole("link", { name: "ดูแผน Pro" })).toHaveAttribute(
       "href",
       "/upgrade",
     );
@@ -199,13 +199,13 @@ test.describe("custom categories (360px)", () => {
 
     const dialog = page.getByRole("dialog", { name: "แก้ไขหมวด" });
     await expect(dialog.getByLabel("ชื่อหมวด")).toBeDisabled();
-    await expect(dialog.getByText("แก้หมวดของตัวเองได้ในแผน Professional ขึ้นไป")).toBeVisible();
+    await expect(dialog.getByText("แก้หมวดของตัวเองได้ในแผน Pro ขึ้นไป")).toBeVisible();
     await expect(dialog.getByRole("button", { name: "บันทึก" })).toHaveCount(0);
     await expect(dialog.getByRole("button", { name: "ลบหมวดนี้" })).toBeVisible();
     await expect(dialog.getByRole("radiogroup", { name: "เลือกอีโมจิ" })).toHaveCount(0);
   });
 
-  test("Professional: pick an emoji from the grid and it is sent with the new category", async ({
+  test("Pro: pick an emoji from the grid and it is sent with the new category", async ({
     page,
   }) => {
     const bodies: unknown[] = [];
@@ -231,7 +231,7 @@ test.describe("custom categories (360px)", () => {
     expect(bodies[0]).toMatchObject({ type: "expense", name: "เติมเกม", emoji: "🎮" });
   });
 
-  test("Professional: typing something that is not one emoji is refused before sending", async ({
+  test("Pro: typing something that is not one emoji is refused before sending", async ({
     page,
   }) => {
     const { seen } = await mockApi(page, { ...BASE, "GET /api/me": ME_PLUS });
@@ -247,7 +247,7 @@ test.describe("custom categories (360px)", () => {
     expect(seen.some((s) => s.startsWith("POST"))).toBe(false);
   });
 
-  test("Professional: clearing the emoji sends an empty one", async ({ page }) => {
+  test("Pro: clearing the emoji sends an empty one", async ({ page }) => {
     const bodies: unknown[] = [];
     await mockApi(page, {
       ...BASE,
@@ -297,7 +297,7 @@ test.describe("budgets page (360px)", () => {
   });
 });
 
-test.describe("category budgets are Professional and above (360px)", () => {
+test.describe("category budgets are Pro and above (360px)", () => {
   const CATEGORY_MODE = {
     ...BUDGETS,
     mode: "category",
@@ -327,7 +327,7 @@ test.describe("category budgets are Professional and above (360px)", () => {
     await expect(page.getByRole("menuitemradio", { name: "แยกตามหมวด" })).toBeDisabled();
     await expect(page.getByRole("menuitemradio", { name: "รวมก้อนเดียว" })).toBeEnabled();
     await page.keyboard.press("Escape");
-    await expect(page.getByText("สำหรับแผน Professional").first()).toBeVisible();
+    await expect(page.getByText("สำหรับแผน Pro").first()).toBeVisible();
     await expect(page.getByRole("progressbar", { name: "การใช้งบ" })).toBeVisible();
   });
 
@@ -345,7 +345,7 @@ test.describe("category budgets are Professional and above (360px)", () => {
     await expect(field).toHaveValue("3000");
   });
 
-  test("Professional: the แยกตามหมวด choice and the budget field are open, quick amounts add up", async ({
+  test("Pro: the แยกตามหมวด choice and the budget field are open, quick amounts add up", async ({
     page,
   }) => {
     const bodies: unknown[] = [];
@@ -447,7 +447,7 @@ test.describe("daily budget (360px)", () => {
   const WITH_DAILY = { ...BUDGETS, daily: { amountSatang: 50_000, spentSatang: 62_000 } };
   const NO_DAILY = { ...BUDGETS, daily: { amountSatang: null, spentSatang: 32_000 } };
 
-  test("Professional: shows today's use of the limit and saves a new one", async ({ page }) => {
+  test("Pro: shows today's use of the limit and saves a new one", async ({ page }) => {
     const bodies: unknown[] = [];
     await mockApi(page, {
       "GET /api/budgets": WITH_DAILY,
@@ -513,7 +513,7 @@ test.describe("daily budget (360px)", () => {
 
     const section = page.getByRole("region", { name: "งบรายวัน" });
     await expect(section.getByLabel("งบรายวัน")).toBeDisabled();
-    await expect(section.getByText("สำหรับแผน Professional")).toBeVisible();
+    await expect(section.getByText("สำหรับแผน Pro")).toBeVisible();
     await expectNoHorizontalScroll(page);
   });
 });

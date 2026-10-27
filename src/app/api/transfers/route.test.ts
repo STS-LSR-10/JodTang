@@ -45,7 +45,7 @@ beforeEach(() => {
 });
 
 describe("POST /api/transfers", () => {
-  it("is for Professional and above", async () => {
+  it("is for Pro and above", async () => {
     plan = "free";
     const res = await post({ fromId: A, toId: B, amount: "500" });
     expect(res.status).toBe(403);

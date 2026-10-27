@@ -28,7 +28,7 @@ describe("pricing", () => {
     expect(yearlySavingPercent(PRICES.ultimate)).toBe(52);
   });
 
-  it("every row has three cells and Free never has more than Professional", () => {
+  it("every row has three cells and Free never has more than Pro", () => {
     for (const row of FEATURE_GROUPS.flatMap((g) => g.rows)) {
       expect(row.cells).toHaveLength(3);
       if (row.cells[0] === true) expect(row.cells[1]).toBe(true);

@@ -36,7 +36,7 @@ beforeEach(() => {
 });
 
 describe("POST /api/export/link", () => {
-  it("is for Professional and above: Free gets a 403 with the upgrade hint and no link", async () => {
+  it("is for Pro and above: Free gets a 403 with the upgrade hint and no link", async () => {
     const res = await post({ format: "csv" });
     expect(res.status).toBe(403);
     expect(await res.json()).toMatchObject({ upgrade: true });

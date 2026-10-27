@@ -30,7 +30,7 @@ beforeEach(() => {
 });
 
 describe("GET /api/group-open", () => {
-  it("a friend on Ultimate can open the ledger", async () => {
+  it("a friend on Elite can open the ledger", async () => {
     const body = await (await get()).json();
     expect(body).toMatchObject({ friend: true, plan: "ultimate", canOpen: true });
     expect(body.addFriendUrl).toBe("https://line.me/R/ti/p/%40964jamyy");
@@ -41,7 +41,7 @@ describe("GET /api/group-open", () => {
     expect(await (await get()).json()).toMatchObject({ friend: false, canOpen: true });
   });
 
-  it("a friend without Ultimate cannot open it", async () => {
+  it("a friend without Elite cannot open it", async () => {
     plan = "plus";
     expect(await (await get()).json()).toMatchObject({ friend: true, canOpen: false });
     plan = "free";

@@ -54,7 +54,7 @@ describe("GET /api/budgets/history", () => {
     );
   });
 
-  it("is for Professional and above, and needs a category id", async () => {
+  it("is for Pro and above, and needs a category id", async () => {
     plan = "free";
     expect((await get()).status).toBe(403);
     expect(calls).toHaveLength(0);

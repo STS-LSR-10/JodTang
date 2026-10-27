@@ -195,7 +195,7 @@ test.describe("transactions page (360px)", () => {
     await expect(page.getByText("บันทึกแล้ว")).toBeVisible();
   });
 
-  test("a search link prefills the box, and Professional sees the totals of everything found", async ({
+  test("a search link prefills the box, and Pro sees the totals of everything found", async ({
     page,
   }) => {
     await mockApi(page, {
@@ -314,8 +314,8 @@ test.describe("transactions page (360px)", () => {
 
     const dialog = page.getByRole("dialog", { name: "ส่งออกข้อมูลรายการ" });
     await expect(dialog).toBeVisible();
-    await expect(dialog.getByText("ส่งออก Excel / CSV / PDF สำหรับแผน Professional")).toBeVisible();
-    await expect(dialog.getByRole("link", { name: "ดูแผน Professional" })).toHaveAttribute(
+    await expect(dialog.getByText("ส่งออก Excel / CSV / PDF สำหรับแผน Pro")).toBeVisible();
+    await expect(dialog.getByRole("link", { name: "ดูแผน Pro" })).toHaveAttribute(
       "href",
       "/upgrade",
     );

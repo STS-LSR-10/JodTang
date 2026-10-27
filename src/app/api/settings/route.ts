@@ -69,7 +69,7 @@ export async function PATCH(request: Request): Promise<Response> {
       if (locked) return locked;
     }
 
-    // Another look or manner than the default is a Professional feature. Going back to the default is
+    // Another look or manner than the default is a Pro feature. Going back to the default is
     // always allowed, so a lapsed plan can still reset it.
     if (
       (parsed.data.card_theme !== undefined && parsed.data.card_theme !== DEFAULT_THEME) ||

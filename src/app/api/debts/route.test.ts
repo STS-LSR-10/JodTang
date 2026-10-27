@@ -100,7 +100,7 @@ describe("GET /api/debts", () => {
 });
 
 describe("POST /api/debts", () => {
-  it.each(["free", "plus"])("is Ultimate only: %s gets a 403", async (p) => {
+  it.each(["free", "plus"])("is Elite only: %s gets a 403", async (p) => {
     plan = p;
     const res = await POST(req("POST", { direction: "lent", person: "ก", amount: "100" }));
     expect(res.status).toBe(403);
@@ -156,7 +156,7 @@ describe("PATCH /api/debts/:id", () => {
     expect(patched[0]).toMatchObject({ amountSatang: 80000, accountId: MAIN });
   });
 
-  it("is Ultimate only", async () => {
+  it("is Elite only", async () => {
     plan = "plus";
     debts = [debt({})];
     expect((await PATCH(req("PATCH", { note: "x" }), params)).status).toBe(403);

@@ -82,7 +82,7 @@ export default function GoalsPage() {
           <>
             {locked ? (
               <div className="rounded-2xl bg-primary-soft px-4 py-3 text-sm text-primary">
-                <span className="font-semibold">สำหรับแผน Professional</span> · สร้างกระปุกออมสิน
+                <span className="font-semibold">สำหรับแผน Pro</span> · สร้างกระปุกออมสิน
                 ตั้งเป้าและดูความคืบหน้า{" "}
                 <Link href="/upgrade" className="font-semibold underline">
                   ดูแผนอัปเกรด
@@ -208,7 +208,7 @@ export default function GoalsPage() {
                 <Link href="/upgrade" className="font-semibold underline">
                   ดูแผนอัปเกรด
                 </Link>{" "}
-                (Ultimate มีได้ 20 ใบ)
+                (Elite มีได้ 20 ใบ)
               </p>
             )}
           </>

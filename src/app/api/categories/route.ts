@@ -55,7 +55,7 @@ const createSchema = z.object({
   emoji: z.string().max(16).nullable().optional(),
 });
 
-/** POST /api/categories — add a custom category (Professional and above). */
+/** POST /api/categories — add a custom category (Pro and above). */
 export async function POST(request: Request): Promise<Response> {
   return guard(async () => {
     const auth = await requireUser(request);

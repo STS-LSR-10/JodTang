@@ -62,7 +62,7 @@ export default function AnalyticsPage() {
   const me = useApi<{ features: Record<string, boolean> }>("/api/me");
   const savingsUnlocked = me.data?.features.savingsChart === true;
   const dashboardUnlocked = me.data?.features.dashboard === true;
-  // Free never calls the (Professional) analytics API: it sees the locked page below instead
+  // Free never calls the (Pro) analytics API: it sees the locked page below instead
   const data = useApi<AnalyticsResponse>(
     tab === "flow" && dashboardUnlocked
       ? `/api/analytics?view=${view}&scope=${scope}&offset=${offset}`

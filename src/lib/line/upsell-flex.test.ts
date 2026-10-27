@@ -40,7 +40,7 @@ describe("upgrade card", () => {
     expect(card).not.toContain(`฿${PRICES.ultimate.monthly}/`);
   });
 
-  it("voice: names the Professional allowance", () => {
+  it("voice: names the Pro allowance", () => {
     const card = json(buildUpsellCard({ feature: "voice", trialAvailable: true, now: AFTER }));
     expect(card).toContain("20 ครั้ง/เดือน");
     expect(card).toContain("a=trial&p=plus");

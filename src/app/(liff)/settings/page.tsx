@@ -215,14 +215,14 @@ export default function SettingsPage() {
                 ariaLabel="เป้าหมายการออม"
                 icon={<PiggyBank className="h-[18px] w-[18px]" />}
                 title="เป้าหมายการออม"
-                sub="กระปุกออมสิน ตั้งเป้า ดูความคืบหน้า · Professional ขึ้นไป"
+                sub="กระปุกออมสิน ตั้งเป้า ดูความคืบหน้า · Pro ขึ้นไป"
               />
               <MenuLink
                 href="/bills"
                 ariaLabel="บิลที่ต้องจ่าย"
                 icon={<CalendarClock className="h-[18px] w-[18px]" />}
                 title="เตือนจ่ายบิล"
-                sub="บอทเตือนก่อนวันครบกำหนด · แผน Ultimate"
+                sub="บอทเตือนก่อนวันครบกำหนด · แผน Elite"
               />
               <MenuButton
                 onClick={() => setSheet("recurring")}

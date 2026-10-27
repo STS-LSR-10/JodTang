@@ -95,7 +95,7 @@ beforeEach(() => {
 });
 
 describe("GET /api/pin/status", () => {
-  it("no PIN: not required, and a Professional can set one", async () => {
+  it("no PIN: not required, and a Pro can set one", async () => {
     expect(await (await STATUS(get())).json()).toMatchObject({
       hasPin: false,
       required: false,
@@ -210,7 +210,7 @@ describe("POST /api/pin/set", () => {
     expect(saved[0]?.hash).toMatch(/^[0-9a-f]+$/);
   });
 
-  it("is for Professional and above", async () => {
+  it("is for Pro and above", async () => {
     plan = "free";
     const res = await SET(post({ pin: "4827", confirmPin: "4827" }));
     expect(res.status).toBe(403);

@@ -129,11 +129,11 @@ describe("upgrade pitches in the chat", () => {
     expect((saved[0]?.occurredAt as Date).toISOString()).toBe(NOW.toISOString());
   });
 
-  it("the trial button starts the Professional trial once", async () => {
+  it("the trial button starts the Pro trial once", async () => {
     const { deps, reply } = setup();
     await handleEvent(tap("a=trial&p=plus"), deps);
     expect(trials).toHaveLength(1);
-    expect(everything(reply)).toContain("ทดลองใช้ Professional ฟรี 7 วันแล้ว");
+    expect(everything(reply)).toContain("ทดลองใช้ Pro ฟรี 7 วันแล้ว");
 
     trialUsed = true;
     const again = setup();
@@ -141,7 +141,7 @@ describe("upgrade pitches in the chat", () => {
     expect(everything(again.reply)).toContain("เริ่มทดลองใช้ไม่ได้");
   });
 
-  it("Professional is never pitched", async () => {
+  it("Pro is never pitched", async () => {
     plan = "plus";
     const { deps, reply } = setup();
     await handleEvent(say("เมื่อวาน ข้าวผัด 60"), deps);

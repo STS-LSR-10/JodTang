@@ -147,7 +147,7 @@ test.describe("PIN card in the settings (360px)", () => {
   const OFF = { hasPin: false, required: false, unlocked: true, canSet: true, resetAt: null };
   const ON = { hasPin: true, required: true, unlocked: true, canSet: true, resetAt: null };
 
-  test("Free: told it needs Professional, no set button", async ({ page }) => {
+  test("Free: told it needs Pro, no set button", async ({ page }) => {
     await mockApi(page, {
       ...COMMON,
       "GET /api/me": ME_FREE,
@@ -155,7 +155,7 @@ test.describe("PIN card in the settings (360px)", () => {
     });
     await page.goto("/settings");
     const card = page.getByRole("region", { name: "ล็อกด้วย PIN" });
-    await expect(card.getByText("สำหรับแผน Professional")).toBeVisible();
+    await expect(card.getByText("สำหรับแผน Pro")).toBeVisible();
     await expect(card.getByRole("button", { name: "ตั้ง PIN" })).toBeDisabled();
   });
 

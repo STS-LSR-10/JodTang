@@ -50,7 +50,7 @@ export function billReminderMessage(r: DueReminder): LineMessage {
 }
 
 /**
- * Hourly: push the bill reminders that are due now to Ultimate users (their own bills, and the due
+ * Hourly: push the bill reminders that are due now to Elite users (their own bills, and the due
  * day of their credit cards). Each reminder is marked as sent before it goes out, so a failing push
  * (blocked account) is not retried every hour.
  */

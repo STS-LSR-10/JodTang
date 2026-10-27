@@ -94,7 +94,7 @@ export interface StructurerConfig {
   model?: string;
 }
 
-/** Cheap, fast models: this runs only for Ultimate users on long sentences. */
+/** Cheap, fast models: this runs only for Elite users on long sentences. */
 export const STRUCTURER_DEFAULT_MODELS: Record<AiProviderName, string> = {
   gemini: "gemini-3.5-flash-lite",
   anthropic: "claude-haiku-5-5",

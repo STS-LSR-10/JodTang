@@ -103,7 +103,7 @@ describe("splitting a receipt (a=sp)", () => {
     expect(inserted.map((i) => i.amountSatang)).toEqual([3000, 6000, 1000]);
   });
 
-  it("is for Ultimate only and creates nothing otherwise", async () => {
+  it("is for Elite only and creates nothing otherwise", async () => {
     plan = "plus";
     const { deps, reply } = setup();
     await handleEvent(tap(), deps);

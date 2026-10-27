@@ -66,7 +66,7 @@ export async function processEvents(rawEvents: unknown[]): Promise<void> {
     },
   };
 
-  // Long typed or spoken sentences (Ultimate) are read by the same AI provider; without a key the rules do it all.
+  // Long typed or spoken sentences (Elite) are read by the same AI provider; without a key the rules do it all.
   const structurer = buildTextStructurer(env);
   if (structurer) deps.structurer = structurer;
   const insightWriter = buildInsightWriter(env);

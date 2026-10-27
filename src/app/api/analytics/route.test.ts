@@ -33,7 +33,7 @@ beforeEach(() => {
 });
 
 describe("GET /api/analytics", () => {
-  it("is for Professional and above: Free gets a 403 with the upgrade hint and no data", async () => {
+  it("is for Pro and above: Free gets a 403 with the upgrade hint and no data", async () => {
     const res = await get();
     expect(res.status).toBe(403);
     expect(await res.json()).toMatchObject({ upgrade: true });

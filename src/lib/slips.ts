@@ -189,7 +189,7 @@ export async function handleSlipImage(
         dateKnown: data.paidAt !== null,
         categoryName: categories.find((c) => c.id === categoryId)?.name ?? null,
         reference: data.reference,
-        // product lines are an Ultimate feature: others never get (or pay for) them
+        // product lines are an Elite feature: others never get (or pay for) them
         items: plan === "ultimate" && data.kind === "receipt" ? data.items : [],
       }),
     ];

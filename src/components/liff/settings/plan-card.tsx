@@ -35,7 +35,7 @@ export function PlanCard({
     setNotice(null);
     try {
       await api("/api/points/redeem", { method: "POST", body: JSON.stringify({ days }) });
-      setNotice(`แลกแล้ว +${days} วัน Professional`);
+      setNotice(`แลกแล้ว +${days} วัน Pro`);
       setDays(1);
       onChanged();
     } catch (e) {
@@ -80,7 +80,7 @@ export function PlanCard({
       </div>
 
       {me.slips.limit === 0 ? (
-        <p className="text-xs text-muted">การอ่านสลิปใช้ได้ตั้งแต่แผน Professional</p>
+        <p className="text-xs text-muted">การอ่านสลิปใช้ได้ตั้งแต่แผน Pro</p>
       ) : null}
 
       {me.slips.limit !== null && me.slips.limit > 0 ? (
@@ -125,7 +125,7 @@ export function PlanCard({
       </div>
 
       <div className="space-y-2">
-        <p className="text-sm font-semibold">แลกเป็นวันใช้ Professional</p>
+        <p className="text-sm font-semibold">แลกเป็นวันใช้ Pro</p>
         {maxDays > 0 ? (
           <div className="flex items-center gap-2">
             <select
@@ -161,7 +161,7 @@ export function PlanCard({
           href="/upgrade"
           className="flex h-11 w-full items-center justify-center rounded-2xl border border-primary text-sm font-semibold text-primary"
         >
-          {plus ? "ดูแผน Ultimate" : "ดูแผนอัปเกรด"}
+          {plus ? "ดูแผน Elite" : "ดูแผนอัปเกรด"}
         </Link>
       ) : null}
 

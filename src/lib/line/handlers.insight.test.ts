@@ -98,18 +98,18 @@ beforeEach(() => {
 
 describe("วิเคราะห์", () => {
   it.each(["free", "plus"])(
-    "is for Ultimate only: %s gets the upsell and nothing is loaded",
+    "is for Elite only: %s gets the upsell and nothing is loaded",
     async (p) => {
       plan = p;
       const { deps, reply } = setup();
       await handleEvent(say("วิเคราะห์"), deps);
-      expect(first(reply).text).toContain("Ultimate");
+      expect(first(reply).text).toContain("Elite");
       expect(factCalls).toHaveLength(0);
       expect(write).not.toHaveBeenCalled();
     },
   );
 
-  it("Ultimate gets an AI Insight card comparing the same days of the cycle before", async () => {
+  it("Elite gets an AI Insight card comparing the same days of the cycle before", async () => {
     plan = "ultimate";
     const { deps, reply } = setup();
     await handleEvent(say("วิเคราะห์"), deps);

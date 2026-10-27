@@ -64,21 +64,21 @@ describe("slip quota by plan", () => {
     expect(refunds).toHaveLength(0);
   });
 
-  it("Professional is stopped at 30 slips a month", async () => {
+  it("Pro is stopped at 30 slips a month", async () => {
     plan = "plus";
     used = 30;
     expect(await run()).toBe(SLIP_QUOTA_TEXT);
     expect(fetchImage).not.toHaveBeenCalled();
   });
 
-  it("Professional can still read the 30th slip", async () => {
+  it("Pro can still read the 30th slip", async () => {
     plan = "plus";
     used = 29;
     await expect(run()).rejects.toThrow("stop after the quota check");
     expect(fetchImage).toHaveBeenCalledTimes(1);
   });
 
-  it("Ultimate reads far more than Professional, up to the fair-use ceiling", async () => {
+  it("Elite reads far more than Pro, up to the fair-use ceiling", async () => {
     plan = "ultimate";
     used = 299;
     await expect(run()).rejects.toThrow("stop after the quota check");

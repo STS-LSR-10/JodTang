@@ -18,7 +18,7 @@ const MAX_BACK = 24;
 /**
  * GET /api/summary?scope=cycle|month|day&offset=0|-1|-2…  (default: the current budget cycle)
  * `offset` steps back whole budget cycles (scope=cycle only). Besides the totals it carries the
- * balance kept up to the end of the period ("accumulated"), the budget set, and (Professional and
+ * balance kept up to the end of the period ("accumulated"), the budget set, and (Pro and
  * above) the spending by category, so the summary page needs one call.
  */
 export async function GET(request: Request): Promise<Response> {

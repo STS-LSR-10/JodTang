@@ -207,7 +207,7 @@ async function handleGroupImage(
   );
 }
 
-/** Is the ledger usable for writing: its owner still on Ultimate? */
+/** Is the ledger usable for writing: its owner still on Elite? */
 async function ownerState(db: SupabaseClient, group: GroupRow, now: Date) {
   const owner = await getOwner(db, group.ownerUserId);
   const writable =
@@ -241,7 +241,7 @@ async function runGroupCommand(
     const existing = await getGroup(db, groupId);
     if (existing?.isActive) {
       if (existing.ownerUserId === user.id) return reply([text(GROUP_ALREADY_OPEN_TEXT)]);
-      // somebody else owns it: only when their Ultimate has run out may it change hands
+      // somebody else owns it: only when their Elite has run out may it change hands
       if ((await ownerState(db, existing, now)).writable)
         return reply([text(GROUP_OTHER_OWNER_TEXT)]);
     }

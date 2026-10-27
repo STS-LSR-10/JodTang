@@ -41,7 +41,7 @@ const createSchema = z.object({
 
 const AMOUNT_PATTERN = /^\d{1,10}(\.\d{1,2})?$/;
 
-/** POST /api/goals — a new piggy bank (Professional and above). */
+/** POST /api/goals — a new piggy bank (Pro and above). */
 export async function POST(request: Request): Promise<Response> {
   return guard(async () => {
     const auth = await requireUser(request);
@@ -71,7 +71,7 @@ export async function POST(request: Request): Promise<Response> {
           error:
             plan === "ultimate"
               ? `มีเป้าหมายได้สูงสุด ${goalCapacity(plan)} ใบ`
-              : `แผน Professional มีเป้าหมายได้ ${goalCapacity(plan)} ใบ อัปเกรดเป็น Ultimate เพื่อมีได้ ${20} ใบนะ`,
+              : `แผน Pro มีเป้าหมายได้ ${goalCapacity(plan)} ใบ อัปเกรดเป็น Elite เพื่อมีได้ ${20} ใบนะ`,
           upgrade: plan !== "ultimate",
         },
         { status: 403, headers: { "Cache-Control": "no-store" } },

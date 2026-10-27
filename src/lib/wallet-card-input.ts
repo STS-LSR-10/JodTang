@@ -17,7 +17,7 @@ export interface CardFields {
 
 /**
  * The card fields of a wallet request, checked: only a card wallet can have them, and setting them
- * (clearing is always allowed) is for Professional and above. Returns the error response to send
+ * (clearing is always allowed) is for Pro and above. Returns the error response to send
  * instead when something is wrong.
  */
 export async function cardFieldsOr400(

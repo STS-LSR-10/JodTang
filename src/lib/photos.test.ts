@@ -68,7 +68,7 @@ describe("handlePhotoImage", () => {
     expect(clearPhotoWait).toHaveBeenCalledTimes(1);
   });
 
-  it("works on Ultimate too", async () => {
+  it("works on Elite too", async () => {
     plan = "ultimate";
     expect(textOf(await handlePhotoImage(deps, user, "m1", live))).toBe(
       PHOTO_ATTACHED_TEXT("ข้าวมันไก่"),

@@ -281,12 +281,12 @@ describe("transfers between wallets", () => {
     expect(json).toContain("a=tc&id=tr1");
   });
 
-  it("Free is told it needs Professional and nothing is moved", async () => {
+  it("Free is told it needs Pro and nothing is moved", async () => {
     plan = "free";
     const { deps, reply } = setup();
     await handleEvent(text("โอน 500 เงินสด>ktc"), deps);
     expect(transfers).toHaveLength(0);
-    expect(sent(reply)).toContain("Professional");
+    expect(sent(reply)).toContain("Pro");
   });
 
   it("the same wallet on both sides is refused", async () => {
@@ -357,12 +357,12 @@ describe("the บัตร command", () => {
     expect(sent(reply)).toContain("💳 KTC");
   });
 
-  it("Free is told it needs Professional", async () => {
+  it("Free is told it needs Pro", async () => {
     withCard();
     plan = "free";
     const { deps, reply } = setup();
     await handleEvent(text("บัตร"), deps);
-    expect(sent(reply)).toContain("Professional");
+    expect(sent(reply)).toContain("Pro");
   });
 
   it("without a card it explains how to add one", async () => {
@@ -436,7 +436,7 @@ describe("card limit alerts after recording", () => {
   });
 });
 
-describe("debts by chat (Ultimate)", () => {
+describe("debts by chat (Elite)", () => {
   const owed = (over: Partial<import("@/lib/debt").DebtDto>): import("@/lib/debt").DebtDto => ({
     id: "d1",
     direction: "lent",
@@ -480,12 +480,12 @@ describe("debts by chat (Ultimate)", () => {
     expect(sent(reply)).toContain("กำหนดคืน");
   });
 
-  it("not Ultimate: told it is an Ultimate feature, nothing saved", async () => {
+  it("not Elite: told it is an Elite feature, nothing saved", async () => {
     plan = "plus";
     const { deps, reply } = setup();
     await handleEvent(text("ให้ยืม สมชาย 500"), deps);
     expect(newDebts).toHaveLength(0);
-    expect(sent(reply)).toContain("Ultimate");
+    expect(sent(reply)).toContain("Elite");
   });
 
   it("an unknown wallet saves nothing", async () => {
@@ -550,11 +550,11 @@ describe("debts by chat (Ultimate)", () => {
     expect(json).toContain("เราติดใคร");
   });
 
-  it("the หนี้ command is for Ultimate, and says so when there is nothing", async () => {
+  it("the หนี้ command is for Elite, and says so when there is nothing", async () => {
     plan = "plus";
     let { deps, reply } = setup();
     await handleEvent(text("หนี้"), deps);
-    expect(sent(reply)).toContain("Ultimate");
+    expect(sent(reply)).toContain("Elite");
 
     plan = "ultimate";
     ({ deps, reply } = setup());
@@ -575,7 +575,7 @@ describe("debts by chat (Ultimate)", () => {
   });
 });
 
-describe("foreign currency by chat (Ultimate)", () => {
+describe("foreign currency by chat (Elite)", () => {
   beforeEach(() => {
     plan = "ultimate";
   });
@@ -641,17 +641,14 @@ describe("foreign currency by chat (Ultimate)", () => {
     expect(sent(reply)).toContain("น้อยกว่า 1 สตางค์");
   });
 
-  it.each(["free", "plus"])(
-    "%s is told it is an Ultimate feature and nothing is saved",
-    async (p) => {
-      plan = p;
-      const { deps, reply } = setup();
-      await handleEvent(text("ราเมน 1500 JPY"), deps);
-      expect(inserted).toHaveLength(0);
-      expect(fxAsked).toHaveLength(0);
-      expect(sent(reply)).toContain("Ultimate");
-    },
-  );
+  it.each(["free", "plus"])("%s is told it is an Elite feature and nothing is saved", async (p) => {
+    plan = p;
+    const { deps, reply } = setup();
+    await handleEvent(text("ราเมน 1500 JPY"), deps);
+    expect(inserted).toHaveLength(0);
+    expect(fxAsked).toHaveLength(0);
+    expect(sent(reply)).toContain("Elite");
+  });
 
   it("baht entries never touch the rate source", async () => {
     const { deps } = setup();

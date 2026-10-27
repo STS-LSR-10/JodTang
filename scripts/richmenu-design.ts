@@ -248,7 +248,7 @@ export function buildRichMenuSvg(): string {
     `<rect x="${up.x + 56}" y="${up.y + 52}" width="236" height="68" rx="34" fill="${C.white}" fill-opacity="0.75"/>`,
     `<text x="${up.x + 174}" y="${up.y + 99}" text-anchor="middle" font-family="${FONT}" font-size="42" font-weight="800" fill="#9A6A08">สุดคุ้ม</text>`,
     `<text x="${up.x + 56}" y="${up.y + 222}" font-family="${FONT}" font-size="104" font-weight="900" fill="${C.teal}">อัปเกรด</text>`,
-    `<text x="${up.x + 56}" y="${up.y + 320}" font-family="${FONT}" font-size="64" font-weight="800" fill="#9A6A08">Pro · Ultimate</text>`,
+    `<text x="${up.x + 56}" y="${up.y + 320}" font-family="${FONT}" font-size="64" font-weight="800" fill="#9A6A08">Pro · Elite</text>`,
     icon("crown", up.x + up.width - 150, up.y + 140, 0.95),
     // invite tile
     small("invite", C.skyTile, "invite", "ชวนเพื่อน", true),

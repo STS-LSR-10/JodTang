@@ -32,7 +32,7 @@ export interface VoiceDeps {
   now: () => Date;
   fetchAudio: (messageId: string) => Promise<{ bytes: Uint8Array; mimeType: string }>;
   transcriber: Transcriber;
-  /** Reads long or unclear sentences (voice is Ultimate, so it is allowed here). */
+  /** Reads long or unclear sentences (voice is Elite, so it is allowed here). */
   structurer?: TextStructurer;
   limit?: (bucket: string, subject: string, rule: LimitRule) => Promise<RateLimitResult>;
 }
@@ -66,7 +66,7 @@ export async function handleVoiceMessage(
     if (!day.allowed) return [text(VOICE_DAY_LIMIT_TEXT)];
   }
 
-  // 3. quota: Professional and Ultimate have a monthly number; Free has one free taste for life
+  // 3. quota: Pro and Elite have a monthly number; Free has one free taste for life
   // (and after that the upgrade pitch). Work that fails gives its use back (see `spent`).
   const kind = paid ? "voice" : "teaser_voice";
   const month = paid ? monthKey(now) : LIFETIME;

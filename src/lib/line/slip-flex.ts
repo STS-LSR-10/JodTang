@@ -18,7 +18,7 @@ export interface SlipCardInput {
   dateKnown: boolean;
   categoryName: string | null;
   reference: string | null;
-  /** Receipt product lines (Ultimate only; empty for everyone else). */
+  /** Receipt product lines (Elite only; empty for everyone else). */
   items?: ReceiptItem[];
 }
 

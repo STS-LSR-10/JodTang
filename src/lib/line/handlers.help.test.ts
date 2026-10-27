@@ -81,7 +81,7 @@ describe("the help flow in the chat", () => {
     },
   );
 
-  it("the question follows the bot's manner when the person has set one (Professional)", async () => {
+  it("the question follows the bot's manner when the person has set one (Pro)", async () => {
     plan = "plus";
     persona = "friendly";
     const { deps, reply } = setup();
@@ -106,7 +106,7 @@ describe("the help flow in the chat", () => {
     plan = "ultimate";
     const { deps, reply } = setup();
     await handleEvent(tap("a=help&t=debt"), deps);
-    expect(JSON.stringify(first(reply))).toContain("Ultimate ✓");
+    expect(JSON.stringify(first(reply))).toContain("Elite ✓");
     const again = setup();
     await handleEvent(tap("a=help&t=whatever"), again.deps);
     expect(first(again.reply).type).toBe("text");

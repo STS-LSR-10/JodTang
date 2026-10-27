@@ -130,7 +130,7 @@ beforeEach(() => {
 });
 
 describe("handleVoiceMessage", () => {
-  it("a Professional user can use voice, counted against the 20 a month", async () => {
+  it("a Pro user can use voice, counted against the 20 a month", async () => {
     const d = deps();
     const out = await run(d, PROFESSIONAL_USER as never);
     expect(textOf(out[0])).toBe('ได้ยินว่า: "กาแฟ 30 บาท"');
@@ -138,17 +138,17 @@ describe("handleVoiceMessage", () => {
     expect(inserted).toHaveLength(1);
   });
 
-  it("a Professional user past 20 a month is told so, and nothing is downloaded", async () => {
+  it("a Pro user past 20 a month is told so, and nothing is downloaded", async () => {
     counters.set("voice|2026-10-01", 20);
     const d = deps();
     const out = await run(d, PROFESSIONAL_USER as never);
     expect(textOf(out[0])).toBe(voiceQuotaText("plus", 20));
-    expect(textOf(out[0])).toContain("Ultimate");
+    expect(textOf(out[0])).toContain("Elite");
     expect(d.fetchAudio).not.toHaveBeenCalled();
     expect(inserted).toHaveLength(0);
   });
 
-  it("Ultimate stops at the fair-use ceiling with its own wording", async () => {
+  it("Elite stops at the fair-use ceiling with its own wording", async () => {
     counters.set("voice|2026-10-01", 200);
     const d = deps();
     const out = await run(d, ULTIMATE_USER);
@@ -173,7 +173,7 @@ describe("handleVoiceMessage", () => {
 
     const d = deps();
     const second = await run(d, FREE_USER as never);
-    expect(JSON.stringify(second)).toContain("จดด้วยเสียงสำหรับสมาชิก Professional");
+    expect(JSON.stringify(second)).toContain("จดด้วยเสียงสำหรับสมาชิก Pro");
     expect(d.fetchAudio).not.toHaveBeenCalled();
     expect(inserted).toHaveLength(1);
   });
@@ -192,7 +192,7 @@ describe("handleVoiceMessage", () => {
     expect(used("voice")).toBe(0);
   });
 
-  it("a Professional voice note never reaches the long-sentence AI (that stays Ultimate)", async () => {
+  it("a Pro voice note never reaches the long-sentence AI (that stays Elite)", async () => {
     const structure = vi.fn(async () => ({ entries: [] }));
     await run(
       deps({

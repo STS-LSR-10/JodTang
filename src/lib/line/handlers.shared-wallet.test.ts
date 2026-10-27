@@ -165,7 +165,7 @@ describe("เชิญ <กระเป๋าร่วม>", () => {
     expect(invitesMade).toHaveLength(0);
   });
 
-  it("a full wallet (Professional: two people) cannot invite more; Ultimate can", async () => {
+  it("a full wallet (Pro: two people) cannot invite more; Elite can", async () => {
     memberCount = 2;
     let { deps, reply } = setup();
     await handleEvent(say("เชิญ กองกลาง"), deps);
@@ -183,7 +183,7 @@ describe("เชิญ <กระเป๋าร่วม>", () => {
     const { deps, reply } = setup();
     await handleEvent(say("เชิญ กองกลาง"), deps);
     expect(invitesMade).toHaveLength(0);
-    expect(said(reply)).toContain("Professional");
+    expect(said(reply)).toContain("Pro");
   });
 });
 

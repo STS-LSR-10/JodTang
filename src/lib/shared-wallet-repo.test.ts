@@ -154,14 +154,14 @@ describe("redeemInvite", () => {
     });
   });
 
-  it("Professional: two people (the owner and one more); the third is turned away and the code stays unused", async () => {
+  it("Pro: two people (the owner and one more); the third is turned away and the code stays unused", async () => {
     const { db, data } = world("plus", ["ann", "bob"]);
     expect(await redeemInvite(db, "482913", "carl", NOW)).toEqual({ ok: false, reason: "full" });
     expect(data.wallet_invites?.[0]?.used_at).toBeNull();
     expect(data.wallet_members).toHaveLength(2);
   });
 
-  it("Ultimate: up to ten", async () => {
+  it("Elite: up to ten", async () => {
     const nine = world("ultimate", ["ann", ...Array.from({ length: 8 }, (_, i) => `m${i}`)]);
     expect((await redeemInvite(nine.db, "482913", "last", NOW)).ok).toBe(true);
     const ten = world("ultimate", ["ann", ...Array.from({ length: 9 }, (_, i) => `m${i}`)]);

@@ -79,7 +79,7 @@ beforeEach(() => {
 });
 
 describe("theme and manner in the chat", () => {
-  it("a Professional user gets the chosen colours and a friendly line after saving", async () => {
+  it("a Pro user gets the chosen colours and a friendly line after saving", async () => {
     const { deps, reply } = setup();
     await handleEvent(say("กาแฟ 50"), deps);
     const text = everything(reply);

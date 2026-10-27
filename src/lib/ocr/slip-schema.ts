@@ -13,7 +13,7 @@ export const rawSlipSchema = z.object({
   payer_bank: z.string().nullable().optional(),
   reference: z.string().nullable().optional(),
   memo: z.string().nullable().optional(),
-  /** Receipt lines (only asked for Ultimate users). */
+  /** Receipt lines (only asked for Elite users). */
   items: z
     .array(
       z.object({

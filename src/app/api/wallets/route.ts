@@ -70,14 +70,14 @@ const createSchema = z.object({
   kind: z.enum(WALLET_KINDS).default("cash"),
   openingBalance: z.union([z.string(), z.number()]).nullable().optional(),
   isDefault: z.boolean().optional(),
-  /** A wallet shared with other people (Professional and above). */
+  /** A wallet shared with other people (Pro and above). */
   shared: z.boolean().optional(),
   creditLimit: z.union([z.string(), z.number()]).nullable().optional(),
   statementDay: z.number().int().min(1).max(28).nullable().optional(),
   dueDay: z.number().int().min(1).max(28).nullable().optional(),
 });
 
-/** POST /api/wallets — add a wallet, within what the plan allows (Free 1, Professional 5). */
+/** POST /api/wallets — add a wallet, within what the plan allows (Free 1, Pro 5). */
 export async function POST(request: Request): Promise<Response> {
   return guard(async () => {
     const auth = await requireUser(request);
@@ -104,7 +104,7 @@ export async function POST(request: Request): Promise<Response> {
         {
           error:
             plan === "free"
-              ? "แผน Free มีกระเป๋าได้ 1 ใบ อัปเกรดเป็น Professional เพื่อมีได้ถึง 5 ใบนะ"
+              ? "แผน Free มีกระเป๋าได้ 1 ใบ อัปเกรดเป็น Pro เพื่อมีได้ถึง 5 ใบนะ"
               : `มีกระเป๋าได้สูงสุด ${capacity} ใบ`,
           upgrade: plan === "free" || plan === "plus",
         },
@@ -112,7 +112,7 @@ export async function POST(request: Request): Promise<Response> {
       );
     }
 
-    // a new shared wallet: Professional and above, never a card, never the main wallet
+    // a new shared wallet: Pro and above, never a card, never the main wallet
     if (parsed.data.shared) {
       const locked = await requireFeature(db, auth.userId, "sharedWallet");
       if (locked) return locked;
@@ -124,7 +124,7 @@ export async function POST(request: Request): Promise<Response> {
             error:
               plan === "ultimate"
                 ? `มีกระเป๋าร่วมได้สูงสุด ${sharedWalletCapacity(plan)} ใบ`
-                : `แผน Professional มีกระเป๋าร่วมได้ ${sharedWalletCapacity(plan)} ใบ อัปเกรดเป็น Ultimate เพื่อมีได้ ${sharedWalletCapacity("ultimate")} ใบนะ`,
+                : `แผน Pro มีกระเป๋าร่วมได้ ${sharedWalletCapacity(plan)} ใบ อัปเกรดเป็น Elite เพื่อมีได้ ${sharedWalletCapacity("ultimate")} ใบนะ`,
             upgrade: plan !== "ultimate",
           },
           { status: 403, headers: { "Cache-Control": "no-store" } },

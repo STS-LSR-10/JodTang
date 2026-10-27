@@ -8,7 +8,7 @@ export interface SlipImage {
 /** Reads a slip image and returns the (untrusted) structured fields. Swap providers freely. */
 export interface SlipOcrProvider {
   readonly name: string;
-  /** `items: true` also asks for the product lines of a receipt (costs more output, Ultimate only). */
+  /** `items: true` also asks for the product lines of a receipt (costs more output, Elite only). */
   extract(image: SlipImage, options?: ExtractOptions): Promise<unknown>;
 }
 

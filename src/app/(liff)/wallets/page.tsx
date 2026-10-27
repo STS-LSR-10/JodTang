@@ -306,7 +306,7 @@ export default function WalletsPage() {
               <span className="flex-1">
                 <span className="block font-semibold">หนี้สิน</span>
                 <span className="block text-xs text-muted">
-                  จดให้ยืม/ยืม ตัดยอดกระเป๋าให้ · แผน Ultimate
+                  จดให้ยืม/ยืม ตัดยอดกระเป๋าให้ · แผน Elite
                 </span>
               </span>
             </Link>
@@ -359,7 +359,7 @@ export default function WalletsPage() {
                 <Link href="/upgrade" className="font-semibold underline">
                   ดูแผนอัปเกรด
                 </Link>{" "}
-                (Professional มีได้ 5 ใบ · Ultimate ไม่จำกัด)
+                (Pro มีได้ 5 ใบ · Elite ไม่จำกัด)
               </p>
             )}
           </>

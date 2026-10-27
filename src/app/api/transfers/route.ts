@@ -31,7 +31,7 @@ const createSchema = z.object({
 
 const AMOUNT_PATTERN = /^\d{1,10}(\.\d{1,2})?$/;
 
-/** POST /api/transfers — move money between two of the person's wallets (Professional and above). */
+/** POST /api/transfers — move money between two of the person's wallets (Pro and above). */
 export async function POST(request: Request): Promise<Response> {
   return guard(async () => {
     const auth = await requireUser(request);

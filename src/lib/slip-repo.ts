@@ -135,7 +135,7 @@ export async function insertSlip(
         payer_bank: d.payerBank,
         reference: d.reference,
         memo: d.memo,
-        // product lines (Ultimate receipts); empty array otherwise
+        // product lines (Elite receipts); empty array otherwise
         items: d.items.map((i) => ({ name: i.name, amount: satangToString(i.amountSatang) })),
       },
       slip_ref: d.reference,

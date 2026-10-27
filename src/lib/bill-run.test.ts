@@ -95,7 +95,7 @@ describe("runBillReminders", () => {
     expect((await runBillReminders(db, push, NOW)).sent).toBe(0);
   });
 
-  it("only Ultimate: a lapsed plan gets nothing", async () => {
+  it("only Elite: a lapsed plan gets nothing", async () => {
     users = [
       { id: "u1", line_user_id: "U1", plan: "ultimate", plan_expires_at: "2026-01-01T00:00:00Z" },
     ];

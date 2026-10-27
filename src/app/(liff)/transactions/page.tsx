@@ -53,7 +53,7 @@ interface WalletsLite {
 interface ListResponse {
   items: TxDto[];
   hasMore: boolean;
-  /** Totals of everything a search finds (Professional and above, first page only). */
+  /** Totals of everything a search finds (Pro and above, first page only). */
   totals?: { incomeSatang: number; expenseSatang: number; count: number } | null;
 }
 
@@ -857,7 +857,7 @@ function ExportSheet({
         <ErrorState message={me.error} onRetry={me.reload} />
       ) : !allowed ? (
         <div className="space-y-3 text-center">
-          <p className="text-base font-semibold">ส่งออก Excel / CSV / PDF สำหรับแผน Professional</p>
+          <p className="text-base font-semibold">ส่งออก Excel / CSV / PDF สำหรับแผน Pro</p>
           <p className="text-sm text-muted">
             ดาวน์โหลดรายการไปทำบัญชีต่อในคอมพิวเตอร์หรือ Google Sheets ลองใช้ฟรี 7
             วันได้ที่หน้าอัปเกรด
@@ -866,7 +866,7 @@ function ExportSheet({
             href="/upgrade"
             className="inline-flex h-11 items-center justify-center rounded-2xl bg-primary px-5 text-sm font-semibold text-surface"
           >
-            ดูแผน Professional
+            ดูแผน Pro
           </Link>
         </div>
       ) : (

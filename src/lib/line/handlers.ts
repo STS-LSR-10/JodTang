@@ -297,9 +297,9 @@ export interface HandlerDeps {
     fetchImage: (messageId: string) => Promise<SlipImage>;
     ocr: SlipOcrProvider;
   };
-  /** AI that writes the AI Insight (Ultimate). Absent -> plain-code observations instead. */
+  /** AI that writes the AI Insight (Elite). Absent -> plain-code observations instead. */
   insightWriter?: InsightWriter;
-  /** AI that reads long sentences (Ultimate). Absent -> the ordinary rules handle everything. */
+  /** AI that reads long sentences (Elite). Absent -> the ordinary rules handle everything. */
   structurer?: TextStructurer;
   /** Voice messages. Absent (no AI key that hears audio) -> a polite "not available" reply. */
   voice?: {
@@ -312,7 +312,7 @@ const MAX_REPLY_MESSAGES = 5;
 const MAX_CARDS_PER_REPLY = 3;
 
 export async function handleEvent(event: LineEvent, deps: HandlerDeps): Promise<void> {
-  // A LINE group: the group ledger (Ultimate) has its own, separate handling.
+  // A LINE group: the group ledger (Elite) has its own, separate handling.
   if (event.source?.type === "group") return handleGroupEvent(event, deps);
 
   const lineUserId = event.source?.userId;
@@ -463,7 +463,7 @@ async function handleText(input: string, user: UserRow, deps: HandlerDeps): Prom
   let { entries } = parsed;
   const plan = effectivePlan(user.plan, user.plan_expires_at, deps.now());
 
-  // Long or unclear sentences (Ultimate): let the AI read them, then ask before saving anything.
+  // Long or unclear sentences (Elite): let the AI read them, then ask before saving anything.
   if (
     deps.structurer &&
     can(plan, "smartParse") &&
@@ -475,7 +475,7 @@ async function handleText(input: string, user: UserRow, deps: HandlerDeps): Prom
   }
 
   if (entries.length === 0) return [notUnderstood()];
-  // "ราเมน 1500 JPY": convert to baht first (Ultimate); everything after sees plain baht entries
+  // "ราเมน 1500 JPY": convert to baht first (Elite); everything after sees plain baht entries
   if (entries.some((e) => e.foreign)) {
     if (!can(plan, "foreignCurrency")) return [text(FX_LOCKED_TEXT)];
     const converted = await convertForeignEntries(entries, deps);
@@ -1338,8 +1338,8 @@ async function pointsSummaryText(db: SupabaseClient, userId: string, now: Date):
     `ตังสะสมของคุณ: ${points} แต้ม`,
     streak > 0 ? `จดต่อเนื่อง ${streak} วันแล้ว` : "วันนี้จดรายการแรกเพื่อเริ่มสะสมนะ",
     days > 0
-      ? `แลกเป็นวันใช้ Professional ได้ ${days} วัน (แลกที่หน้าตั้งค่า)`
-      : "สะสมครบแล้วแลกเป็นวันใช้ Professional ได้ที่หน้าตั้งค่านะ",
+      ? `แลกเป็นวันใช้ Pro ได้ ${days} วัน (แลกที่หน้าตั้งค่า)`
+      : "สะสมครบแล้วแลกเป็นวันใช้ Pro ได้ที่หน้าตั้งค่านะ",
   ].join("\n");
 }
 
@@ -1405,7 +1405,7 @@ async function safeDailyAlerts(
 }
 
 /**
- * Professional and above are offered a photo for a plain single save, with no tap needed: the next
+ * Pro and above are offered a photo for a plain single save, with no tap needed: the next
  * image becomes the entry's photo (for a short while). Best effort: a failure only means no offer.
  */
 async function offerPhoto(
@@ -1530,7 +1530,7 @@ async function runCommand(
         );
         const subtitle = formatThaiDate(now);
         if (data.current.count === 0) return [text(`สรุปวันนี้ (${subtitle})\nยังไม่มีรายการเลย`)];
-        // with a daily limit set (Professional and above) the card says how much of it is used
+        // with a daily limit set (Pro and above) the card says how much of it is used
         const limit = await dailyLimitOf(user, deps);
         return [
           withSummaryShortcuts(
@@ -1599,7 +1599,7 @@ async function runCommand(
           subtitle,
           slices,
           totalSatang,
-          // the charts page is a Professional feature: Free is not sent to a locked page
+          // the charts page is a Pro feature: Free is not sent to a locked page
           moreUrl: can(effectivePlan(user.plan, user.plan_expires_at, now), "dashboard")
             ? pageUrl("/analytics")
             : undefined,
@@ -1934,7 +1934,7 @@ async function handlePostback(
     if (redo.some((e) => e.tags.length > 0) && !can(plan, "tags")) return [text(TAGS_LOCKED_TEXT)];
     return saveEntries(redo, user, deps, new Map());
   }
-  // "📆 ช่วงวันเอง" under a summary card: pick the first day, then the last (Professional and above).
+  // "📆 ช่วงวันเอง" under a summary card: pick the first day, then the last (Pro and above).
   // The first day travels in the button's data, so nothing is stored between the two taps.
   if (action === "sr" || action === "sr1" || action === "sr2") {
     if (!can(effectivePlan(user.plan, user.plan_expires_at, deps.now()), "customRange")) {
@@ -1952,7 +1952,7 @@ async function handlePostback(
     if (!first || !picked) return [text(SUMMARY_RANGE_BAD_DATE_TEXT)];
     return summaryForRange(user, deps, first, picked);
   }
-  // "📅 จดย้อนหลัง" under that card: Professional and above get the calendar, others the upsell
+  // "📅 จดย้อนหลัง" under that card: Pro and above get the calendar, others the upsell
   // (checked here, before the calendar opens). a=bdk (the keyboard button) is silent.
   if (action === "bd") {
     if (!can(effectivePlan(user.plan, user.plan_expires_at, deps.now()), "backdate")) {
@@ -2097,7 +2097,7 @@ async function handlePostback(
     return [buildPhotoAsk(current?.photo_path ? PHOTO_ASK_REPLACE_TEXT : PHOTO_ASK_TEXT)];
   }
 
-  // "แยก n รายการ" on a receipt card (Ultimate): one entry per product line
+  // "แยก n รายการ" on a receipt card (Elite): one entry per product line
   if (action === "sp") return splitReceipt(tx, user, deps);
 
   if (action === "pt") {

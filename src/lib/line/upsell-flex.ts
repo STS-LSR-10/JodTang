@@ -8,7 +8,7 @@ const MAX_POSTBACK = 300;
 
 export interface UpsellCardInput {
   feature: "backdate" | "slip" | "voice";
-  /** The Professional trial can still be started from the chat. */
+  /** The Pro trial can still be started from the chat. */
   trialAvailable: boolean;
   /** Public /upgrade page; the button is left out when the app URL is unknown. */
   upgradeUrl?: string;
@@ -22,11 +22,11 @@ const SLIP_PRO = SLIP_LIMIT.plus;
 
 const COPY = {
   backdate: {
-    title: "จดย้อนหลังสำหรับสมาชิก Professional",
-    body: "ระบบตรวจพบการระบุวันที่ย้อนหลัง (เช่น “เมื่อวาน”) ฟังก์ชันนี้สำหรับสมาชิกแพ็กเกจ Professional ขึ้นไป ยังไม่ได้จดรายการนี้นะ",
+    title: "จดย้อนหลังสำหรับสมาชิก Pro",
+    body: "ระบบตรวจพบการระบุวันที่ย้อนหลัง (เช่น “เมื่อวาน”) ฟังก์ชันนี้สำหรับสมาชิกแพ็กเกจ Pro ขึ้นไป ยังไม่ได้จดรายการนี้นะ",
   },
   voice: {
-    title: "จดด้วยเสียงสำหรับสมาชิก Professional",
+    title: "จดด้วยเสียงสำหรับสมาชิก Pro",
     body: "พูดสั้น ๆ เช่น “กาแฟสามสิบบาท” แล้วบอทจดให้ ไม่ต้องพิมพ์ ใช้สิทธิ์ลองจดด้วยเสียงฟรีครบแล้ว",
   },
   slip: {
@@ -53,9 +53,9 @@ export function buildUpsellCard(input: UpsellCardInput): LineMessage {
   const launch = launchActive(now) ? ` (ราคาเปิดตัวถึง ${LAUNCH_ENDS_TEXT})` : "";
   const price =
     input.feature === "slip"
-      ? `Professional ฿${plus}/เดือน อ่านสลิปได้ ${SLIP_PRO} ใบ/เดือน · Ultimate ฿${ultimate}/เดือน อ่านสลิปไม่จำกัด${launch}`
+      ? `Pro ฿${plus}/เดือน อ่านสลิปได้ ${SLIP_PRO} ใบ/เดือน · Elite ฿${ultimate}/เดือน อ่านสลิปไม่จำกัด${launch}`
       : input.feature === "voice"
-        ? `Professional ฿${plus}/เดือน จดด้วยเสียงได้ ${VOICE_LIMIT.plus} ครั้ง/เดือน · Ultimate ฿${ultimate}/เดือน ไม่จำกัด${launch}`
+        ? `Pro ฿${plus}/เดือน จดด้วยเสียงได้ ${VOICE_LIMIT.plus} ครั้ง/เดือน · Elite ฿${ultimate}/เดือน ไม่จำกัด${launch}`
         : `อัปเกรดวันนี้เพียง ฿${plus}/เดือน${launch}${input.trialAvailable ? ` หรือทดลองใช้ฟรี ${TRIAL_DAYS} วัน!` : ""}`;
 
   const buttons: unknown[] = [];
@@ -66,7 +66,7 @@ export function buildUpsellCard(input: UpsellCardInput): LineMessage {
         {
           type: "postback",
           data: "a=trial&p=plus",
-          displayText: `ทดลองใช้ Professional ฟรี ${TRIAL_DAYS} วัน`,
+          displayText: `ทดลองใช้ Pro ฟรี ${TRIAL_DAYS} วัน`,
         },
         true,
       ),

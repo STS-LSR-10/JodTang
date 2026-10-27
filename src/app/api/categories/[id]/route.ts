@@ -50,7 +50,7 @@ export async function PATCH(request: Request, { params }: Params): Promise<Respo
     }
 
     if (category.user_id === auth.userId) {
-      // Changing what an own category is (name, words, colour, emoji) is Professional and above;
+      // Changing what an own category is (name, words, colour, emoji) is Pro and above;
       // hiding and reordering it stay open to everyone.
       if (
         patch.name !== undefined ||

@@ -1,7 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { bangkokDateKey } from "@/lib/points";
 
-/** Slip reads every account gets for free, once in a lifetime (a taste of the Professional feature). */
+/** Slip reads every account gets for free, once in a lifetime (a taste of the Pro feature). */
 export const TEASER_SLIPS = 1;
 
 export type UpsellFeature = "backdate" | "slip" | "voice";

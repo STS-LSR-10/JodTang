@@ -40,7 +40,7 @@ describe("limits", () => {
     expect(slipsRemaining("plus", 99)).toBe(0);
   });
 
-  it("voice logging is Professional and above, with a monthly number each", () => {
+  it("voice logging is Pro and above, with a monthly number each", () => {
     expect(can("free", "voiceLog")).toBe(false);
     expect(can("plus", "voiceLog")).toBe(true);
     expect(can("ultimate", "voiceLog")).toBe(true);
@@ -48,7 +48,7 @@ describe("limits", () => {
     expect(VOICE_LIMIT.ultimate).toBe(FAIR_USE.voice);
   });
 
-  it("Ultimate has more recurring entries than Professional", () => {
+  it("Elite has more recurring entries than Pro", () => {
     expect(recurringLimit("free")).toBe(0);
     expect(recurringLimit("plus")).toBe(20);
     expect(recurringLimit("ultimate")).toBe(100);
@@ -66,7 +66,7 @@ describe("limits", () => {
 });
 
 describe("export and dashboard", () => {
-  it("are Professional and above, never Free", () => {
+  it("are Pro and above, never Free", () => {
     for (const feature of ["export", "dashboard"] as const) {
       expect(can("free", feature)).toBe(false);
       expect(can("plus", feature)).toBe(true);

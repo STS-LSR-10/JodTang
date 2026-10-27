@@ -165,7 +165,7 @@ export type JoinResult =
 
 /**
  * Use an invite code: the person joins the wallet if the code is good, they are not on it already,
- * and the owner's plan still has room (two people on Professional, ten on Ultimate). The code can
+ * and the owner's plan still has room (two people on Pro, ten on Elite). The code can
  * be used once; the plan limit is the owner's, not the joiner's.
  */
 export async function redeemInvite(

@@ -16,7 +16,7 @@ interface SpendRow {
 
 /**
  * GET /api/budgets/history?categoryId=<uuid> — what the person spent on one category in each of the
- * last six calendar months (Professional and above, like the analytics charts). One database call
+ * last six calendar months (Pro and above, like the analytics charts). One database call
  * per month, so nothing depends on how many entries there are.
  */
 export async function GET(request: Request): Promise<Response> {

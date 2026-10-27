@@ -18,7 +18,7 @@ export interface TxDto {
   /** A slip image is attached (view it via /api/transactions/:id/slip). */
   hasSlip: boolean;
   note: string | null;
-  /** #tags without the # (Professional and above). */
+  /** #tags without the # (Pro and above). */
   tags: string[];
   /** The wallet the entry was put in; null = the main wallet. */
   accountId: string | null;

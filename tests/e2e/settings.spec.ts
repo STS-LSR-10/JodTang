@@ -19,9 +19,9 @@ test.describe("settings page (360px)", () => {
     await page.goto("/settings");
 
     await expect(page.getByText("สมชาย ทดสอบ")).toBeVisible();
-    await expect(page.getByText("การอ่านสลิปใช้ได้ตั้งแต่แผน Professional")).toBeVisible();
+    await expect(page.getByText("การอ่านสลิปใช้ได้ตั้งแต่แผน Pro")).toBeVisible();
     await expect(page.getByRole("progressbar", { name: "โควตาสลิปเดือนนี้" })).toHaveCount(0);
-    await expect(page.getByText("สำหรับแผน Professional").first()).toBeVisible();
+    await expect(page.getByText("สำหรับแผน Pro").first()).toBeVisible();
     await expect(page.getByRole("switch", { name: "เปิดเตือนจดประจำวัน" })).toBeDisabled();
     await expect(page.getByRole("switch", { name: "เปิดสรุปรายสัปดาห์" })).toBeDisabled();
     await expect(page.getByRole("switch", { name: "เปิดสรุปรายเดือน" })).toBeDisabled();
@@ -53,7 +53,7 @@ test.describe("settings page (360px)", () => {
     await expect(page.getByText("3 / 5")).toBeVisible();
   });
 
-  test("Professional: automatic summaries are off by default and saved when switched on", async ({
+  test("Pro: automatic summaries are off by default and saved when switched on", async ({
     page,
   }) => {
     const bodies: unknown[] = [];

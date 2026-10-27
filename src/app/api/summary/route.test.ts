@@ -107,7 +107,7 @@ describe("GET /api/summary", () => {
     expect((await get()).budgetSatang).toBe(300_000);
   });
 
-  it("categories (Professional and above): biggest first, empty ones dropped, names and colours filled in", async () => {
+  it("categories (Pro and above): biggest first, empty ones dropped, names and colours filled in", async () => {
     const body = await get();
     expect(body.categories).toEqual([
       { categoryId: "food", name: "อาหาร", color: "#0F766E", totalSatang: 50_000 },

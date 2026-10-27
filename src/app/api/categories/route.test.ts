@@ -68,7 +68,7 @@ beforeEach(() => {
 });
 
 describe("POST /api/categories", () => {
-  it("is for Professional and above: Free gets a 403 and nothing is saved", async () => {
+  it("is for Pro and above: Free gets a 403 and nothing is saved", async () => {
     const res = await post({ type: "expense", name: "ค่าอาหารแมว" });
     expect(res.status).toBe(403);
     expect(await res.json()).toMatchObject({ upgrade: true });

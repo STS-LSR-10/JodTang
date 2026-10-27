@@ -87,7 +87,7 @@ beforeEach(() => {
 });
 
 describe("POST /api/bills", () => {
-  it.each(["free", "plus"])("is Ultimate only: %s gets a 403", async (p) => {
+  it.each(["free", "plus"])("is Elite only: %s gets a 403", async (p) => {
     plan = p;
     const res = await POST(req("POST", { name: "ค่าไฟ", cadence: "monthly", dayOfMonth: 15 }));
     expect(res.status).toBe(403);

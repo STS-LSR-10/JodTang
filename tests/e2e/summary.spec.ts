@@ -95,14 +95,14 @@ test.describe("summary page (360px)", () => {
     await page.goto("/summary");
 
     const profile = page.getByRole("region", { name: "โปรไฟล์" });
-    await expect(profile.getByText("แพลนฟรี")).toBeVisible();
+    await expect(profile.getByText("Free", { exact: true })).toBeVisible();
     await expect(page.getByText("ยังไม่ตั้ง")).toBeVisible();
     await expect(page.getByRole("link", { name: "ตั้งงบ" })).toBeVisible();
-    await expect(page.getByText("ใช้ได้ในแผน Professional ขึ้นไป")).toBeVisible();
+    await expect(page.getByText("ใช้ได้ในแผน Pro ขึ้นไป")).toBeVisible();
     await expectNoHorizontalScroll(page);
   });
 
-  test("Professional: ring, budget status, category details and the goal bar", async ({ page }) => {
+  test("Pro: ring, budget status, category details and the goal bar", async ({ page }) => {
     await mockApi(page, {
       "GET /api/summary": {
         ...SUMMARY,

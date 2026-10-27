@@ -35,7 +35,7 @@ const createSchema = z.object({
 
 const AMOUNT_PATTERN = /^\d{1,10}(\.\d{1,2})?$/;
 
-/** POST /api/debts — lend or borrow (Ultimate); the wallet's balance moves with it. */
+/** POST /api/debts — lend or borrow (Elite); the wallet's balance moves with it. */
 export async function POST(request: Request): Promise<Response> {
   return guard(async () => {
     const auth = await requireUser(request);

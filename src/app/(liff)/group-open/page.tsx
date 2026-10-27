@@ -19,7 +19,7 @@ interface OpenCheck {
 /**
  * Opened from "เปิดสมุดกลุ่ม" on the welcome card in a group. Someone who is not a friend of the bot gets
  * an explanation and a link to add it (instead of a command the bot could not answer), someone without
- * Ultimate is told so, and everybody else writes the command in the group with one tap.
+ * Elite is told so, and everybody else writes the command in the group with one tap.
  */
 export default function GroupOpenPage() {
   const check = useApi<OpenCheck>("/api/group-open");
@@ -75,9 +75,9 @@ export default function GroupOpenPage() {
         ) : !data.canOpen ? (
           <section className={cn(cardClass, "space-y-3 text-center")}>
             <BookOpen className="mx-auto h-8 w-8 text-primary" aria-hidden />
-            <h2 className="text-lg font-bold">ผู้เปิดสมุดกลุ่มต้องเป็นแผน Ultimate</h2>
+            <h2 className="text-lg font-bold">ผู้เปิดสมุดกลุ่มต้องเป็นแผน Elite</h2>
             <p className="text-sm text-muted">
-              เพื่อน ๆ ในกลุ่มจดได้ฟรี มีแค่คนเปิดสมุดที่ต้องเป็น Ultimate ทดลองใช้ฟรี 7 วันได้
+              เพื่อน ๆ ในกลุ่มจดได้ฟรี มีแค่คนเปิดสมุดที่ต้องเป็น Elite ทดลองใช้ฟรี 7 วันได้
             </p>
             <Link
               href="/upgrade"

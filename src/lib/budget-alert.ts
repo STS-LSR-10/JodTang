@@ -32,7 +32,7 @@ export async function budgetAlertsFor(
   },
 ): Promise<string[]> {
   if (input.type !== "expense") return [];
-  // 80% / 100% warnings are for Professional and above (a lapsed plan stops them)
+  // 80% / 100% warnings are for Pro and above (a lapsed plan stops them)
   const { plan } = await getPlanInfo(db, input.userId, input.now);
   if (!can(plan, "budgetAlert")) return [];
 
@@ -77,7 +77,7 @@ export async function budgetAlertsFor(
 }
 
 /**
- * After expenses were saved: the scold when today's spending went over the daily limit (Professional
+ * After expenses were saved: the scold when today's spending went over the daily limit (Pro
  * and above). `amountSatang` is everything just added to today, so several entries from one message
  * give one warning. Entries dated on another day are not today's business. Best effort like the
  * budget alerts.

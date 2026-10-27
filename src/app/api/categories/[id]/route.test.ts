@@ -101,7 +101,7 @@ describe("PATCH /api/categories/:id on a category of the person's own", () => {
     expect(updates).toEqual([{ is_hidden: true }, { sort_order: 5 }]);
   });
 
-  it("Professional sets the emoji, clears it back to the tag, and can edit the rest", async () => {
+  it("Pro sets the emoji, clears it back to the tag, and can edit the rest", async () => {
     plan = "plus";
     await patch(ID, { emoji: "🐱" });
     await patch(ID, { emoji: "" });

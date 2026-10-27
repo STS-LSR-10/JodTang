@@ -24,7 +24,7 @@ describe("buildCheckoutFields", () => {
     expect(f["subscription_data[metadata][period]"]).toBe("yearly");
   });
 
-  it("monthly Ultimate card costs ฿139 and renews monthly", () => {
+  it("monthly Elite card costs ฿139 and renews monthly", () => {
     const f = buildCheckoutFields(
       { userId: USER, plan: "ultimate", period: "monthly", method: "card" },
       BASE,

@@ -100,10 +100,10 @@ describe("help topics", () => {
     expect(free).toContain("Pro");
     expect(free).not.toContain("Pro ✓");
     expect(json(buildHelpTopicCard({ topic: "record", plan: "plus" }))).toContain("Pro ✓");
-    expect(json(buildHelpTopicCard({ topic: "debt", plan: "ultimate" }))).toContain("Ultimate ✓");
+    expect(json(buildHelpTopicCard({ topic: "debt", plan: "ultimate" }))).toContain("Elite ✓");
   });
 
-  it("a Free user cannot tap a Professional command (it would only bounce)", () => {
+  it("a Free user cannot tap a Pro command (it would only bounce)", () => {
     const sends = (j: string, text: string) =>
       j.includes(`"type":"message","label":"${text}","text":"${text}"`);
     const freeSummary = json(buildHelpTopicCard({ topic: "summary", plan: "free" }));
@@ -241,7 +241,7 @@ describe("group welcome card", () => {
     expect(card).toContain('"label":"📒 เปิดสมุดกลุ่ม"');
     expect(card).toContain('"label":"📖 วิธีใช้งาน","text":"วิธีใช้งาน"');
     expect(card).toContain("https://x.test/logo.png");
-    expect(card).toContain("Ultimate"); // the opener must be Ultimate; the rest are free
+    expect(card).toContain("Elite"); // the opener must be Elite; the rest are free
     expect(card.length).toBeLessThan(50_000);
   });
 

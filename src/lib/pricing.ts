@@ -75,7 +75,7 @@ export interface FeatureRow {
   label: string;
   /** Key of the icon the upgrade page draws beside it. */
   icon: FeatureIcon;
-  /** Free, Professional, Ultimate. false = not included (shown as a dash). */
+  /** Free, Pro, Elite. false = not included (shown as a dash). */
   cells: [Cell, Cell, Cell];
   /** The plan.ts feature this row describes; a test keeps the rows and the real gates in step. */
   feature?: Feature;
@@ -353,7 +353,7 @@ export const PLAN_HIGHLIGHTS: Record<Plan, string[]> = {
     "กราฟเก็บออม + สรุปในแชท",
   ],
   ultimate: [
-    "ทุกอย่างใน Professional",
+    "ทุกอย่างใน Pro",
     "อ่านสลิปไม่จำกัด + แยกรายการจากใบเสร็จ",
     "พิมพ์ประโยคยาวๆ ให้ AI ช่วยอ่าน + จดด้วยเสียง",
     "หลายกระเป๋าไม่จำกัด · สมุดกลุ่ม LINE แยกคนจ่าย",

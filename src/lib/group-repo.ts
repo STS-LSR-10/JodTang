@@ -269,7 +269,7 @@ export async function countEntriesSince(
   return count ?? 0;
 }
 
-/** The owner of a ledger: their LINE id (to know who is asking) and plan (the ledger needs Ultimate). */
+/** The owner of a ledger: their LINE id (to know who is asking) and plan (the ledger needs Elite). */
 export async function getOwner(
   db: SupabaseClient,
   ownerUserId: string,

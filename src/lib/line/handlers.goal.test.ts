@@ -118,7 +118,7 @@ describe("เป้าหมาย", () => {
     expect(json).toContain("40%");
   });
 
-  it("explains how to start when there are none; Free is told it needs Professional", async () => {
+  it("explains how to start when there are none; Free is told it needs Pro", async () => {
     goals = [];
     let { deps, reply } = setup();
     await handleEvent(say("เป้าหมาย"), deps);
@@ -127,7 +127,7 @@ describe("เป้าหมาย", () => {
     plan = "free";
     ({ deps, reply } = setup());
     await handleEvent(say("เป้าหมาย"), deps);
-    expect(sent(reply)).toContain("Professional");
+    expect(sent(reply)).toContain("Pro");
   });
 });
 
@@ -156,12 +156,12 @@ describe("เป้าหมาย ใหม่", () => {
     expect(sent(reply)).toContain("มีเป้าหมายได้ 5 ใบแล้ว");
   });
 
-  it("Free is told it needs Professional", async () => {
+  it("Free is told it needs Pro", async () => {
     plan = "free";
     const { deps, reply } = setup();
     await handleEvent(say("เป้าหมาย ใหม่ บ้าน 1000"), deps);
     expect(created).toHaveLength(0);
-    expect(sent(reply)).toContain("Professional");
+    expect(sent(reply)).toContain("Pro");
   });
 });
 
@@ -226,7 +226,7 @@ describe("ออม / ถอน", () => {
     const { deps, reply } = setup();
     await handleEvent(say("ออม เที่ยวญี่ปุ่น 2000"), deps);
     expect(deposits).toHaveLength(0);
-    expect(sent(reply)).not.toContain("Professional");
+    expect(sent(reply)).not.toContain("Pro");
   });
 });
 

@@ -68,10 +68,10 @@ beforeEach(() => {
 });
 
 describe("ค้นหา", () => {
-  it("is for Professional and above: Free gets the upsell and nothing is searched", async () => {
+  it("is for Pro and above: Free gets the upsell and nothing is searched", async () => {
     const { deps, reply } = setup();
     await handleEvent(say("ค้นหา กาแฟ"), deps);
-    expect(first(reply).text).toContain("Professional ขึ้นไป");
+    expect(first(reply).text).toContain("Pro ขึ้นไป");
     expect(totalsCalls).toHaveLength(0);
   });
 

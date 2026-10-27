@@ -3,7 +3,7 @@ import type { Plan } from "@/lib/plan";
 import type { LineMessage } from "@/lib/types";
 import { COLOR } from "./flex";
 
-/** The lowest plan that has a thing (Ultimate includes everything Professional has). */
+/** The lowest plan that has a thing (Elite includes everything Pro has). */
 type Need = "free" | "plus" | "ultimate";
 
 const RANK: Record<Plan, number> = { free: 0, plus: 1, ultimate: 2 };
@@ -326,7 +326,7 @@ const TILE_LOCKED = "#F1F5F9";
 
 const BADGE: Record<Exclude<Need, "free">, { label: string; bg: string; fg: string }> = {
   plus: { label: "Pro", bg: "#FEF3C7", fg: "#92400E" },
-  ultimate: { label: "Ultimate", bg: "#EDE9FE", fg: "#5B21B6" },
+  ultimate: { label: "Elite", bg: "#EDE9FE", fg: "#5B21B6" },
 };
 
 const LOCKED_TEXT = "#94A3B8";
@@ -722,7 +722,7 @@ export function buildGroupHelpCard(input: { appUrl?: string } = {}): LineMessage
 /**
  * What the group sees when the bot is added: three small cards to swipe through (hello and the buttons,
  * three steps, who it is for) instead of one tall one. "เปิดสมุดกลุ่ม" opens a LIFF page (it checks the
- * person is a friend of the bot and an Ultimate member, and only then writes the command in the group),
+ * person is a friend of the bot and an Elite member, and only then writes the command in the group),
  * so someone who is not a friend gets an explanation and an add-friend link instead of silence. Groups
  * have no single person's theme, so it keeps the default colours.
  */
@@ -820,7 +820,7 @@ export function buildGroupWelcomeCard(input: { appUrl?: string; openUrl?: string
           tagline: "เพื่อน ๆ จดได้ฟรี",
           appUrl: input.appUrl,
           body: [
-            step("1", "กด “เปิดสมุดกลุ่ม”", "ผู้เปิดต้องเป็น Ultimate (ทดลองฟรี 7 วัน)"),
+            step("1", "กด “เปิดสมุดกลุ่ม”", "ผู้เปิดต้องเป็น Elite (ทดลองฟรี 7 วัน)"),
             step("2", "พิมพ์ จด ข้าวเที่ยง 350", "หรือ ค่าน้ำ 200 จด · หารบิลข้าว 900"),
             step("3", "พิมพ์ สรุป", "ดูยอดรวมและใครจ่ายเท่าไร"),
           ],

@@ -93,10 +93,10 @@ beforeEach(() => {
 });
 
 describe("เทียบเดือน", () => {
-  it("is for Professional and above: Free gets the upsell and nothing is loaded", async () => {
+  it("is for Pro and above: Free gets the upsell and nothing is loaded", async () => {
     const { deps, reply } = setup();
     await handleEvent(say("เทียบเดือน"), deps);
-    expect(first(reply).text).toContain("Professional ขึ้นไป");
+    expect(first(reply).text).toContain("Pro ขึ้นไป");
     expect(compareSpans).toBeNull();
   });
 
@@ -126,10 +126,10 @@ describe("เทียบเดือน", () => {
 });
 
 describe("สรุปปี", () => {
-  it("is for Professional and above: Free gets the upsell and nothing is loaded", async () => {
+  it("is for Pro and above: Free gets the upsell and nothing is loaded", async () => {
     const { deps, reply } = setup();
     await handleEvent(say("สรุปปี"), deps);
-    expect(first(reply).text).toContain("Professional ขึ้นไป");
+    expect(first(reply).text).toContain("Pro ขึ้นไป");
     expect(yearRange).toBeNull();
   });
 

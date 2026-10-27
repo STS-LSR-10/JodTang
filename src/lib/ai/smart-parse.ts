@@ -43,7 +43,7 @@ export async function runSmartParse(
     text: string;
     subject: string;
     categories: CategoryHint[];
-    /** Count this read against the month's fair-use ceiling (Ultimate); past it the rules read instead. */
+    /** Count this read against the month's fair-use ceiling (Elite); past it the rules read instead. */
     cap?: { db: SupabaseClient; userId: string };
   },
 ): Promise<SmartEntry[] | null> {

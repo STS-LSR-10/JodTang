@@ -30,7 +30,7 @@ export async function POST(request: Request): Promise<Response> {
     const auth = await requireUser(request);
     if (auth instanceof Response) return auth;
 
-    // Professional and above (the buttons are hidden for Free, this is the real check)
+    // Pro and above (the buttons are hidden for Free, this is the real check)
     const locked = await requireFeature(getAdminClient(), auth.userId, "export");
     if (locked) return locked;
 

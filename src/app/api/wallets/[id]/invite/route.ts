@@ -39,7 +39,7 @@ export async function POST(request: Request, { params }: Params): Promise<Respon
           error:
             plan === "ultimate"
               ? `ร่วมกระเป๋าเดียวกันได้สูงสุด ${sharedMemberLimit(plan)} คน`
-              : "แผน Professional ร่วมกระเป๋าได้ 2 คน อัปเกรดเป็น Ultimate เพื่อชวนได้มากขึ้นนะ",
+              : "แผน Pro ร่วมกระเป๋าได้ 2 คน อัปเกรดเป็น Elite เพื่อชวนได้มากขึ้นนะ",
           upgrade: plan !== "ultimate",
         },
         { status: 403, headers: { "Cache-Control": "no-store" } },

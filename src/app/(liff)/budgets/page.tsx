@@ -51,7 +51,7 @@ interface BudgetsResponse {
   cycle: "monthly" | "weekly";
   cycleStartDay?: number;
   overall: { amountSatang: number | null; spentSatang: number };
-  /** The limit for one day (Professional and above) and today's spending. */
+  /** The limit for one day (Pro and above) and today's spending. */
   daily?: { amountSatang: number | null; spentSatang: number };
   /** What came in this cycle, per income category. */
   income?: { categoryId: string; receivedSatang: number }[];
@@ -139,12 +139,12 @@ function addToAmount(text: string, add: number): string {
   return String(current + add);
 }
 
-/** What Free sees instead of the add form: the feature is Professional and above. */
+/** What Free sees instead of the add form: the feature is Pro and above. */
 function CustomCategoryLockedSheet({ onClose }: { onClose: () => void }) {
   return (
     <Sheet title="หมวดของตัวเอง" onClose={onClose}>
       <div className="space-y-3 text-center">
-        <p className="text-base font-semibold">สร้างหมวดของตัวเองสำหรับแผน Professional</p>
+        <p className="text-base font-semibold">สร้างหมวดของตัวเองสำหรับแผน Pro</p>
         <p className="text-sm text-muted">
           เพิ่มหมวดเฉพาะตัว เช่น “ค่าอาหารแมว” พร้อมเลือกอีโมจิ ลองใช้ฟรี 7 วันได้ที่หน้าอัปเกรด
           ตอนนี้ใช้หมวดมาตรฐานและปรับคำค้นได้ตามเดิม
@@ -153,7 +153,7 @@ function CustomCategoryLockedSheet({ onClose }: { onClose: () => void }) {
           href="/upgrade"
           className="inline-flex h-11 items-center justify-center rounded-2xl bg-primary px-5 text-sm font-semibold text-surface"
         >
-          ดูแผน Professional
+          ดูแผน Pro
         </Link>
       </div>
     </Sheet>
@@ -396,9 +396,9 @@ export default function BudgetsPage() {
   const cats = useApi<{ items: CategoryItem[] }>("/api/categories?all=1");
   const budgets = useApi<BudgetsResponse>("/api/budgets");
   const me = useApi<{ features: Record<string, boolean> }>("/api/me");
-  // Professional and above create and edit their own categories; the server checks it too.
+  // Pro and above create and edit their own categories; the server checks it too.
   const locked = !me.loading && me.data !== null && me.data?.features.customCategory !== true;
-  // Per-category budgets and the 80% / 100% warnings are Professional and above too.
+  // Per-category budgets and the 80% / 100% warnings are Pro and above too.
   const budgetLocked = !me.loading && me.data !== null && me.data?.features.categoryBudget !== true;
   const dailyLocked = !me.loading && me.data !== null && me.data?.features.dailyBudget !== true;
   const alertsOff = !me.loading && me.data !== null && me.data?.features.budgetAlert !== true;
@@ -1234,7 +1234,7 @@ function CategorySheet({
           </div>
           {frozen ? (
             <p className="text-xs text-muted">
-              แก้หมวดของตัวเองได้ในแผน Professional ขึ้นไป{" "}
+              แก้หมวดของตัวเองได้ในแผน Pro ขึ้นไป{" "}
               <Link href="/upgrade" className="font-semibold text-primary underline">
                 ดูแผน
               </Link>{" "}

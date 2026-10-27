@@ -128,7 +128,7 @@ export async function PUT(request: Request): Promise<Response> {
     const body = parsed.data;
 
     const db = getAdminClient();
-    // Per-category budgets are for Professional and above. Clearing one and going back to the
+    // Per-category budgets are for Pro and above. Clearing one and going back to the
     // overall budget stay open to everyone (a lapsed plan keeps its data, read only).
     const setsCategoryBudget =
       body.mode === "category" || (body.categories ?? []).some((c) => c.amount !== null);
@@ -136,7 +136,7 @@ export async function PUT(request: Request): Promise<Response> {
       const locked = await requireFeature(db, auth.userId, "categoryBudget");
       if (locked) return locked;
     }
-    // The daily limit is for Professional and above (clearing it is open to everyone).
+    // The daily limit is for Pro and above (clearing it is open to everyone).
     const daily = toBudgetSatang(body.daily);
     if (daily !== undefined && daily !== null) {
       const locked = await requireFeature(db, auth.userId, "dailyBudget");

@@ -35,7 +35,7 @@ export async function GET(request: Request): Promise<Response> {
     const auth = await requireUser(request);
     if (auth instanceof Response) return auth;
 
-    // The charts are a Professional feature (Free reads the summaries in the chat instead).
+    // The charts are a Pro feature (Free reads the summaries in the chat instead).
     const locked = await requireFeature(getAdminClient(), auth.userId, "dashboard");
     if (locked) return locked;
 

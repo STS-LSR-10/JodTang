@@ -50,7 +50,7 @@ export interface BillContext {
   group: GroupRow;
   /** The person who typed or tapped (absent when LINE did not say who). */
   userId: string | undefined;
-  /** The ledger's owner is still on Ultimate (read-only otherwise). */
+  /** The ledger's owner is still on Elite (read-only otherwise). */
   writable: boolean;
   isOwner: boolean;
   /** The name to show for a member, fetching it from LINE when it is not known yet. */
@@ -67,7 +67,7 @@ export const BILL_USAGE_TEXT =
 const NO_USER_TEXT =
   "บอทยังไม่รู้ว่าใครพิมพ์ ให้เพิ่มบอทเป็นเพื่อน (และยอมรับข้อกำหนดของ LINE OA) ก่อน แล้วลองใหม่นะ";
 const PAUSED_TEXT =
-  "สมุดกลุ่มนี้หยุดจดชั่วคราว เพราะแผน Ultimate ของเจ้าของสมุดหมดอายุ ดูยอดค้างได้ตามปกติ";
+  "สมุดกลุ่มนี้หยุดจดชั่วคราว เพราะแผน Elite ของเจ้าของสมุดหมดอายุ ดูยอดค้างได้ตามปกติ";
 const TOO_MANY_TEXT = "มีบิลที่ยังไม่เสร็จครบ 10 บิลแล้ว ปิดหรือยกเลิกบิลเก่าก่อนนะ";
 const NO_BILL_TEXT = "ไม่เจอบิลของคุณที่รออยู่ ลองพิมพ์ “หารบิล ชื่อ ยอด” เพื่อเริ่มบิลใหม่นะ";
 const NOT_PAYER_TEXT = "เฉพาะคนที่จ่ายบิลนี้ (หรือเจ้าของสมุด) ทำได้นะ";

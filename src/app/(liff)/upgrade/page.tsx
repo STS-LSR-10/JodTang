@@ -371,7 +371,7 @@ export default function UpgradePage() {
         ) : null}
         <p className="flex items-start gap-1 text-xs text-muted">
           <Sparkles className="mt-0.5 h-3 w-3 shrink-0" aria-hidden />
-          ยังไม่มีเงินสด? สะสมตังจากการจดทุกวันแล้วแลกเป็นวันใช้ Professional ได้ที่หน้าตั้งค่า
+          ยังไม่มีเงินสด? สะสมตังจากการจดทุกวันแล้วแลกเป็นวันใช้ Pro ได้ที่หน้าตั้งค่า
         </p>
 
         <Comparison />
@@ -572,7 +572,7 @@ function Comparison() {
               Pro
             </th>
             <th scope="col" className="py-2 font-semibold">
-              Ultimate
+              Elite
             </th>
           </tr>
         </thead>

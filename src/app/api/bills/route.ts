@@ -58,7 +58,7 @@ const createSchema = z.object({
   note: billBodyFields.note.optional(),
 });
 
-/** POST /api/bills — a new bill to be reminded about (Ultimate). */
+/** POST /api/bills — a new bill to be reminded about (Elite). */
 export async function POST(request: Request): Promise<Response> {
   return guard(async () => {
     const auth = await requireUser(request);

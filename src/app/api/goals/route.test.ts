@@ -66,7 +66,7 @@ beforeEach(() => {
 });
 
 describe("POST /api/goals", () => {
-  it("is for Professional and above", async () => {
+  it("is for Pro and above", async () => {
     plan = "free";
     const res = await POST(req({ name: "เที่ยว", target: "30000" }));
     expect(res.status).toBe(403);
@@ -87,7 +87,7 @@ describe("POST /api/goals", () => {
     });
   });
 
-  it("Professional stops at 5 live goals, Ultimate goes on to 20", async () => {
+  it("Pro stops at 5 live goals, Elite goes on to 20", async () => {
     goals = [1, 2, 3, 4, 5].map((n) => goal(n));
     const res = await POST(req({ name: "ที่ 6", target: "100" }));
     expect(res.status).toBe(403);
@@ -148,7 +148,7 @@ describe("POST /api/goals/:id/deposits", () => {
     expect((await DEPOSIT(req({ amount: "500.01", direction: "out" }), params)).status).toBe(400);
   });
 
-  it("is Professional and above, and refuses bad amounts and unknown goals", async () => {
+  it("is Pro and above, and refuses bad amounts and unknown goals", async () => {
     goals = [goal(1, 50_000)];
     plan = "free";
     expect((await DEPOSIT(req({ amount: "10" }), params)).status).toBe(403);

@@ -21,7 +21,7 @@ test.describe("theme and bot manner (360px)", () => {
 
     const card = page.getByRole("region", { name: "ธีมการ์ดและนิสัยบอท" });
     await expect(card).toBeVisible();
-    await expect(card.getByText("สำหรับแผน Professional")).toBeVisible();
+    await expect(card.getByText("สำหรับแผน Pro")).toBeVisible();
     await expect(card.getByRole("radio", { name: "เขียวมิ้นต์" })).toBeEnabled();
     await expect(card.getByRole("radio", { name: "ฟ้าทะเล" })).toBeDisabled();
     await expect(card.getByRole("radio", { name: /ดุหน่อย/ })).toBeDisabled();
@@ -29,7 +29,7 @@ test.describe("theme and bot manner (360px)", () => {
     await expectNoSeriousA11yViolations(page);
   });
 
-  test("Professional picks a theme and a manner, each saved on its own", async ({ page }) => {
+  test("Pro picks a theme and a manner, each saved on its own", async ({ page }) => {
     const bodies: unknown[] = [];
     await mockApi(page, {
       ...COMMON,
@@ -79,16 +79,16 @@ test.describe("theme and bot manner (360px)", () => {
 });
 
 test.describe("photo offer after a save (360px)", () => {
-  test("Free sees it locked; Professional can switch it off", async ({ page }) => {
+  test("Free sees it locked; Pro can switch it off", async ({ page }) => {
     await mockApi(page, { ...COMMON, "GET /api/settings": SETTINGS, "GET /api/me": ME_FREE });
     await page.goto("/settings");
     const free = page.getByRole("region", { name: "ชวนแนบรูปหลังจด" });
-    await expect(free.getByText("สำหรับแผน Professional")).toBeVisible();
+    await expect(free.getByText("สำหรับแผน Pro")).toBeVisible();
     await expect(free.getByRole("switch")).toBeDisabled();
     await expectNoHorizontalScroll(page);
   });
 
-  test("Professional switches it off", async ({ page }) => {
+  test("Pro switches it off", async ({ page }) => {
     const bodies: unknown[] = [];
     await mockApi(page, {
       ...COMMON,

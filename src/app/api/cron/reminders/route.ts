@@ -15,7 +15,7 @@ export const maxDuration = 60;
 
 /**
  * Hourly: push the daily "you have not recorded today" nudge and the weekly / monthly summaries
- * (Professional and above).
+ * (Pro and above).
  * Triggered hourly by GitHub Actions;
  * GET + Authorization: Bearer CRON_SECRET.
  */
@@ -42,7 +42,7 @@ export async function GET(request: Request): Promise<Response> {
       log.error("cron_summaries_failed", error);
       return null;
     });
-    // bill reminders (Ultimate) also run hourly; a failure must not hide the other results
+    // bill reminders (Elite) also run hourly; a failure must not hide the other results
     const bills = await runBillReminders(db, line.push, now).catch((error: unknown) => {
       log.error("cron_bills_failed", error);
       return null;

@@ -56,7 +56,7 @@ beforeEach(() => {
 });
 
 describe("receipt product lines", () => {
-  it("are requested for Ultimate, shown on the card, and saved with the slip", async () => {
+  it("are requested for Elite, shown on the card, and saved with the slip", async () => {
     const card = await run();
     expect(extract.mock.calls[0]?.[1]).toEqual({ items: true });
     expect(card).toContain("แยก 2 รายการ");
@@ -66,7 +66,7 @@ describe("receipt product lines", () => {
     expect(saved.data.items).toHaveLength(2);
   });
 
-  it("are not requested for Professional, and never offered even if a reader sent them", async () => {
+  it("are not requested for Pro, and never offered even if a reader sent them", async () => {
     plan = "plus";
     const card = await run();
     expect(extract.mock.calls[0]?.[1]).toEqual({ items: false });
@@ -74,7 +74,7 @@ describe("receipt product lines", () => {
     expect(card).not.toContain("นมสด");
   });
 
-  it("a transfer slip on Ultimate has no split button", async () => {
+  it("a transfer slip on Elite has no split button", async () => {
     extract.mockImplementation(async () => ({ ...RECEIPT, kind: "transfer" }));
     expect(await run()).not.toContain("a=sp");
   });

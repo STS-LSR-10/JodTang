@@ -131,7 +131,7 @@ export async function runSummaries(
         continue;
       }
       const messages: LineMessage[] = [buildSummaryMessage({ kind, range, data, liffUrl })];
-      // Ultimate gets the AI Insight on the end of the monthly summary; a failure here must
+      // Elite gets the AI Insight on the end of the monthly summary; a failure here must
       // never cost the person the summary itself.
       if (
         kind === "monthly" &&

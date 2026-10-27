@@ -25,7 +25,7 @@ const COPY = {
 
 /**
  * What a locked analytics tab shows for Free: a blurred hint of the real page behind a card that
- * says what Professional adds, with the price that applies today.
+ * says what Pro adds, with the price that applies today.
  */
 export function ProTeaser({ variant }: { variant: keyof typeof COPY }) {
   const copy = COPY[variant];
@@ -58,7 +58,7 @@ export function ProTeaser({ variant }: { variant: keyof typeof COPY }) {
       </div>
 
       <section
-        aria-label="ฟีเจอร์ของแผน Professional"
+        aria-label="ฟีเจอร์ของแผน Pro"
         className="relative z-10 w-full space-y-4 rounded-3xl border border-warn/30 bg-surface/95 p-6 text-center shadow-card backdrop-blur"
       >
         <div className="inline-flex rounded-2xl border border-warn/30 bg-warn-soft p-3 text-warn">
@@ -66,7 +66,7 @@ export function ProTeaser({ variant }: { variant: keyof typeof COPY }) {
         </div>
         <div className="space-y-1">
           <span className="inline-block rounded-full border border-warn/30 bg-warn-soft px-2.5 py-0.5 text-[11px] font-bold text-warn">
-            สำหรับแผน Professional
+            สำหรับแผน Pro
           </span>
           <h2 className="text-base font-bold">{copy.title}</h2>
           <p className="text-xs text-muted">{copy.text}</p>
@@ -87,7 +87,7 @@ export function ProTeaser({ variant }: { variant: keyof typeof COPY }) {
             className="flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-primary text-sm font-semibold text-surface"
           >
             <Sparkles className="h-4 w-4" aria-hidden />
-            อัปเกรดเป็น Professional เริ่มต้น ฿{monthly}/เดือน
+            อัปเกรดเป็น Pro เริ่มต้น ฿{monthly}/เดือน
           </Link>
           <p className="text-[11px] text-muted">ลองใช้ฟรี 7 วันได้ที่หน้าอัปเกรด</p>
         </div>

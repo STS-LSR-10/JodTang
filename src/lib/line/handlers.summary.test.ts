@@ -196,10 +196,10 @@ describe("the ช่วงวันเอง shortcut under the summary cards", 
 });
 
 describe("สรุป <วันเริ่ม> ถึง <วันจบ>", () => {
-  it("is for Professional and above: Free gets the upsell and nothing is loaded", async () => {
+  it("is for Pro and above: Free gets the upsell and nothing is loaded", async () => {
     const { deps, reply } = setup();
     await handleEvent(say("สรุป 1/10 ถึง 15/10"), deps);
-    expect(sent(reply)[0]?.text).toContain("Professional ขึ้นไป");
+    expect(sent(reply)[0]?.text).toContain("Pro ขึ้นไป");
     expect(rangeCalls).toHaveLength(0);
   });
 
@@ -255,7 +255,7 @@ describe("the two-step calendar (a=sr, a=sr1, a=sr2)", () => {
     ] as const) {
       const { deps, reply } = setup();
       await handleEvent(tap(data, params), deps);
-      expect(sent(reply)[0]?.text).toContain("Professional ขึ้นไป");
+      expect(sent(reply)[0]?.text).toContain("Pro ขึ้นไป");
       expect((sent(reply)[0] as unknown as Quick).quickReply).toBeUndefined();
     }
     expect(rangeCalls).toHaveLength(0);

@@ -9,7 +9,7 @@ import { text } from "./messages";
 import { buildUpsellCard } from "./upsell-flex";
 
 export const TRIAL_STARTED_TEXT = (expires: string) =>
-  `เริ่มทดลองใช้ Professional ฟรี ${TRIAL_DAYS} วันแล้ว (ถึง ${expires}) ลองจดย้อนหลัง อ่านสลิป หรือใช้ฟีเจอร์อื่นได้เลย`;
+  `เริ่มทดลองใช้ Pro ฟรี ${TRIAL_DAYS} วันแล้ว (ถึง ${expires}) ลองจดย้อนหลัง อ่านสลิป หรือใช้ฟีเจอร์อื่นได้เลย`;
 export const TRIAL_UNAVAILABLE_TEXT =
   "เริ่มทดลองใช้ไม่ได้ในตอนนี้ (เคยทดลองแล้ว หรือมีแผนที่ใช้งานอยู่) ดูแผนอัปเกรดได้ที่เมนู “อัปเกรด” นะ";
 

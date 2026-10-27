@@ -12,7 +12,7 @@ type Key = "weekly_summary_enabled" | "monthly_summary_enabled";
 
 /**
  * The daily "you have not recorded today" reminder and the weekly / monthly summaries pushed to the
- * chat, in one card (Professional and above; turning them off is always allowed).
+ * chat, in one card (Pro and above; turning them off is always allowed).
  */
 export function NotificationsCard({
   me,
