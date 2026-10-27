@@ -14,6 +14,7 @@ import {
   ART_CROP,
   ART_FILE,
   ART_WIDTH,
+  PASTEL,
   RICH_MENU_HEIGHT,
   RICH_MENU_WIDTH,
   TILES,
@@ -49,6 +50,8 @@ async function renderImage(): Promise<Buffer> {
   const jpg = await sharp(resolve(ART_FILE))
     .extract({ left: 0, top: ART_CROP.top, width: ART_WIDTH, height: ART_CROP.height })
     .resize(RICH_MENU_WIDTH, RICH_MENU_HEIGHT, { fit: "fill", kernel: "lanczos3" })
+    .modulate({ saturation: PASTEL.saturation, brightness: PASTEL.brightness })
+    .linear(PASTEL.contrast, PASTEL.lift)
     .sharpen({ sigma: 0.6 })
     .jpeg({ quality: 88, mozjpeg: true })
     .toBuffer();

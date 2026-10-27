@@ -25,6 +25,12 @@ export const ART_HEIGHT = 1083;
  */
 export const ART_CROP = { top: 20, height: 1031 } as const;
 
+/**
+ * The painting is toned down to pastel: less colour, a little lighter, shadows lifted. Still dark
+ * enough for the labels to read (the next step, "soft", started to wash out the "Elite!" text).
+ */
+export const PASTEL = { saturation: 0.7, brightness: 1.06, contrast: 0.86, lift: 26 } as const;
+
 export interface Bounds {
   x: number;
   y: number;
