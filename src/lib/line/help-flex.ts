@@ -59,7 +59,7 @@ export const HELP_TOPICS: HelpTopic[] = [
     tagline: "พิมพ์สั้น ๆ ก็จดเสร็จแล้ว",
     items: [
       { icon: "☕", cmd: "กาแฟ 30", desc: "จดรายจ่าย (ทศนิยมได้ เช่น ข้าว 50.50)", need: "free" },
-      { icon: "💰", cmd: "เงินเดือน 20000", desc: "จดรายรับ (ใส่คอมมาได้ 20,000)", need: "free" },
+      { icon: "💰", cmd: "เงินเดือน 25000", desc: "จดรายรับ (ใส่คอมมาได้ 25,000)", need: "free" },
       { icon: "➕", cmd: "+500 ขายของ", desc: "ใส่ + เป็นรายรับ · − เป็นรายจ่าย", need: "free" },
       {
         icon: "📅",
@@ -603,7 +603,7 @@ export function buildWelcomeCard(input: { appUrl?: string }): LineMessage {
   });
   return {
     type: "flex",
-    altText: "สวัสดี! เราคือจดตังค์ พิมพ์ เช่น กาแฟ 30 หรือ เงินเดือน 20000 ได้เลย",
+    altText: "สวัสดี! เราคือจดตังค์ พิมพ์ เช่น กาแฟ 30 หรือ เงินเดือน 25000 ได้เลย",
     contents: {
       type: "bubble",
       size: "mega",
@@ -637,7 +637,7 @@ export function buildWelcomeCard(input: { appUrl?: string }): LineMessage {
         contents: [
           { type: "text", text: "ลองพิมพ์ดู", size: "xs", weight: "bold", color: COLOR.muted },
           example("กาแฟ 30", "จดรายจ่าย"),
-          example("เงินเดือน 20000", "จดรายรับ"),
+          example("เงินเดือน 25000", "จดรายรับ"),
           example("+500 ขายของ", "ใส่ + เป็นรายรับ"),
           example("ส่งรูปสลิป", "บอทอ่านให้ (ลองฟรี 1 ใบ)"),
         ],
