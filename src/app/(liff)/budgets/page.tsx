@@ -97,7 +97,7 @@ function keywordsFromText(text: string): string[] {
   );
 }
 
-/** A category's tile colour: its own pick when it is a custom one, else the olive palette by place. */
+/** A category's tile colour: its own pick when it is a custom one, else the pastel palette by place. */
 function tileColor(c: CategoryItem, index: number): string {
   return c.own && c.color ? c.color : sliceColor(null, index);
 }
@@ -767,7 +767,7 @@ export default function BudgetsPage() {
   );
 }
 
-/** The dark olive card at the top: budget, how much is used, the budget mode and the cycle. */
+/** The pastel green card at the top: budget, how much is used, the budget mode and the cycle. */
 function BudgetHero({
   data,
   categoryLocked,
@@ -796,25 +796,25 @@ function BudgetHero({
   return (
     <section
       aria-label="งบประมาณ"
-      className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[var(--hero-from)] to-[var(--hero-to)] p-5 text-white shadow-card"
+      className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[var(--hero-from)] to-[var(--hero-to)] p-5 text-[var(--hero-ink)] shadow-card"
     >
       <div
         aria-hidden
-        className="pointer-events-none absolute -right-6 -top-6 h-32 w-32 rounded-full bg-[var(--hero-glow)]/20 blur-2xl"
+        className="pointer-events-none absolute -right-6 -top-6 h-32 w-32 rounded-full bg-white/50 blur-2xl"
       />
       <div className="relative space-y-3">
         <div className="flex items-center justify-between gap-2">
-          <p className="text-xs font-medium text-white/90">งบประมาณประจำ{per}</p>
+          <p className="text-xs font-medium text-[var(--hero-ink-soft)]">งบประมาณประจำ{per}</p>
           <div className="relative">
             <button
               type="button"
               aria-haspopup="menu"
               aria-expanded={menu}
               onClick={() => setMenu((v) => !v)}
-              className="flex h-9 items-center gap-1.5 rounded-xl border border-white/25 bg-white/15 px-3 text-xs font-medium text-white"
+              className="flex h-9 items-center gap-1.5 rounded-xl border border-white/70 bg-white/60 px-3 text-xs font-medium text-[var(--hero-ink)]"
             >
               {modeText}
-              <ChevronDown className="h-3 w-3 text-[var(--hero-glow)]" aria-hidden />
+              <ChevronDown className="h-3 w-3 text-[var(--hero-ink)]" aria-hidden />
             </button>
             {menu ? (
               <div
@@ -853,11 +853,13 @@ function BudgetHero({
 
         <div className="flex items-end justify-between gap-2">
           <div className="min-w-0">
-            <p className="text-xs text-white/85">ยอดงบที่ตั้งไว้ทั้งหมด</p>
+            <p className="text-xs text-[var(--hero-ink-soft)]">ยอดงบที่ตั้งไว้ทั้งหมด</p>
             <p className="num mt-0.5 truncate text-2xl font-bold">
               {total ? `฿${formatBaht(total)}` : "ยังไม่ตั้ง"}
               {total ? (
-                <span className="ml-1.5 text-xs font-normal text-white/85">/ {per}</span>
+                <span className="ml-1.5 text-xs font-normal text-[var(--hero-ink-soft)]">
+                  / {per}
+                </span>
               ) : null}
             </p>
           </div>
@@ -865,7 +867,7 @@ function BudgetHero({
             <button
               type="button"
               onClick={onAdjust}
-              className="flex h-9 shrink-0 items-center gap-1.5 rounded-xl bg-[var(--hero-glow)] px-3 text-xs font-semibold text-[#2b2410]"
+              className="flex h-9 shrink-0 items-center gap-1.5 rounded-xl bg-primary px-3 text-xs font-semibold text-surface"
             >
               {total ? "ปรับงบ" : "ตั้งงบ"}
             </button>
@@ -874,11 +876,11 @@ function BudgetHero({
 
         {total ? (
           <div className="space-y-1.5">
-            <div className="flex justify-between gap-2 text-[11px] text-white/90">
+            <div className="flex justify-between gap-2 text-[11px] text-[var(--hero-ink-soft)]">
               <span className="num">
                 ใช้ไปแล้ว ฿{formatBaht(spent)} ({pct}%)
               </span>
-              <span className="num font-medium text-[var(--hero-glow)]">
+              <span className="num font-semibold text-[var(--hero-ink)]">
                 {remaining !== null && remaining < 0
                   ? `เกินงบ ฿${formatBaht(-remaining)}`
                   : `เหลือ ฿${formatBaht(remaining ?? 0)}`}
@@ -890,31 +892,31 @@ function BudgetHero({
               aria-valuemin={0}
               aria-valuemax={100}
               aria-valuenow={Math.min(pct, 100)}
-              className="h-2.5 overflow-hidden rounded-full bg-black/25 p-0.5"
+              className="h-2.5 overflow-hidden rounded-full bg-white/70 p-0.5"
             >
               <div
-                className="h-full rounded-full bg-[var(--hero-glow)]"
+                className="h-full rounded-full bg-primary"
                 style={{ width: `${Math.min(pct, 100)}%` }}
               />
             </div>
             {state !== "ok" ? (
-              <p className="text-[11px] font-medium text-white">
+              <p className="text-[11px] font-semibold text-[var(--hero-ink)]">
                 {state === "over" ? "ครบงบแล้ว" : "ใกล้ครบงบ"}
               </p>
             ) : null}
           </div>
         ) : (
-          <p className="text-xs text-white/85">
+          <p className="text-xs text-[var(--hero-ink-soft)]">
             {data.mode === "overall"
               ? `ยังไม่ได้ตั้งงบ ใช้ไปแล้ว ฿${formatBaht(spent)} ในรอบนี้`
               : "ตั้งงบของแต่ละหมวดได้ที่การ์ดด้านล่าง เว้นว่างไว้ถ้าไม่ต้องการจำกัด"}
           </p>
         )}
 
-        <div className="flex items-center justify-between gap-2 border-t border-white/15 pt-2 text-xs text-white/90">
+        <div className="flex items-center justify-between gap-2 border-t border-white/70 pt-2 text-xs text-[var(--hero-ink-soft)]">
           <span>
             รอบงบ:{" "}
-            <strong className="font-medium text-white">
+            <strong className="font-semibold text-[var(--hero-ink)]">
               {data.cycle === "weekly"
                 ? "ทุกวันจันทร์"
                 : `ทุกวันที่ ${data.cycleStartDay ?? 1} ของเดือน`}
@@ -922,7 +924,7 @@ function BudgetHero({
           </span>
           <Link
             href="/settings"
-            className="flex h-8 items-center gap-1 font-medium text-[var(--hero-glow)]"
+            className="flex h-8 items-center gap-1 font-semibold text-[var(--hero-ink)] underline underline-offset-2"
           >
             ตั้งค่า
             <Settings2 className="h-3 w-3" aria-hidden />
@@ -937,7 +939,7 @@ function BudgetHero({
             </PlusLock>
           </div>
         ) : (
-          <p className="text-[11px] text-white/85">
+          <p className="text-[11px] text-[var(--hero-ink-soft)]">
             จะแจ้งเตือนในแชทเมื่อใช้ถึง 80% และเมื่อเกินงบ
           </p>
         )}

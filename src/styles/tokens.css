@@ -18,6 +18,8 @@
   --hero-from: #0f766e;
   --hero-to: #115e59;
   --hero-glow: #fbbf24;
+  --hero-ink: #ffffff;
+  --hero-ink-soft: #ffffffd9;
 }
 
 .dark {
@@ -39,51 +41,47 @@
 }
 
 /*
- * The olive-and-turmeric look: switched on (data-theme on <html>) for the summary, analytics and
- * budgets pages by <ThemeScope>. Every colour token is redefined, so the components keep using the
- * same classes. Text colours are picked to stay at WCAG AA on white and on their own tints.
+ * The pastel-green look: switched on (data-theme on <html>) for the signed-in pages by
+ * <ThemeScope>. Every colour token is redefined, so the components keep using the same classes.
+ * Text colours are picked to stay at WCAG AA on white and on their own tints; the top cards are
+ * pastel with dark green text (--hero-ink) rather than dark with white text.
  */
-[data-theme="olive"] {
-  --primary: #4c652d;
-  --primary-soft: #e9efe0;
-  --accent: #d49b28;
-  --expense: #b5402b;
-  --income: #44702a;
-  --background: #faf9f6;
+[data-theme="pastel"] {
+  --primary: #23734e;
+  --primary-soft: #ddf3e5;
+  --accent: #e0a12e;
+  --expense: #b94630;
+  --income: #2a7a52;
+  --background: #f4faf6;
   --surface: #ffffff;
-  --foreground: #1f2617;
-  --muted: #5f6357;
-  --border: #e7e2d6;
-  --warn: #8a5f10;
+  --foreground: #1e2b24;
+  --muted: #4f6158;
+  --border: #d6eadd;
+  --warn: #7a5209;
   --warn-soft: #fdf3da;
-  --hero-from: #4c652d;
-  --hero-to: #374921;
-  --hero-glow: #e5a52a;
+  --hero-from: #d6f1e1;
+  --hero-to: #bfe7cf;
+  --hero-ink: #1d4d36;
+  --hero-ink-soft: #2a5e43;
+  --hero-glow: #e0a12e;
 }
 
-.dark[data-theme="olive"] {
-  --primary: #9bbd72;
-  --primary-soft: #2a3818;
-  --accent: #e5a52a;
-  --expense: #f0846c;
-  --income: #9bbd72;
-  --background: #12150e;
-  --surface: #1a1f14;
-  --foreground: #ecefe6;
-  --muted: #a3a99a;
-  --border: #2f3626;
+.dark[data-theme="pastel"] {
+  --primary: #8fd3ad;
+  --primary-soft: #1f3b2d;
+  --accent: #e5b04a;
+  --expense: #f2907a;
+  --income: #8fd3ad;
+  --background: #101914;
+  --surface: #17221b;
+  --foreground: #e8f2ec;
+  --muted: #a4b8ac;
+  --border: #2a3d32;
   --warn: #f0c05a;
   --warn-soft: #3a2c0a;
-  --hero-from: #4c652d;
-  --hero-to: #2a3818;
-  --hero-glow: #e5a52a;
-}
-
-body {
-  background: var(--background);
-  color: var(--foreground);
-}
-
-.num {
-  font-variant-numeric: tabular-nums;
+  --hero-from: #28503b;
+  --hero-to: #1d3a2b;
+  --hero-ink: #e8f6ee;
+  --hero-ink-soft: #bcd9c8;
+  --hero-glow: #e5b04a;
 }

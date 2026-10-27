@@ -7,10 +7,10 @@ import { summarizeByCategory } from "./summary";
 /** The most rows the table prints; the totals always cover every row. */
 export const MAX_PDF_ROWS = 2000;
 
-const OLIVE = "#4C652D";
-const OLIVE_SOFT = "#E9EFE0";
-const EXPENSE = "#B5402B";
-const INCOME = "#44702A";
+const OLIVE = "#23734E";
+const OLIVE_SOFT = "#DDF3E5";
+const EXPENSE = "#B94630";
+const INCOME = "#2A7A52";
 const INK = "#1F2617";
 const MUTED = "#6B6F63";
 const LINE = "#E7E2D6";

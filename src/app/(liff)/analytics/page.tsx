@@ -86,7 +86,7 @@ export default function AnalyticsPage() {
     key: c.categoryId ?? c.name,
     name: c.name,
     value: c.totalSatang / 100,
-    color: null, // the olive palette, in rank order, on every chart of the page
+    color: null, // the pastel palette, in rank order, on every chart of the page
   }));
   const catTotal = data.data?.categoriesTotalSatang ?? 0;
 

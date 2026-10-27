@@ -515,7 +515,7 @@ function TransactionsView() {
           <div
             role="region"
             aria-label="จัดการรายการที่เลือก"
-            className="flex items-center justify-between gap-2 rounded-2xl bg-gradient-to-r from-[var(--hero-from)] to-[var(--hero-to)] p-3 text-white shadow-card"
+            className="flex items-center justify-between gap-2 rounded-2xl bg-gradient-to-r from-[var(--hero-from)] to-[var(--hero-to)] p-3 text-[var(--hero-ink)] shadow-card"
           >
             <p className="num text-xs font-semibold" aria-live="polite">
               เลือกแล้ว {selected.size} รายการ
@@ -525,7 +525,7 @@ function TransactionsView() {
                 type="button"
                 disabled={selected.size === 0 || bulkBusy}
                 onClick={() => setMoveOpen(true)}
-                className="flex h-9 items-center gap-1 rounded-lg bg-white/15 px-2.5 text-[11px] font-semibold disabled:opacity-50"
+                className="flex h-9 items-center gap-1 rounded-lg bg-white/70 px-2.5 text-[11px] font-semibold disabled:opacity-50"
               >
                 <FolderInput className="h-3.5 w-3.5" aria-hidden /> ย้ายหมวด
               </button>
@@ -533,14 +533,14 @@ function TransactionsView() {
                 type="button"
                 disabled={selected.size === 0 || bulkBusy}
                 onClick={bulkDelete}
-                className="flex h-9 items-center gap-1 rounded-lg bg-[#b5402b] px-2.5 text-[11px] font-semibold disabled:opacity-50"
+                className="flex h-9 items-center gap-1 rounded-lg bg-expense px-2.5 text-[11px] font-semibold text-white disabled:opacity-50"
               >
                 <Trash2 className="h-3.5 w-3.5" aria-hidden /> ลบ
               </button>
               <button
                 type="button"
                 onClick={stopSelecting}
-                className="h-9 rounded-lg bg-white/15 px-2.5 text-[11px] font-medium"
+                className="h-9 rounded-lg bg-white/70 px-2.5 text-[11px] font-medium"
               >
                 ยกเลิก
               </button>
@@ -690,7 +690,7 @@ function TransactionsView() {
           type="button"
           onClick={() => setFormOpen(true)}
           aria-label="เพิ่มรายการใหม่"
-          className="fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] right-5 z-20 flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-tr from-[var(--hero-from)] to-[#7a9e48] text-white shadow-card"
+          className="fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] right-5 z-20 flex h-14 w-14 items-center justify-center rounded-full bg-primary text-surface shadow-card"
         >
           <Plus className="h-6 w-6" aria-hidden />
         </button>

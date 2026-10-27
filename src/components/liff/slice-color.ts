@@ -1,12 +1,12 @@
 const FALLBACK_COLORS = [
-  "#5F7D3A",
-  "#D49B28",
-  "#DE6449",
-  "#9AB07E",
-  "#B07B18",
-  "#8DAF68",
-  "#A98B5B",
-  "#C74B33",
+  "#4FA77C",
+  "#EDBA52",
+  "#E8907C",
+  "#9AD3B4",
+  "#D9A441",
+  "#76BF98",
+  "#B8C98A",
+  "#D9806A",
 ];
 
 /** Category colour, or a palette fallback so every slice and legend swatch matches. */

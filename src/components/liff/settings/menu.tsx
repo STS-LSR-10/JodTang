@@ -28,7 +28,7 @@ interface RowProps {
   value?: string;
   /** Something on the right before the arrow (a small "+ เพิ่ม" tag). */
   badge?: ReactNode;
-  /** Tint of the icon tile: the default olive, or the warm one for upgrades. */
+  /** Tint of the icon tile: the default green, or the warm one for upgrades. */
   tone?: "primary" | "warm";
   ariaLabel?: string;
 }

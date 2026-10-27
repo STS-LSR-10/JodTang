@@ -8,7 +8,10 @@ import { formatBaht } from "@/lib/money";
 import { bangkokParts, formatThaiDate } from "@/lib/thai-date";
 import { cn } from "@/lib/utils";
 
-/** A stable place in the olive palette for a category (its id, else its name). */
+/** The tile colour of an income entry (the page theme's --income, as a plain colour for the alpha tint). */
+const INCOME_TINT = "#2a7a52";
+
+/** A stable place in the pastel palette for a category (its id, else its name). */
 function paletteIndex(tx: TxDto): number {
   const key = tx.categoryId ?? tx.categoryName ?? "";
   let h = 0;
@@ -47,12 +50,12 @@ export function TxCard({
       <span
         aria-hidden
         className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-lg"
-        style={{ backgroundColor: `${income ? "#44702a" : color}26` }}
+        style={{ backgroundColor: `${income ? INCOME_TINT : color}26` }}
       >
         {emoji ?? (
           <span
             className="h-3 w-3 rounded-full"
-            style={{ backgroundColor: income ? "#44702a" : color }}
+            style={{ backgroundColor: income ? INCOME_TINT : color }}
           />
         )}
       </span>

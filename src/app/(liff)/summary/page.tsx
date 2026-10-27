@@ -222,44 +222,47 @@ function Hero({
   return (
     <section
       aria-label="ภาพรวม"
-      className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[var(--hero-from)] to-[var(--hero-to)] p-5 text-white shadow-card"
+      className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[var(--hero-from)] to-[var(--hero-to)] p-5 text-[var(--hero-ink)] shadow-card"
     >
       <div
         aria-hidden
-        className="pointer-events-none absolute -right-8 -top-8 h-36 w-36 rounded-full bg-[var(--hero-glow)]/20 blur-2xl"
+        className="pointer-events-none absolute -right-8 -top-8 h-36 w-36 rounded-full bg-white/50 blur-2xl"
       />
       <div className="relative">
         <div className="flex items-center justify-between gap-2">
-          <p className="text-sm text-white/90">
+          <p className="text-sm text-[var(--hero-ink-soft)]">
             {accumulated ? "เหลือเก็บสะสม" : "เหลือเก็บรอบนี้"}
           </p>
           <button
             type="button"
             aria-pressed={accumulated}
             onClick={onToggle}
-            className="inline-flex h-8 items-center gap-1.5 rounded-full border border-white/25 bg-white/15 px-3 text-xs font-semibold text-white"
+            className="inline-flex h-8 items-center gap-1.5 rounded-full border border-white/70 bg-white/60 px-3 text-xs font-semibold text-[var(--hero-ink)]"
           >
-            <Repeat className="h-3.5 w-3.5 text-[var(--hero-glow)]" aria-hidden />
+            <Repeat className="h-3.5 w-3.5 text-[var(--hero-ink)]" aria-hidden />
             {accumulated ? "รอบนี้" : "สะสม"}
           </button>
         </div>
         <p
-          className={cn("num my-2 text-3xl font-bold", value < 0 ? "text-[#ffc9bd]" : "text-white")}
+          className={cn(
+            "num my-2 text-3xl font-bold",
+            value < 0 ? "text-expense" : "text-[var(--hero-ink)]",
+          )}
         >
           ฿{formatBaht(value)}
         </p>
-        <p className="text-xs text-white/85">
+        <p className="text-xs text-[var(--hero-ink-soft)]">
           {accumulated
             ? "รายรับ − รายจ่ายทั้งหมดตั้งแต่เริ่มจดจนถึงสิ้นรอบนี้"
             : "รายรับ − รายจ่ายของรอบนี้"}
         </p>
         {goal ? (
-          <div className="mt-4 border-t border-white/15 pt-3">
+          <div className="mt-4 border-t border-white/70 pt-3">
             <div className="mb-1.5 flex justify-between gap-2 text-xs">
-              <span className="min-w-0 truncate text-white/85">
+              <span className="min-w-0 truncate text-[var(--hero-ink-soft)]">
                 เป้าหมาย {goal.emoji ?? "🎯"} {goal.name}
               </span>
-              <span className="num shrink-0 font-semibold text-[var(--hero-glow)]">
+              <span className="num shrink-0 font-semibold text-[var(--hero-ink)]">
                 {goal.percent}% (฿{formatBaht(goal.targetSatang)})
               </span>
             </div>
@@ -269,10 +272,10 @@ function Hero({
               aria-valuemin={0}
               aria-valuemax={100}
               aria-valuenow={Math.min(100, goal.percent)}
-              className="h-2 overflow-hidden rounded-full bg-black/25 p-0.5"
+              className="h-2 overflow-hidden rounded-full bg-white/70 p-0.5"
             >
               <div
-                className="h-full rounded-full bg-[var(--hero-glow)]"
+                className="h-full rounded-full bg-primary"
                 style={{ width: `${Math.min(100, goal.percent)}%` }}
               />
             </div>
@@ -344,7 +347,7 @@ function Spending({
     key: c.categoryId ?? c.name,
     name: c.name,
     value: c.totalSatang / 100,
-    color: null, // the olive palette, in rank order
+    color: null, // the pastel palette, in rank order
   }));
 
   return (
