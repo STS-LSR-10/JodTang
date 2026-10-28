@@ -5,6 +5,7 @@ import {
   CalendarClock,
   Clock,
   Coins,
+  Gift,
   Crown,
   Languages,
   PiggyBank,
@@ -22,7 +23,6 @@ import { PinCard } from "@/components/liff/settings/pin-card";
 import { ResetCard } from "@/components/liff/settings/reset-card";
 import { MemoryCard } from "@/components/liff/settings/memory-card";
 import { PlanCard } from "@/components/liff/settings/plan-card";
-import { ReferralCard } from "@/components/liff/settings/referral-card";
 import {
   MenuButton,
   MenuGroup,
@@ -254,6 +254,13 @@ export default function SettingsPage() {
                 title="อัปเกรด"
                 sub="ปลดล็อกฟีเจอร์พรีเมียมทั้งหมด"
               />
+              <MenuLink
+                href="/invite"
+                icon={<Gift className="h-[18px] w-[18px]" />}
+                title="ชวนเพื่อน"
+                sub="รหัสชวนของคุณ และรับตังสะสมทั้งคู่"
+                value={me.data.referrals > 0 ? `${me.data.referrals} คน` : undefined}
+              />
               <MenuButton
                 onClick={() => setSheet("payments")}
                 icon={<Receipt className="h-[18px] w-[18px]" />}
@@ -283,7 +290,6 @@ export default function SettingsPage() {
               />
             </MenuGroup>
 
-            <ReferralCard me={me.data} onChanged={me.reload} />
             <PinCard />
             <ResetCard />
             <DeleteCard />

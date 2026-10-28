@@ -124,6 +124,7 @@ export const ME_FREE = {
   streak: 3,
   redeem: { pointsPerDay: 10, days: 0, cost: 0 },
   referralCode: "ABCD1234",
+  referrals: 3,
   referred: false,
   limits: { recurringRules: 20, wallets: 1 },
   payments: { available: false, history: [] },

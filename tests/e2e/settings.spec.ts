@@ -82,15 +82,6 @@ test.describe("settings page (360px)", () => {
     await expect(weekly).toHaveAttribute("aria-checked", "true");
     await expectNoHorizontalScroll(page);
   });
-  test("referral code is shown and short codes cannot be submitted", async ({ page }) => {
-    await mockApi(page, { ...COMMON, "GET /api/me": ME_FREE });
-    await page.goto("/settings");
-
-    await expect(page.getByLabel("รหัสชวนเพื่อนของคุณ")).toHaveText("ABCD1234");
-    await page.getByLabel("รหัสของเพื่อน").fill("AB");
-    await expect(page.getByRole("button", { name: "ใช้รหัส" })).toBeDisabled();
-  });
-
   test("delete-all needs two steps and the exact phrase", async ({ page }) => {
     const { seen } = await mockApi(page, {
       ...COMMON,

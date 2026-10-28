@@ -1,3 +1,4 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { guard, json } from "@/lib/api";
 import { requireUser } from "@/lib/auth/require-user";
 import { POINTS_PER_PLUS_DAY } from "@/lib/config";
@@ -59,6 +60,17 @@ const FEATURES: Feature[] = [
   "personalize",
 ];
 
+/** Friends this person invited who have recorded their first entry (the bonus was paid for them). */
+async function countReferrals(db: SupabaseClient, userId: string): Promise<number> {
+  const { count, error } = await db
+    .from("point_ledger")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", userId)
+    .eq("reason", "referral");
+  if (error) throw new Error(`count referrals: ${error.message}`);
+  return count ?? 0;
+}
+
 export async function GET(request: Request): Promise<Response> {
   return guard(async () => {
     const auth = await requireUser(request);
@@ -75,10 +87,11 @@ export async function GET(request: Request): Promise<Response> {
     const now = new Date();
     const plan = effectivePlan(data.plan, data.plan_expires_at, now);
     const billing = await loadBillingState(db, auth.userId, now);
-    const [slipsUsed, dailyKeys, payments] = await Promise.all([
+    const [slipsUsed, dailyKeys, payments, referrals] = await Promise.all([
       countSlipsThisMonth(db, auth.userId, now),
       recentDailyKeys(db, auth.userId),
       getPaymentProvider().listPayments(auth.userId),
+      countReferrals(db, auth.userId),
     ]);
 
     return json({
@@ -98,6 +111,7 @@ export async function GET(request: Request): Promise<Response> {
       redeem: { pointsPerDay: POINTS_PER_PLUS_DAY, ...redeemable(data.points) },
       referralCode: data.referral_code,
       referred: Boolean(data.referred_by),
+      referrals,
       limits: { recurringRules: recurringLimit(plan), wallets: walletCapacity(plan) },
       pricing: pricingAt(now),
       // free trials still available (once per tier, and only while no plan is running)

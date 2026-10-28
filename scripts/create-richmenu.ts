@@ -38,8 +38,6 @@ const LIFF_PAGES: Partial<Record<TileKey, string>> = {
   upgrade: "upgrade",
 };
 
-const INVITE_TEXT = "มาจดรายรับรายจ่ายง่าย ๆ ในไลน์กับจดตังค์ (JodTang) ด้วยกันนะ";
-
 function fail(message: string): never {
   console.error(`✗ ${message}`);
   process.exit(1);
@@ -139,12 +137,8 @@ async function main() {
         // sends "วิธีใช้งาน" as the user's message; the bot asks what they want to know (topic chips)
         return { type: "message", label, text: "วิธีใช้งาน" };
       case "invite":
-        // share text + LIFF link (Bot link "aggressive" prompts non-friends to add the account)
-        return {
-          type: "uri",
-          label,
-          uri: `https://line.me/R/share?text=${encodeURIComponent(`${INVITE_TEXT}\n${liffUrl}`)}`,
-        };
+        // the invite page: code, share button, how it works
+        return { type: "uri", label, uri: `${liffUrl}/invite` };
       default:
         return { type: "uri", label, uri: `${liffUrl}/summary` };
     }
