@@ -26,23 +26,13 @@ export function Splash() {
     if (!v) return;
     if (resumeAt > 0) v.currentTime = Math.min(resumeAt, v.duration);
     // already finished on the previous screen: stay on the last frame
-    if (resumeAt >= v.duration - 0.1) setPlaying(true);
-  }
-
-  // Start as soon as it can play (the file is small and streams while it plays), so a slow
-  // connection still sees the video, not just the still frame.
-  function onCanPlay() {
-    const v = video.current;
-    if (!v || !v.paused || v.ended) return;
     if (resumeAt < v.duration - 0.1) void v.play().catch(() => undefined);
+    else setPlaying(true);
   }
 
-  // the video can be ready before this page is hydrated (cached): its events are gone by then
+  // the video can have its metadata before this page is hydrated (cached): its event is gone by then
   useEffect(() => {
-    const v = video.current;
-    if (!v) return;
-    if (v.readyState >= 1) onLoadedMetadata();
-    if (v.readyState >= 3) onCanPlay();
+    if (video.current && video.current.readyState >= 1) onLoadedMetadata();
   }, []);
 
   return (
@@ -68,7 +58,6 @@ export function Splash() {
           aria-hidden
           tabIndex={-1}
           onLoadedMetadata={onLoadedMetadata}
-          onCanPlay={onCanPlay}
           onPlaying={() => setPlaying(true)}
           onTimeUpdate={(e) => {
             resumeAt = e.currentTarget.currentTime;
