@@ -29,9 +29,9 @@ export function Splash() {
     if (resumeAt >= v.duration - 0.1) setPlaying(true);
   }
 
-  // Start only once enough is downloaded to play it through: starting at the first byte stalls
-  // mid-clip on a slow connection (the still frame stays up until then).
-  function onCanPlayThrough() {
+  // Start as soon as it can play (the file is small and streams while it plays), so a slow
+  // connection still sees the video, not just the still frame.
+  function onCanPlay() {
     const v = video.current;
     if (!v || !v.paused || v.ended) return;
     if (resumeAt < v.duration - 0.1) void v.play().catch(() => undefined);
@@ -42,7 +42,7 @@ export function Splash() {
     const v = video.current;
     if (!v) return;
     if (v.readyState >= 1) onLoadedMetadata();
-    if (v.readyState >= 4) onCanPlayThrough();
+    if (v.readyState >= 3) onCanPlay();
   }, []);
 
   return (
@@ -68,7 +68,7 @@ export function Splash() {
           aria-hidden
           tabIndex={-1}
           onLoadedMetadata={onLoadedMetadata}
-          onCanPlayThrough={onCanPlayThrough}
+          onCanPlay={onCanPlay}
           onPlaying={() => setPlaying(true)}
           onTimeUpdate={(e) => {
             resumeAt = e.currentTarget.currentTime;
