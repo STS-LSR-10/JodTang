@@ -23,6 +23,7 @@ describe("the Rich Menu tap areas", () => {
       "help",
       "upgrade",
       "invite",
+      "scan",
     ]) {
       expect(keys.has(k as never)).toBe(true);
     }
@@ -51,8 +52,8 @@ describe("the Rich Menu tap areas", () => {
   });
 
   it("a box of the picture is carried over with the same crop and scale", () => {
-    // the whole cropped picture is the whole menu
-    expect(toMenuBounds([0, 20, 1452, 1051])).toEqual({
+    // the whole picture is the whole menu
+    expect(toMenuBounds([0, 0, 1264, 848])).toEqual({
       x: 0,
       y: 0,
       width: RICH_MENU_WIDTH,

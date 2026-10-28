@@ -32,7 +32,7 @@ import {
 import { bangkokParts, formatThaiDate, fromBangkok, isValidYmd } from "@/lib/thai-date";
 import type { LineMessage, TxType } from "@/lib/types";
 import type { SlipImage, SlipOcrProvider } from "@/lib/ocr/provider";
-import { can, effectivePlan, PHOTOS_PER_MONTH } from "@/lib/plan";
+import { can, effectivePlan, PHOTOS_PER_MONTH, SLIP_LIMIT } from "@/lib/plan";
 import {
   applyTheme,
   DEFAULT_PERSONA,
@@ -137,6 +137,7 @@ import {
   buildYearCard,
 } from "./spend-flex";
 import {
+  clearPhotoWait,
   countPhotosThisMonth,
   getLivePhotoWait,
   getPhotoTx,
@@ -176,6 +177,8 @@ import {
   PHOTO_ASK_REPLACE_TEXT,
   PHOTO_ASK_TEXT,
   PHOTO_OFFER_TEXT,
+  SCAN_ASK_TEXT,
+  SCAN_LOCKED_TEXT,
   COMPARE_EMPTY_TEXT,
   COMPARE_LOCKED_TEXT,
   INSIGHT_EMPTY_TEXT,
@@ -1903,6 +1906,17 @@ async function handlePostback(
   const action = params.get("a");
   // Rich Menu "จดตังค์": answer with the how-to card; its button opens the keyboard (a=compose-go).
   if (action === "compose") return [buildComposeCard()];
+  // Rich Menu "สแกนบิล" (Pro and above): camera / album buttons, then the picture is read as a slip.
+  // Free gets the upgrade pitch instead (the Rich Menu cannot open the camera for some people only).
+  if (action === "scan") {
+    const now = deps.now();
+    if (SLIP_LIMIT[effectivePlan(user.plan, user.plan_expires_at, now)] === 0) {
+      return upsellReply(deps.db, user.id, now, "slip", SCAN_LOCKED_TEXT);
+    }
+    // the next picture is a bill, not the photo offered after a recording a moment ago
+    await clearPhotoWait(deps.db, user.id).catch(() => undefined);
+    return [buildPhotoAsk(SCAN_ASK_TEXT)];
+  }
   // A topic chip under the help question: that topic's card (it carries the chips along, so they stay).
   if (action === "help") {
     const topic = params.get("t");

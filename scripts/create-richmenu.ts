@@ -131,6 +131,10 @@ async function main() {
     switch (key) {
       case "compose":
         return compose;
+      case "scan":
+        // silent postback: the bot answers Pro and above with camera / album buttons, Free with
+        // the upgrade card (a Rich Menu button cannot open the camera for some people only)
+        return { type: "postback", label, data: "a=scan" };
       case "help":
         // sends "วิธีใช้งาน" as the user's message; the bot asks what they want to know (topic chips)
         return { type: "message", label, text: "วิธีใช้งาน" };

@@ -4,26 +4,23 @@
  * measured on the picture itself (ART_*) and carried over to the menu with the same crop and scale,
  * so changing the picture means changing the boxes below.
  *
- *   ┌──────────────────────────────────────┐
- *   │ logo · "จดบันทึก" panel with the piggy bank │  compose
- *   ├────┬────┬────┬────┬──────────────────────┤
- *   │สรุป│วิเคราะห์│หมวด/งบ│รายการ│   (decoration)         │
- *   ├────┼────┼────┼────┴────────────┬─────────┤
- *   │ชวนเพื่อน│วิธีใช้งาน│ตั้งค่า│ อัปเกรด Pro · Elite │ (deco)  │
- *   └────┴────┴────┴─────────────────┴─────────┘
+ *   ┌────┬────┬─────────────────────────┐
+ *   │สรุป│วิเคราะห์│   จดตังค์ (compose)        │
+ *   ├────┼────┼────────────┬────────────┤
+ *   │หมวด/งบ│รายการ│ ชวนเพื่อน   │ สแกนบิล    │
+ *   ├────┼────┼────────────┴────────────┤
+ *   │ตั้งค่า│วิธีใช้งาน│   อัปเกรด Pro · Elite     │
+ *   └────┴────┴─────────────────────────┘
  */
 export const RICH_MENU_WIDTH = 2500;
 export const RICH_MENU_HEIGHT = 1686;
 
 /** The picture, in its own pixels. */
-export const ART_FILE = "assets/richmenu-art.webp";
-export const ART_WIDTH = 1452;
-export const ART_HEIGHT = 1083;
-/**
- * The menu is wider than the picture (1.48 against 1.34), so a strip of garden at the top and
- * bottom is cut (all the tiles stay), and the rest is stretched about 5% sideways.
- */
-export const ART_CROP = { top: 20, height: 1031 } as const;
+export const ART_FILE = "assets/richmenu-art.jpg";
+export const ART_WIDTH = 1264;
+export const ART_HEIGHT = 848;
+/** The picture is almost exactly the menu's proportions (1.49 against 1.48): nothing is cut. */
+export const ART_CROP = { top: 0, height: ART_HEIGHT } as const;
 
 /**
  * Optional toning of the painting (less colour, lighter, shadows lifted). The current picture is
@@ -48,7 +45,8 @@ export type TileKey =
   | "help"
   | "compose"
   | "upgrade"
-  | "invite";
+  | "invite"
+  | "scan";
 
 export interface Tile {
   key: TileKey;
@@ -73,15 +71,16 @@ export function toMenuBounds([left, top, right, bottom]: Box): Bounds {
 
 // ── the tiles of the picture ──
 const BOXES: { key: TileKey; label: string; box: Box }[] = [
-  { key: "compose", label: "จดบันทึก", box: [60, 155, 1390, 545] },
-  { key: "summary", label: "สรุป", box: [65, 582, 268, 795] },
-  { key: "analytics", label: "วิเคราะห์", box: [290, 582, 492, 795] },
-  { key: "budgets", label: "หมวด/งบ", box: [515, 582, 716, 795] },
-  { key: "transactions", label: "รายการ", box: [738, 582, 940, 795] },
-  { key: "invite", label: "ชวนเพื่อน", box: [65, 818, 268, 1027] },
-  { key: "help", label: "วิธีใช้งาน", box: [290, 818, 492, 1027] },
-  { key: "settings", label: "ตั้งค่า", box: [515, 818, 716, 1027] },
-  { key: "upgrade", label: "อัปเกรด", box: [735, 818, 1158, 1027] },
+  { key: "summary", label: "สรุป", box: [30, 38, 262, 288] },
+  { key: "analytics", label: "วิเคราะห์", box: [280, 38, 513, 288] },
+  { key: "budgets", label: "หมวด/งบ", box: [30, 306, 262, 555] },
+  { key: "transactions", label: "รายการ", box: [280, 306, 513, 555] },
+  { key: "settings", label: "ตั้งค่า", box: [30, 573, 262, 815] },
+  { key: "help", label: "วิธีใช้งาน", box: [280, 573, 513, 815] },
+  { key: "compose", label: "จดตังค์", box: [525, 35, 1234, 378] },
+  { key: "invite", label: "ชวนเพื่อน", box: [540, 396, 886, 610] },
+  { key: "scan", label: "สแกนบิล", box: [902, 396, 1234, 610] },
+  { key: "upgrade", label: "อัปเกรด", box: [540, 628, 1234, 812] },
 ];
 
 export const TILES: Tile[] = BOXES.map(({ key, label, box }) => ({
