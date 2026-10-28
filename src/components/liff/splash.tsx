@@ -4,13 +4,13 @@ import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 
 /**
- * How far the logo video got, kept while the app moves from one page to the next (the module stays
+ * How far the opening video got, kept while the app moves from one page to the next (the module stays
  * alive across in-app navigation), so the next opening screen carries on instead of starting over.
  */
 let resumeAt = 0;
 
 /**
- * Full-screen opening screen while the app signs in. The first frame of the logo video shows at
+ * Full-screen opening screen while the app signs in. The first frame of the opening video shows at
  * once (same size and place as the video, so nothing jumps); the muted video fades in over it, plays
  * once and rests on its last frame. People who asked their device for less motion keep the still
  * frame. White on purpose: the video is on white, in dark mode too.
@@ -41,7 +41,7 @@ export function Splash() {
       aria-label="กำลังเปิดแอป"
       className="fixed inset-0 z-50 flex items-center justify-center bg-white"
     >
-      <div className="relative aspect-video w-full max-w-md">
+      <div className="relative aspect-[668/720] w-full max-w-sm">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src="/loading-poster.jpg"
