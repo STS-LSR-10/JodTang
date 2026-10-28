@@ -46,7 +46,7 @@ export function PlanCard({
   }
 
   return (
-    <section className={cardClass} aria-label="แผนและตังสะสม">
+    <section className={cardClass} aria-label="แผนและเหรียญสะสม">
       <div className="flex items-center gap-3">
         {me.pictureUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
@@ -110,7 +110,7 @@ export function PlanCard({
       <div className="grid grid-cols-2 gap-3">
         <div className="rounded-xl bg-primary-soft px-3.5 py-2.5">
           <p className="flex items-center gap-1.5 text-xs text-muted">
-            <Sparkles className="h-3.5 w-3.5 text-accent" aria-hidden /> ตังสะสม
+            <Sparkles className="h-3.5 w-3.5 text-accent" aria-hidden /> เหรียญสะสม
           </p>
           <p className="num text-xl font-bold text-primary">{me.points}</p>
         </div>

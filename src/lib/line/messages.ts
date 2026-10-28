@@ -27,10 +27,10 @@ export const SLIP_FAIR_USE_TEXT = (limit: number) =>
   `เดือนนี้อ่านสลิปครบ ${limit} ใบตามเกณฑ์ใช้งานปกติแล้ว พิมพ์จดเองได้เลย เช่น "ค่าไฟ 1200" และจะอ่านสลิปได้ใหม่ต้นเดือนหน้านะ`;
 export const SLIP_CANCELLED_TEXT = "ยกเลิกแล้ว ไม่ได้จดสลิปนี้";
 export const PICK_CATEGORY_TEXT = "เลือกหมวดที่ถูกต้องนะ";
-export const REFERRAL_BONUS_TEXT = `ได้โบนัสชวนเพื่อน +${REFERRAL_BONUS_REFEREE} ตังสะสมแล้ว! ตรวจดูได้ที่หน้าตั้งค่า`;
+export const REFERRAL_BONUS_TEXT = `ได้โบนัสชวนเพื่อน +${REFERRAL_BONUS_REFEREE} เหรียญสะสมแล้ว! ตรวจดูได้ที่หน้าตั้งค่า`;
 export const USE_CODE_USAGE_TEXT =
   'พิมพ์ "ใช้รหัส" ตามด้วยรหัสของเพื่อน เช่น "ใช้รหัส ABCD1234" เพื่อรับโบนัสทั้งสองฝ่ายนะ';
-export const REFERRAL_OK_TEXT = `ใช้รหัสแล้ว! พอจดรายการแรกจะได้โบนัส ${REFERRAL_BONUS_REFEREE} ตังสะสม และเพื่อนก็ได้ด้วยนะ`;
+export const REFERRAL_OK_TEXT = `ใช้รหัสแล้ว! พอจดรายการแรกจะได้โบนัส ${REFERRAL_BONUS_REFEREE} เหรียญสะสม และเพื่อนก็ได้ด้วยนะ`;
 export const REFERRAL_FAIL_TEXT = {
   invalid: "ไม่พบรหัสชวนเพื่อนนี้ ตรวจตัวอักษรอีกครั้งนะ",
   self: "ใช้รหัสของตัวเองไม่ได้นะ",
@@ -41,12 +41,12 @@ export const REFERRAL_FAIL_TEXT = {
 export function referralShareText(code: string): string {
   return [
     `รหัสชวนเพื่อนของคุณ: ${code}`,
-    `ให้เพื่อนพิมพ์ "ใช้รหัส ${code}" ในแชทนี้ พอเพื่อนจดรายการแรก ทั้งคู่ได้โบนัสตังสะสม`,
+    `ให้เพื่อนพิมพ์ "ใช้รหัส ${code}" ในแชทนี้ พอเพื่อนจดรายการแรก ทั้งคู่ได้โบนัสเหรียญสะสม`,
   ].join("\n");
 }
 
 export const MEMORY_PLUS_HINT_TEXT =
-  "จดหมวดนี้ให้แล้วนะ การจำผู้รับ → หมวดอัตโนมัติเป็นฟีเจอร์ของแผน Pro (แลกวัน Pro ด้วยตังสะสมได้ที่หน้าตั้งค่า)";
+  "จดหมวดนี้ให้แล้วนะ การจำผู้รับ → หมวดอัตโนมัติเป็นฟีเจอร์ของแผน Pro (แลกวัน Pro ด้วยเหรียญสะสมได้ที่หน้าตั้งค่า)";
 
 export const SLIP_SOON_TEXT =
   'ฟีเจอร์อ่านสลิปกำลังจะมาเร็ว ๆ นี้ ตอนนี้พิมพ์จดได้เลย เช่น "ค่าไฟ 1200" นะ';

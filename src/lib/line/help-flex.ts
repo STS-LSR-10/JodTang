@@ -261,7 +261,7 @@ export const HELP_TOPICS: HelpTopic[] = [
     id: "other",
     chip: "✏️ อื่น ๆ",
     icon: "✏️",
-    title: "แก้ไข ตังสะสม ชวนเพื่อน",
+    title: "แก้ไข เหรียญสะสม ชวนเพื่อน",
     subtitle: "คำสั่งอื่น ๆ ที่ใช้บ่อย",
     tagline: "จดผิดก็แก้ได้ในพริบตา",
     items: [
@@ -269,10 +269,10 @@ export const HELP_TOPICS: HelpTopic[] = [
       { icon: "✏️", cmd: "แก้ล่าสุด 45", desc: "เปลี่ยนจำนวนเงินรายการล่าสุด", need: "free" },
       {
         icon: "🎁",
-        cmd: "ตังสะสม",
+        cmd: "เหรียญสะสม",
         desc: "ดูแต้มและจดต่อเนื่องกี่วัน",
         need: "free",
-        send: "ตังสะสม",
+        send: "เหรียญสะสม",
       },
       {
         icon: "📣",

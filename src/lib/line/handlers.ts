@@ -1335,7 +1335,7 @@ async function pointsSummaryText(db: SupabaseClient, userId: string, now: Date):
   const streak = currentStreak(keys, now);
   const { days } = redeemable(points);
   return [
-    `ตังสะสมของคุณ: ${points} แต้ม`,
+    `เหรียญสะสมของคุณ: ${points} แต้ม`,
     streak > 0 ? `จดต่อเนื่อง ${streak} วันแล้ว` : "วันนี้จดรายการแรกเพื่อเริ่มสะสมนะ",
     days > 0
       ? `แลกเป็นวันใช้ Pro ได้ ${days} วัน (แลกที่หน้าตั้งค่า)`

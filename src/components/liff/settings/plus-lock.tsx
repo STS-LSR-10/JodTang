@@ -11,7 +11,7 @@ export function PlusLock({ children }: { children: React.ReactNode }) {
         <Link href="/upgrade" className="font-semibold underline">
           ดูแผนอัปเกรด
         </Link>{" "}
-        หรือแลกวันใช้ด้วยตังสะสมที่การ์ดแผนด้านบน
+        หรือแลกวันใช้ด้วยเหรียญสะสมที่การ์ดแผนด้านบน
       </p>
     </div>
   );

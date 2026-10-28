@@ -134,7 +134,8 @@ export function parseCommand(input: string): Command | null {
     return term ? { kind: "search", term } : { kind: "search-usage" };
   }
   if (text === "ลบล่าสุด") return { kind: "delete-latest" };
-  if (["ตังสะสม", "แต้ม", "แต้มสะสม", "points"].includes(text)) return { kind: "points" };
+  if (["เหรียญสะสม", "เหรียญ", "ตังสะสม", "แต้ม", "แต้มสะสม", "points"].includes(text))
+    return { kind: "points" };
   if (["รหัสชวน", "รหัสชวนเพื่อน", "รหัสของฉัน"].includes(text)) return { kind: "my-code" };
 
   if (text.startsWith("ใช้รหัส")) {

@@ -14,7 +14,7 @@ const LINK = LIFF_ID ? `https://liff.line.me/${LIFF_ID}` : null;
 const STEPS = [
   { n: 1, title: "ส่งคำชวนให้เพื่อน", sub: "กดแชร์ผ่าน LINE" },
   { n: 2, title: "เพื่อนเพิ่มเพื่อน", sub: "แล้วพิมพ์ “ใช้รหัส” ของคุณ" },
-  { n: 3, title: "รับตังสะสมทั้งคู่", sub: "เมื่อเพื่อนจดรายการแรก" },
+  { n: 3, title: "รับเหรียญสะสมทั้งคู่", sub: "เมื่อเพื่อนจดรายการแรก" },
 ] as const;
 
 export default function InvitePage() {
@@ -42,7 +42,7 @@ export default function InvitePage() {
           />
           <h1 className="text-xl font-extrabold leading-snug text-primary">
             ชวนเพื่อนมาจดใช้งาน
-            <span className="block text-foreground">รับตังสะสมฟรี!</span>
+            <span className="block text-foreground">รับเหรียญสะสมฟรี!</span>
           </h1>
         </div>
       </header>
@@ -62,7 +62,7 @@ function Content({ me, onChanged }: { me: Me; onChanged: () => void }) {
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
 
-  const shareText = `มาจดรายรับรายจ่ายง่าย ๆ ในไลน์กับจดตังค์ (JodTang) ด้วยกันนะ เพิ่มเพื่อนแล้วพิมพ์ "ใช้รหัส ${me.referralCode}" ทั้งคู่ได้โบนัสตังสะสม${
+  const shareText = `มาจดรายรับรายจ่ายง่าย ๆ ในไลน์กับจดตังค์ (JodTang) ด้วยกันนะ เพิ่มเพื่อนแล้วพิมพ์ "ใช้รหัส ${me.referralCode}" ทั้งคู่ได้โบนัสเหรียญสะสม${
     LINK ? `\n${LINK}` : ""
   }`;
 
@@ -117,7 +117,7 @@ function Content({ me, onChanged }: { me: Me; onChanged: () => void }) {
             <dd className="num font-bold">{me.referrals} คน</dd>
           </div>
           <div className="flex justify-between gap-2">
-            <dt className="text-muted">ตังสะสมของคุณ</dt>
+            <dt className="text-muted">เหรียญสะสมของคุณ</dt>
             <dd className="num font-bold">{me.points}</dd>
           </div>
         </dl>
@@ -130,11 +130,11 @@ function Content({ me, onChanged }: { me: Me; onChanged: () => void }) {
         <div className="grid grid-cols-2 gap-2 text-center">
           <div className="rounded-2xl bg-primary-soft p-3">
             <p className="text-xs text-muted">คุณได้รับ</p>
-            <p className="num text-lg font-bold text-primary">+{REFERRAL_BONUS_REFERRER} ตัง</p>
+            <p className="num text-lg font-bold text-primary">+{REFERRAL_BONUS_REFERRER} เหรียญ</p>
           </div>
           <div className="rounded-2xl bg-warn-soft p-3">
             <p className="text-xs text-muted">เพื่อนได้รับ</p>
-            <p className="num text-lg font-bold text-warn">+{REFERRAL_BONUS_REFEREE} ตัง</p>
+            <p className="num text-lg font-bold text-warn">+{REFERRAL_BONUS_REFEREE} เหรียญ</p>
           </div>
         </div>
       </section>
@@ -197,7 +197,7 @@ function Content({ me, onChanged }: { me: Me; onChanged: () => void }) {
         <section className={cardClass} aria-label="กรอกรหัสจากเพื่อน">
           <h2 className="font-semibold">มีรหัสจากเพื่อน?</h2>
           <p className="text-xs text-muted">
-            ใช้ได้ภายในไม่กี่วันแรกหลังเริ่มใช้งาน พอจดรายการแรก ทั้งคู่ได้โบนัสตังสะสม
+            ใช้ได้ภายในไม่กี่วันแรกหลังเริ่มใช้งาน พอจดรายการแรก ทั้งคู่ได้โบนัสเหรียญสะสม
           </p>
           <div className="flex gap-2">
             <input

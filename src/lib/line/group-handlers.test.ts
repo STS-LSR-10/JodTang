@@ -551,7 +551,7 @@ describe("what the group can never see", () => {
       "เป้าหมาย",
       "บิล",
       "สรุปเดือนนี้ของฉัน",
-      "ตังสะสม",
+      "เหรียญสะสม",
       "ค้นหา กาแฟ",
     ]) {
       await handleEvent(inGroup("Uanna", t), deps);

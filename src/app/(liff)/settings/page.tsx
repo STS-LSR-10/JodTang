@@ -258,7 +258,7 @@ export default function SettingsPage() {
                 href="/invite"
                 icon={<Gift className="h-[18px] w-[18px]" />}
                 title="ชวนเพื่อน"
-                sub="รหัสชวนของคุณ และรับตังสะสมทั้งคู่"
+                sub="รหัสชวนของคุณ และรับเหรียญสะสมทั้งคู่"
                 value={me.data.referrals > 0 ? `${me.data.referrals} คน` : undefined}
               />
               <MenuButton

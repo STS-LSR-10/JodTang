@@ -21,6 +21,8 @@ describe("parseCommand", () => {
   });
 
   it.each([
+    ["เหรียญสะสม", { kind: "points" }],
+    ["เหรียญ", { kind: "points" }],
     ["ตังสะสม", { kind: "points" }],
     ["แต้ม", { kind: "points" }],
     ["รหัสชวน", { kind: "my-code" }],

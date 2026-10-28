@@ -371,7 +371,7 @@ export default function UpgradePage() {
         ) : null}
         <p className="flex items-start gap-1 text-xs text-muted">
           <Sparkles className="mt-0.5 h-3 w-3 shrink-0" aria-hidden />
-          ยังไม่มีเงินสด? สะสมตังจากการจดทุกวันแล้วแลกเป็นวันใช้ Pro ได้ที่หน้าตั้งค่า
+          ยังไม่มีเงินสด? สะสมเหรียญจากการจดทุกวันแล้วแลกเป็นวันใช้ Pro ได้ที่หน้าตั้งค่า
         </p>
 
         <Comparison />
