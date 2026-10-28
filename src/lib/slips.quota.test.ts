@@ -6,23 +6,13 @@ import { handleSlipImage, type SlipDeps } from "./slips";
 
 let plan = "free";
 let used = 0;
-let teaserLeft = true;
-const refunds: number[] = [];
-vi.mock("@/lib/upsell", () => ({
-  takeTeaserSlip: async () => {
-    const ok = teaserLeft;
-    teaserLeft = false;
-    return ok;
-  },
-  refundTeaserSlip: async () => {
-    refunds.push(1);
-  },
-  claimUpsellCard: async () => false,
-}));
+let usedWeek = 0;
+vi.mock("@/lib/upsell", () => ({ claimUpsellCard: async () => false }));
 vi.mock("@/lib/slip-repo", async (original) => ({
   ...(await original<typeof import("@/lib/slip-repo")>()),
   getUserPlanRow: async () => ({ plan, plan_expires_at: null }),
   countSlipsThisMonth: async () => used,
+  countSlipsThisWeek: async () => usedWeek,
 }));
 
 const fetchImage = vi.fn(async () => {
@@ -45,23 +35,23 @@ const run = async () => {
 beforeEach(() => {
   plan = "free";
   used = 0;
-  teaserLeft = true;
-  refunds.length = 0;
+  usedWeek = 0;
   fetchImage.mockClear();
 });
 
 describe("slip quota by plan", () => {
-  it("Free gets one free read; a read that fails gives it back", async () => {
-    await expect(run()).rejects.toThrow("stop after the quota check");
-    expect(fetchImage).toHaveBeenCalledTimes(1);
-    expect(refunds).toHaveLength(1);
+  it("Free reads the 1st, 2nd and 3rd photo of the week", async () => {
+    for (usedWeek = 0; usedWeek < 3; usedWeek++) {
+      fetchImage.mockClear();
+      await expect(run()).rejects.toThrow("stop after the quota check");
+      expect(fetchImage).toHaveBeenCalledTimes(1);
+    }
   });
 
-  it("Free with the free read used up is pitched an upgrade, and nothing is downloaded", async () => {
-    teaserLeft = false;
+  it("Free with 3 photos already this week is pitched an upgrade, and nothing is downloaded", async () => {
+    usedWeek = 3;
     expect(await run()).toBe(SLIP_LOCKED_TEXT);
     expect(fetchImage).not.toHaveBeenCalled();
-    expect(refunds).toHaveLength(0);
   });
 
   it("Pro is stopped at 30 slips a month", async () => {

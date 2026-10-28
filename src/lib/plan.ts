@@ -55,6 +55,9 @@ export const SLIP_LIMIT: Record<Plan, number | null> = {
   ultimate: null,
 };
 
+/** Slip photos a Free account can have read per week (Bangkok Monday to Sunday). */
+export const FREE_SLIPS_PER_WEEK = 3;
+
 /**
  * "Unlimited" on Elite means normal use. Past these a month, the paid-per-use AI calls stop until
  * the 1st (typing still works). Shown on the upgrade page as a footnote, so nobody is surprised.

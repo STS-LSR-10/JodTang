@@ -51,6 +51,26 @@ export async function countSlipsThisMonth(
   return count ?? 0;
 }
 
+/** Slips this user has sent in the current Bangkok week, Monday to Sunday (the Free quota). */
+export async function countSlipsThisWeek(
+  db: SupabaseClient,
+  userId: string,
+  now: Date,
+): Promise<number> {
+  const p = bangkokParts(now);
+  const sinceMonday = (p.weekday + 6) % 7;
+  const from = fromBangkok(p.year, p.month, p.day - sinceMonday);
+  const to = fromBangkok(p.year, p.month, p.day - sinceMonday + 7);
+  const { count, error } = await db
+    .from("slips")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", userId)
+    .gte("created_at", from.toISOString())
+    .lt("created_at", to.toISOString());
+  if (error) fail("count slips this week", error);
+  return count ?? 0;
+}
+
 export async function findSlipByHash(
   db: SupabaseClient,
   userId: string,

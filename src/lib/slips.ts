@@ -11,17 +11,24 @@ import {
   SLIP_LOCKED_TEXT,
   SLIP_FAIR_USE_TEXT,
   SLIP_QUOTA_TEXT,
-  SLIP_TEASER_TEXT,
+  SLIP_FREE_LEFT_TEXT,
   SLIP_UNREADABLE_TEXT,
   text,
 } from "@/lib/line/messages";
 import { formatBaht, toSatang } from "@/lib/money";
 import type { SlipImage, SlipOcrProvider } from "@/lib/ocr/provider";
 import { sanitizeSlip } from "@/lib/ocr/slip-schema";
-import { effectivePlan, FAIR_USE, SLIP_LIMIT, slipsRemaining } from "@/lib/plan";
+import {
+  effectivePlan,
+  FAIR_USE,
+  FREE_SLIPS_PER_WEEK,
+  SLIP_LIMIT,
+  slipsRemaining,
+} from "@/lib/plan";
 import { insertTransaction, loadCategories, loadMemoryFor, type UserRow } from "@/lib/repo";
 import {
   countSlipsThisMonth,
+  countSlipsThisWeek,
   findSlipByHash,
   findSlipByRef,
   findTransactionBySlip,
@@ -29,9 +36,7 @@ import {
   insertSlip,
   SLIP_BUCKET,
 } from "@/lib/slip-repo";
-import { refundTeaserSlip, takeTeaserSlip } from "@/lib/upsell";
 import { upsellReply } from "@/lib/line/upsell-reply";
-import { log } from "@/lib/log";
 import type { LineMessage } from "@/lib/types";
 
 export interface SlipDeps {
@@ -69,26 +74,24 @@ export async function handleSlipImage(
   // 1. quota (failed reads are never inserted, so they never count)
   const planRow = await getUserPlanRow(db, user.id);
   const plan = effectivePlan(planRow.plan, planRow.plan_expires_at, now);
-  // Free: one free read per account for life (a taste); after that the upgrade pitch. A read that
-  // does not end up recorded gives the free read back (see the `finally` below).
-  let teaser = false;
+  // Free: a few reads a week (a taste); past that the upgrade pitch. Failed reads are never
+  // inserted, so they never count.
+  let freeLeft: number | null = null;
   if (SLIP_LIMIT[plan] === 0) {
-    teaser = await takeTeaserSlip(db, user.id);
-    if (!teaser) return upsellReply(db, user.id, now, "slip", SLIP_LOCKED_TEXT);
+    const usedWeek = await countSlipsThisWeek(db, user.id, now);
+    if (usedWeek >= FREE_SLIPS_PER_WEEK) {
+      return upsellReply(db, user.id, now, "slip", SLIP_LOCKED_TEXT);
+    }
+    freeLeft = FREE_SLIPS_PER_WEEK - usedWeek - 1;
   }
   let recorded = false;
-  try {
-    const messages = await readSlip();
-    return teaser && recorded ? [...messages, text(SLIP_TEASER_TEXT)] : messages;
-  } finally {
-    if (teaser && !recorded)
-      await refundTeaserSlip(db, user.id).catch((e) => log.error("teaser_refund_failed", e));
-  }
+  const messages = await readSlip();
+  return freeLeft !== null && recorded ? [...messages, text(SLIP_FREE_LEFT_TEXT(freeLeft))] : messages;
 
   async function readSlip(): Promise<LineMessage[]> {
     const used = await countSlipsThisMonth(db, user.id, now);
     const remaining = slipsRemaining(plan, used);
-    if (!teaser && remaining !== null && remaining <= 0) return [text(SLIP_QUOTA_TEXT)];
+    if (freeLeft === null && remaining !== null && remaining <= 0) return [text(SLIP_QUOTA_TEXT)];
     // "unlimited" is normal use: past the fair-use ceiling the paid-per-use reading stops until the 1st
     if (plan === "ultimate" && used >= FAIR_USE.slips) {
       return [text(SLIP_FAIR_USE_TEXT(FAIR_USE.slips))];

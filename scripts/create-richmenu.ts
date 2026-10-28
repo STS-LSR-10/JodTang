@@ -132,9 +132,9 @@ async function main() {
       case "compose":
         return compose;
       case "scan":
-        // silent postback: the bot answers Pro and above with camera / album buttons, Free with
-        // the upgrade card (a Rich Menu button cannot open the camera for some people only)
-        return { type: "postback", label, data: "a=scan" };
+        // opens the phone camera at once; the picture then arrives as an ordinary image message and
+        // the bot checks the plan (Free: 3 a week, then the upgrade card)
+        return { type: "uri", label, uri: "line://nv/camera/" };
       case "help":
         // sends "วิธีใช้งาน" as the user's message; the bot asks what they want to know (topic chips)
         return { type: "message", label, text: "วิธีใช้งาน" };
