@@ -1477,7 +1477,7 @@ async function confirmCard(
         ? "รายสัปดาห์"
         : `รายเดือน (วันที่ ${settings.cycle_start_day})`,
     logoUrl: process.env.APP_BASE_URL
-      ? `${process.env.APP_BASE_URL.replace(/\/$/, "")}/logo.png`
+      ? `${process.env.APP_BASE_URL.replace(/\/$/, "")}/success-logo.png`
       : undefined,
   });
 }

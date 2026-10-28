@@ -38,7 +38,7 @@ export interface ConfirmCardInput {
   editUrl?: string;
   /** The card confirms an edit ("แก้ไขรายการสำเร็จ") rather than a new entry. */
   edited?: boolean;
-  /** Public PNG of the logo for the card header (omitted when the app URL is unknown). */
+  /** Public PNG of the mascot for the card header (omitted when the app URL is unknown). */
   logoUrl?: string;
 }
 
@@ -175,7 +175,7 @@ export function buildConfirmMessage(input: ConfirmCardInput): LineMessage {
     header.push({
       type: "image",
       url: input.logoUrl,
-      size: "64px",
+      size: "72px",
       aspectMode: "fit",
       flex: 0,
     });
