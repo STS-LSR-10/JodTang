@@ -150,10 +150,9 @@ export const splitDoneText = (lines: { title: string; amountBaht: string }[], to
 // ───── photos attached to entries ─────
 export const PHOTO_LOCKED_TEXT =
   'การแนบรูปประกอบรายการเป็นฟีเจอร์ของแผน Pro ขึ้นไป ลองทดลองใช้ฟรี 7 วันได้ที่เมนู "อัปเกรด" นะ';
-export const PHOTO_ASK_TEXT =
-  "ส่งรูปที่ต้องการแนบมาได้เลย (ภายใน 10 นาที) ถ้าส่งรูปอื่นภายหลัง ระบบจะอ่านเป็นสลิปตามปกติ";
-export const PHOTO_ASK_REPLACE_TEXT =
-  "รายการนี้มีรูปแนบอยู่แล้ว ส่งรูปใหม่มาได้เลย (ภายใน 10 นาที) รูปใหม่จะมาแทนรูปเดิมนะ";
+// Short on purpose: the camera / album buttons ride on this one line.
+export const PHOTO_ASK_TEXT = "📎 เลือกรูปที่จะแนบ";
+export const PHOTO_ASK_REPLACE_TEXT = "📎 เลือกรูปใหม่ (แทนรูปเดิม)";
 export const PHOTO_LIMIT_TEXT =
   "เดือนนี้แนบรูปครบจำนวนแล้ว ไว้เดือนหน้าแนบเพิ่มได้ใหม่นะ ตอนนี้จดรายการได้ตามปกติ";
 export const PHOTO_ATTACHED_TEXT = (title: string) => `แนบรูปกับ "${title}" แล้ว`;

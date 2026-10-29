@@ -85,11 +85,15 @@ describe("the แนบรูป button on the saved card (Pro and above)", () =
     const { deps, reply } = setup();
     await handleEvent(say("ข้าว 50"), deps);
     const card = sent(reply)[0] as unknown as {
-      contents: { footer: { contents: { type: string; action?: { data: string } }[] } };
+      contents: {
+        footer: { contents: { type: string; action?: { data: string; displayText?: string } }[] };
+      };
     };
     const [pill, filler] = card.contents.footer.contents;
     expect(pill?.action?.data).toBe("a=ph&id=t-ข้าว");
     expect(filler?.type).toBe("filler"); // pushes the pill to the left
+    // the tap is silent: no "แนบรูป" message appears in the chat, only the camera / album buttons
+    expect(pill?.action?.displayText).toBeUndefined();
     expect(everything(reply)).toContain("📎 แนบรูป");
   });
 

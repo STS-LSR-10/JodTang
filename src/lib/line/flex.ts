@@ -199,8 +199,8 @@ function attachPhotoPill(txId: string) {
     action: {
       type: "postback",
       label: "แนบรูป",
+      // no displayText: the tap is silent, only the camera / album buttons come back
       data: `a=ph&id=${txId}`,
-      displayText: "แนบรูป",
     },
     contents: [
       { type: "text", text: "📎 แนบรูป", size: "xs", weight: "bold", color: "#0B5D4F", flex: 0 },
