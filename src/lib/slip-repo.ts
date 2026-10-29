@@ -224,3 +224,20 @@ export async function learnMerchant(
     if (error) fail("insert memory", error);
   }
 }
+
+/** Delete every recorded entry of a slip (the "cancel the whole slip" button). Returns how many. */
+export async function cancelSlipEntries(
+  db: SupabaseClient,
+  userId: string,
+  slipId: string,
+): Promise<number> {
+  const { data, error } = await db
+    .from("transactions")
+    .update({ status: "deleted" })
+    .eq("user_id", userId)
+    .eq("slip_id", slipId)
+    .eq("status", "confirmed")
+    .select("id");
+  if (error) fail("cancel slip entries", error);
+  return (data ?? []).length;
+}

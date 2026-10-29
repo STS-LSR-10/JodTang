@@ -48,7 +48,7 @@ import {
   recentDailyKeys,
   redeemable,
 } from "@/lib/points";
-import { getSlip, getSlipItems, learnMerchant } from "@/lib/slip-repo";
+import { cancelSlipEntries, getSlip, getSlipItems, learnMerchant } from "@/lib/slip-repo";
 import { planReceiptSplit } from "@/lib/receipt-split";
 import { categoryLabel } from "@/lib/category-emoji";
 import { buildCategorySlices } from "@/lib/category-spend";
@@ -328,6 +328,7 @@ export interface HandlerDeps {
   };
 }
 
+const UUID_RE = /^[0-9a-f-]{36}$/;
 const MAX_REPLY_MESSAGES = 5;
 const MAX_CARDS_PER_REPLY = 3;
 
@@ -396,7 +397,24 @@ export async function handleEvent(event: LineEvent, deps: HandlerDeps): Promise<
           } else {
             await reply(
               await handleSlipImage(
-                { db: deps.db, now: deps.now, fetchImage: slip.fetchImage, ocr: slip.ocr },
+                {
+                  db: deps.db,
+                  now: deps.now,
+                  fetchImage: slip.fetchImage,
+                  ocr: slip.ocr,
+                  editUrl: (txId) => pageUrl(`/transactions?edit=${txId}`),
+                  logoUrl: appBaseUrl() ? `${appBaseUrl()}/success-logo.png` : undefined,
+                  onRecorded: async (made) => {
+                    const out: LineMessage[] = [];
+                    for (const t of made) {
+                      for (const a of await safeAlerts(deps, user.id, t, t.category_id)) {
+                        out.push(text(a));
+                      }
+                    }
+                    out.push(...(await awardAndNotify(deps, user.id)));
+                    return out;
+                  },
+                },
                 user,
                 event.message.id,
               ),
@@ -1950,10 +1968,25 @@ async function handlePostback(
   const action = params.get("a");
   // Rich Menu "จดตังค์": answer with the how-to card; its button opens the keyboard (a=compose-go).
   if (action === "compose") return [buildComposeCard()];
+  // The card of a recorded slip / receipt: ❌ on a row deletes that entry, "ยกเลิกทั้งใบ" all of them.
+  if (action === "rdx") {
+    const id = params.get("id") ?? "";
+    if (!UUID_RE.test(id)) return [text(NOT_FOUND_TEXT)];
+    const tx = await getTransaction(deps.db, user.id, id);
+    if (!tx || tx.status !== "confirmed" || !tx.slip_id) return [text(NOT_FOUND_TEXT)];
+    await updateTransaction(deps.db, user.id, id, { status: "deleted" });
+    return [text(`ลบแล้ว: ${tx.title} ฿${formatBaht(txAmountSatang(tx))}`)];
+  }
+  if (action === "rcx") {
+    const slipId = params.get("s") ?? "";
+    if (!UUID_RE.test(slipId)) return [text(NOT_FOUND_TEXT)];
+    const dropped = await cancelSlipEntries(deps.db, user.id, slipId);
+    return [text(dropped > 0 ? `ยกเลิกทั้งใบแล้ว ลบ ${dropped} รายการ` : NOT_FOUND_TEXT)];
+  }
   // The check card of a PDF: record or drop every entry of that file at once.
   if (action === "pdfok" || action === "pdfx") {
     const importId = params.get("i") ?? "";
-    if (!/^[0-9a-f-]{36}$/.test(importId)) return [text(NOT_FOUND_TEXT)];
+    if (!UUID_RE.test(importId)) return [text(NOT_FOUND_TEXT)];
     if (action === "pdfx") {
       const dropped = await cancelImport(deps.db, user.id, importId);
       return [text(dropped > 0 ? PDF_CANCELLED_TEXT : PDF_ALREADY_DONE_TEXT)];

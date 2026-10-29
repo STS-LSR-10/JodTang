@@ -12,7 +12,7 @@ import {
   buildConfirmMessage,
   buildTypeQuestion,
 } from "./flex";
-import { buildCategoryChooser, buildSlipCard } from "./slip-flex";
+import { buildCategoryChooser } from "./slip-flex";
 import { buildSearchCard } from "./search-flex";
 
 const base = {
@@ -110,28 +110,6 @@ describe("flex", () => {
   it("short style is a plain text message", () => {
     const msg = buildConfirmMessage({ ...base, style: "short" });
     expect(msg).toMatchObject({ type: "text", text: "จดแล้ว: กาแฟ ฿30 · อาหาร" });
-  });
-
-  it("slip card has confirm / edit / cancel and flags an unknown date", () => {
-    const msg = buildSlipCard({
-      txId: base.txId,
-      title: "ร้านกาแฟ",
-      payeeBank: "กสิกรไทย",
-      payeeAccountLast4: "1234",
-      amountSatang: 4500,
-      occurredAt: base.occurredAt,
-      dateKnown: false,
-      categoryName: "อาหาร",
-      reference: "20261014ABC123",
-    });
-    const json = JSON.stringify(msg);
-    expect(json).toContain(`a=sc&id=${base.txId}`);
-    expect(json).toContain(`a=se&id=${base.txId}`);
-    expect(json).toContain(`a=sx&id=${base.txId}`);
-    expect(json).toContain("••1234");
-    expect(json).toContain("อ่านวันที่จากสลิปไม่ได้");
-    // no long digit runs (account numbers) anywhere in the card, ignoring the transaction id
-    expect(json.replaceAll(base.txId, "")).not.toMatch(/\d{9,}/);
   });
 
   it("category chooser respects LINE's limits", () => {
@@ -241,55 +219,6 @@ describe("compose quick replies", () => {
     const m = buildCategoryKeyboardList("expense", []);
     expect(m.type).toBe("text");
     expect(m.quickReply).toBeUndefined();
-  });
-});
-
-describe("receipt card with product lines", () => {
-  const card = (items: { name: string; amountSatang: number }[], amountSatang = 10_000) =>
-    JSON.stringify(
-      buildSlipCard({
-        txId: base.txId,
-        title: "เซเว่น",
-        payeeBank: null,
-        payeeAccountLast4: null,
-        amountSatang,
-        occurredAt: new Date("2026-10-15T08:00:00Z"),
-        dateKnown: true,
-        categoryName: "อาหาร",
-        reference: null,
-        items,
-      }),
-    );
-  const two = [
-    { name: "นมสด", amountSatang: 3000 },
-    { name: "ขนมปัง", amountSatang: 7000 },
-  ];
-
-  it("lists the lines and offers to split them", () => {
-    const json = card(two);
-    expect(json).toContain("รายการในใบเสร็จ");
-    expect(json).toContain("นมสด");
-    expect(json).toContain(`"data":"a=sp&id=${base.txId}"`);
-    expect(json).toContain("แยก 2 รายการ");
-  });
-
-  it("shows at most 8 lines and says how many more", () => {
-    const many = Array.from({ length: 11 }, (_, i) => ({ name: `สินค้า${i}`, amountSatang: 100 }));
-    const json = card(many, 5000);
-    expect(json).toContain("และอีก 3 รายการ");
-    expect(json).not.toContain("สินค้า9");
-  });
-
-  it("has no split button when the lines exceed the total, and says why", () => {
-    const json = card(two, 9000);
-    expect(json).not.toContain("a=sp");
-    expect(json).toContain("เกินยอดรวม");
-  });
-
-  it("is the old card when there are no lines", () => {
-    const json = card([]);
-    expect(json).not.toContain("รายการในใบเสร็จ");
-    expect(json).not.toContain("a=sp");
   });
 });
 

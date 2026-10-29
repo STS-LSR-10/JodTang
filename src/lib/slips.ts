@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { categorizeByRules } from "@/lib/categorize/rules";
-import { buildSlipCard } from "@/lib/line/slip-flex";
+import { buildReceiptCard, type ReceiptCardEntry } from "@/lib/line/receipt-flex";
 import { extensionFor, ImageError } from "@/lib/line/content";
 import {
   ALREADY_RECORDED_TEXT,
@@ -25,7 +25,15 @@ import {
   SLIP_LIMIT,
   slipsRemaining,
 } from "@/lib/plan";
-import { insertTransaction, loadCategories, loadMemoryFor, type UserRow } from "@/lib/repo";
+import { planReceiptSplit } from "@/lib/receipt-split";
+import {
+  insertTransaction,
+  loadCategories,
+  loadMemoryFor,
+  updateTransaction,
+  type TxRow,
+  type UserRow,
+} from "@/lib/repo";
 import {
   countSlipsThisMonth,
   countSlipsThisWeek,
@@ -44,6 +52,12 @@ export interface SlipDeps {
   now: () => Date;
   fetchImage: (messageId: string) => Promise<SlipImage>;
   ocr: SlipOcrProvider;
+  /** Opens the editor of one entry (the ✏️ on the card); absent -> no ✏️ button. */
+  editUrl?: (txId: string) => string | undefined;
+  /** Public https picture for the card header. */
+  logoUrl?: string;
+  /** After the entries are recorded: budget warnings, points... (extra messages after the card). */
+  onRecorded?: (entries: TxRow[]) => Promise<LineMessage[]>;
 }
 
 const sha256 = (bytes: Uint8Array) => createHash("sha256").update(bytes).digest("hex");
@@ -86,7 +100,9 @@ export async function handleSlipImage(
   }
   let recorded = false;
   const messages = await readSlip();
-  return freeLeft !== null && recorded ? [...messages, text(SLIP_FREE_LEFT_TEXT(freeLeft))] : messages;
+  return freeLeft !== null && recorded
+    ? [...messages, text(SLIP_FREE_LEFT_TEXT(freeLeft))]
+    : messages;
 
   async function readSlip(): Promise<LineMessage[]> {
     const used = await countSlipsThisMonth(db, user.id, now);
@@ -147,7 +163,7 @@ export async function handleSlipImage(
       }
     }
 
-    // 7. record the slip and a pending transaction
+    // 7. record the slip and its entries at once (every row has ✏️ / ❌ on the card)
     const slip = await insertSlip(db, { userId: user.id, storagePath: path, sha256: hash, data });
     if (!slip) {
       await discardUpload().catch(() => undefined);
@@ -160,41 +176,79 @@ export async function handleSlipImage(
       loadCategories(db, user.id),
       loadMemoryFor(db, user, now),
     ]);
-    const { categoryId } = categorizeByRules({
-      title: [data.payeeName, data.memo].filter(Boolean).join(" ") || title,
-      type: "expense",
-      categories,
-      memory,
-    });
-
     const occurredAt = data.paidAt ?? now;
-    const tx = await insertTransaction(db, {
-      userId: user.id,
-      type: "expense",
-      title,
-      amountSatang: data.amountSatang,
-      categoryId,
-      occurredAt,
-      status: "pending_confirm",
-      rawText: title,
-      source: "slip",
-      slipId: slip.id,
-    });
+
+    // Elite reads the product lines of a receipt: one entry per line, adding up to the total (the
+    // difference, VAT or service charge, is a line of its own). Everyone else: one entry.
+    const split =
+      plan === "ultimate" && data.kind === "receipt"
+        ? planReceiptSplit(data.amountSatang, data.items)
+        : null;
+    const lines = split?.ok
+      ? split.lines.map((l) => ({
+          title: l.name,
+          amountSatang: l.amountSatang,
+          rule: l.name,
+        }))
+      : [
+          {
+            title,
+            amountSatang: data.amountSatang,
+            rule: [data.payeeName, data.memo].filter(Boolean).join(" ") || title,
+          },
+        ];
+
+    const made: TxRow[] = [];
+    const entries: ReceiptCardEntry[] = [];
+    try {
+      for (const line of lines) {
+        const { categoryId } = categorizeByRules({
+          title: line.rule,
+          type: "expense",
+          categories,
+          memory,
+        });
+        const tx = await insertTransaction(db, {
+          userId: user.id,
+          type: "expense",
+          title: line.title,
+          amountSatang: line.amountSatang,
+          categoryId,
+          occurredAt,
+          status: "confirmed",
+          rawText: line.title,
+          source: "slip",
+          slipId: slip.id,
+        });
+        made.push(tx);
+        const category = categories.find((c) => c.id === categoryId);
+        entries.push({
+          txId: tx.id,
+          type: "expense",
+          title: line.title,
+          amountSatang: line.amountSatang,
+          occurredAt,
+          categoryName: category?.name ?? null,
+          categoryIcon: category?.icon ?? null,
+        });
+      }
+    } catch (error) {
+      // part of the receipt got in: take it back so the person can send the photo again
+      for (const t of made) {
+        await updateTransaction(db, user.id, t.id, { status: "deleted" }).catch(() => undefined);
+      }
+      throw error;
+    }
 
     return [
-      buildSlipCard({
-        txId: tx.id,
-        title,
-        payeeBank: data.payeeBank,
-        payeeAccountLast4: data.payeeAccountLast4,
-        amountSatang: data.amountSatang,
-        occurredAt,
+      buildReceiptCard({
+        slipId: slip.id,
+        entries,
         dateKnown: data.paidAt !== null,
-        categoryName: categories.find((c) => c.id === categoryId)?.name ?? null,
-        reference: data.reference,
-        // product lines are an Elite feature: others never get (or pay for) them
-        items: plan === "ultimate" && data.kind === "receipt" ? data.items : [],
+        editUrl: deps.editUrl,
+        logoUrl: deps.logoUrl,
       }),
+      ...((await deps.onRecorded?.(made)) ?? []),
     ];
   }
 }

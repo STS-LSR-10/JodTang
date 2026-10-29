@@ -68,7 +68,7 @@ export function shareText(input: ConfirmCardInput): string {
   return `${input.title} ${sign}฿${formatBaht(input.amountSatang)} (${formatThaiDate(input.occurredAt)}) · จดด้วยจดตังค์`;
 }
 
-const chip = (label: string, bg: string, color: string, action: unknown, width = "40px") => ({
+export const chip = (label: string, bg: string, color: string, action: unknown, width = "40px") => ({
   type: "box",
   layout: "vertical",
   width,
