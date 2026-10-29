@@ -52,6 +52,8 @@ export interface ConfirmCardInput {
   walletChoices?: { id: string; label: string; selected: boolean }[];
   /** There are more wallets than the row shows: add an "อื่น ๆ" chip that lists them all. */
   moreWallets?: boolean;
+  /** Show the small "📎 แนบรูป" button at the bottom-left; a tap starts the photo step. */
+  photoButton?: boolean;
   /** Public PNG of the mascot for the card header (omitted when the app URL is unknown). */
   logoUrl?: string;
 }
@@ -179,6 +181,31 @@ export function paymentRow(
       ],
     },
   ];
+}
+
+/** The small "📎 แนบรูป" pill: a tap opens the camera / album step for this entry. */
+function attachPhotoPill(txId: string) {
+  return {
+    type: "box",
+    layout: "horizontal",
+    flex: 0,
+    height: "32px",
+    cornerRadius: "16px",
+    paddingStart: "12px",
+    paddingEnd: "14px",
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: COLOR.primarySoft,
+    action: {
+      type: "postback",
+      label: "แนบรูป",
+      data: `a=ph&id=${txId}`,
+      displayText: "แนบรูป",
+    },
+    contents: [
+      { type: "text", text: "📎 แนบรูป", size: "xs", weight: "bold", color: "#0B5D4F", flex: 0 },
+    ],
+  };
 }
 
 const LEVEL_COLOR = { ok: COLOR.primary, warn: "#B45309", over: COLOR.expense } as const;
@@ -650,6 +677,20 @@ export function buildConfirmMessage(input: ConfirmCardInput): LineMessage {
         paddingAll: "18px",
         contents: body,
       },
+      ...(input.photoButton
+        ? {
+            footer: {
+              type: "box",
+              layout: "horizontal",
+              backgroundColor: COLOR.surface,
+              paddingTop: "0px",
+              paddingBottom: "14px",
+              paddingStart: "18px",
+              paddingEnd: "18px",
+              contents: [attachPhotoPill(input.txId), { type: "filler" }],
+            },
+          }
+        : {}),
     },
   };
 }

@@ -47,7 +47,6 @@ vi.mock("@/lib/slip-repo", async (original) => ({
 }));
 vi.mock("@/lib/photo-repo", () => ({
   getLivePhotoWait: async () => null,
-  PHOTO_OFFER_WAIT_MINUTES: 3,
 }));
 vi.mock("@/lib/wallet-repo", async (original) => ({
   ...(await original<typeof import("@/lib/wallet-repo")>()),

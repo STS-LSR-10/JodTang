@@ -82,7 +82,7 @@ test.describe("photo offer after a save (360px)", () => {
   test("Free sees it locked; Pro can switch it off", async ({ page }) => {
     await mockApi(page, { ...COMMON, "GET /api/settings": SETTINGS, "GET /api/me": ME_FREE });
     await page.goto("/settings");
-    const free = page.getByRole("region", { name: "ชวนแนบรูปหลังจด" });
+    const free = page.getByRole("region", { name: "ปุ่มแนบรูปบนการ์ด" });
     await expect(free.getByText("สำหรับแผน Pro")).toBeVisible();
     await expect(free.getByRole("switch")).toBeDisabled();
     await expectNoHorizontalScroll(page);
@@ -100,7 +100,7 @@ test.describe("photo offer after a save (360px)", () => {
       },
     });
     await page.goto("/settings");
-    const card = page.getByRole("region", { name: "ชวนแนบรูปหลังจด" });
+    const card = page.getByRole("region", { name: "ปุ่มแนบรูปบนการ์ด" });
     await expect(card.getByRole("switch")).toBeChecked();
     await card.getByRole("switch").click();
     await expect.poll(() => bodies.length).toBe(1);

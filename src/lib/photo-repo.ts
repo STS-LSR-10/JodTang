@@ -4,8 +4,6 @@ import { bangkokParts, fromBangkok } from "@/lib/thai-date";
 
 /** How long "send me the photo" stays open after the person taps the button. */
 export const PHOTO_WAIT_MINUTES = 10;
-/** After the automatic offer the window is short, so a slip sent a bit later is not taken for a photo. */
-export const PHOTO_OFFER_WAIT_MINUTES = 3;
 
 function fail(context: string, error: { message: string }): never {
   throw new Error(`${context}: ${error.message}`);

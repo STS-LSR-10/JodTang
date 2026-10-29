@@ -6,7 +6,7 @@ import { PlusLock } from "./plus-lock";
 import { Switch } from "./switch";
 import { cardClass, type Me, type Settings } from "./types";
 
-/** "Offer me a photo after I record something" (the camera and album buttons under the card). */
+/** Show the small "แนบรูป" button on the card of a saved entry (a tap opens the camera / album step). */
 export function PhotoPromptCard({
   me,
   settings,
@@ -40,17 +40,18 @@ export function PhotoPromptCard({
   }
 
   return (
-    <section className={cardClass} aria-label="ชวนแนบรูปหลังจด">
+    <section className={cardClass} aria-label="ปุ่มแนบรูปบนการ์ด">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <h2 className="font-semibold">ชวนแนบรูปหลังจด</h2>
+          <h2 className="font-semibold">ปุ่มแนบรูปบนการ์ด</h2>
           <p className="text-xs text-muted">
-            หลังจดรายการ บอทมีปุ่มถ่ายรูป/เลือกจากอัลบั้มให้แนบใบเสร็จหรือสินค้าต่อท้าย
+            การ์ดจดสำเร็จมีปุ่ม “แนบรูป” เล็ก ๆ มุมซ้ายล่าง
+            กดแล้วถ่ายรูปหรือเลือกจากอัลบั้มเพื่อแนบใบเสร็จหรือสินค้า
           </p>
         </div>
         <Switch
           checked={enabled && !locked}
-          label="ชวนแนบรูปหลังจด"
+          label="ปุ่มแนบรูปบนการ์ด"
           disabled={busy || locked}
           onChange={() => void toggle()}
         />

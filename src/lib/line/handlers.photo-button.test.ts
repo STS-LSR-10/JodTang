@@ -1,12 +1,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { handleEvent, type HandlerDeps, type LineEvent } from "./handlers";
-import { PHOTO_OFFER_TEXT } from "./messages";
 
-let style = "short";
+let style = "full";
 let photoPrompt: boolean | undefined = true;
 let plan = "plus";
-let photosUsed = 0;
 const waits: unknown[][] = [];
 
 vi.mock("@/lib/repo", async (original) => ({
@@ -40,10 +38,14 @@ vi.mock("@/lib/repo", async (original) => ({
 }));
 vi.mock("@/lib/photo-repo", async (original) => ({
   ...(await original<typeof import("@/lib/photo-repo")>()),
-  countPhotosThisMonth: async () => photosUsed,
+  countPhotosThisMonth: async () => 0,
   startPhotoWait: async (...a: unknown[]) => {
     waits.push(a);
   },
+}));
+vi.mock("@/lib/slip-repo", async (original) => ({
+  ...(await original<typeof import("@/lib/slip-repo")>()),
+  getUserPlanRow: async () => ({ plan, plan_expires_at: null }),
 }));
 
 const say = (t: string): LineEvent => ({
@@ -66,59 +68,67 @@ function setup() {
   };
   return { deps, reply };
 }
-type Sent = { text?: string; quickReply?: { items: { action: { type: string } }[] } };
+type Sent = { type: string; text?: string; quickReply?: unknown };
 const sent = (reply: ReturnType<typeof setup>["reply"]) =>
   (reply.mock.calls[0]?.[1] ?? []) as Sent[];
+const everything = (reply: ReturnType<typeof setup>["reply"]) => JSON.stringify(sent(reply));
 
 beforeEach(() => {
-  style = "short";
+  style = "full";
   photoPrompt = true;
   plan = "plus";
-  photosUsed = 0;
   waits.length = 0;
 });
 
-describe("the photo offer after a save (Pro and above)", () => {
-  it("comes last with camera and album buttons, and the next image belongs to that entry", async () => {
+describe("the แนบรูป button on the saved card (Pro and above)", () => {
+  it("sits at the bottom-left of the card and points at that entry", async () => {
     const { deps, reply } = setup();
     await handleEvent(say("ข้าว 50"), deps);
-    const last = sent(reply).at(-1);
-    expect(last?.text).toBe(PHOTO_OFFER_TEXT);
-    expect(last?.quickReply?.items.map((i) => i.action.type)).toEqual(["camera", "cameraRoll"]);
-    expect(waits).toHaveLength(1);
-    expect(waits[0]?.[2]).toBe("t-ข้าว"); // the entry
-    expect(waits[0]?.[4]).toBe(3); // a short window, so a slip sent later is still a slip
+    const card = sent(reply)[0] as unknown as {
+      contents: { footer: { contents: { type: string; action?: { data: string } }[] } };
+    };
+    const [pill, filler] = card.contents.footer.contents;
+    expect(pill?.action?.data).toBe("a=ph&id=t-ข้าว");
+    expect(filler?.type).toBe("filler"); // pushes the pill to the left
+    expect(everything(reply)).toContain("📎 แนบรูป");
   });
 
-  it("is not sent to Free, nor once the month's 100 photos are used", async () => {
+  it("nothing is asked after the save, and nothing waits for a photo until the button is tapped", async () => {
+    const { deps, reply } = setup();
+    await handleEvent(say("ข้าว 50"), deps);
+    expect(sent(reply).some((m) => m.quickReply !== undefined)).toBe(false);
+    expect(everything(reply)).not.toContain("อยากแนบรูป");
+    expect(waits).toHaveLength(0);
+  });
+
+  it("every card of a multi-entry message has its own button", async () => {
+    const { deps, reply } = setup();
+    await handleEvent(say("กาแฟ 45\nข้าว 50"), deps);
+    const json = everything(reply);
+    expect(json).toContain("a=ph&id=t-กาแฟ");
+    expect(json).toContain("a=ph&id=t-ข้าว");
+  });
+
+  it("is not on a Free card, nor when the person turned it off", async () => {
     plan = "free";
     const a = setup();
     await handleEvent(say("ข้าว 50"), a.deps);
-    expect(sent(a.reply).some((m) => m.text === PHOTO_OFFER_TEXT)).toBe(false);
+    expect(everything(a.reply)).not.toContain("a=ph");
     plan = "plus";
-    photosUsed = 100;
+    photoPrompt = false;
     const b = setup();
     await handleEvent(say("ข้าว 50"), b.deps);
-    expect(sent(b.reply).some((m) => m.text === PHOTO_OFFER_TEXT)).toBe(false);
-    expect(waits).toHaveLength(0);
+    expect(everything(b.reply)).not.toContain("a=ph");
   });
 
-  it("is not sent when the person turned it off, or has cards turned off", async () => {
-    photoPrompt = false;
+  it("is not on the short card or when cards are off", async () => {
+    style = "short";
     const a = setup();
     await handleEvent(say("ข้าว 50"), a.deps);
-    expect(waits).toHaveLength(0);
-    photoPrompt = true;
+    expect(everything(a.reply)).not.toContain("a=ph");
     style = "off";
     const b = setup();
     await handleEvent(say("ข้าว 50"), b.deps);
-    expect(waits).toHaveLength(0);
-  });
-
-  it("is not sent for several entries in one message", async () => {
-    const { deps, reply } = setup();
-    await handleEvent(say("กาแฟ 45\nข้าว 50"), deps);
-    expect(sent(reply).some((m) => m.text === PHOTO_OFFER_TEXT)).toBe(false);
-    expect(waits).toHaveLength(0);
+    expect(everything(b.reply)).not.toContain("a=ph");
   });
 });
