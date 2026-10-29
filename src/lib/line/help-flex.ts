@@ -498,7 +498,8 @@ export function topicBubble(input: {
       ? [
           {
             type: "image",
-            url: `${input.appUrl}/logo.png`,
+            // LINE keeps pictures by their address: bump `v` whenever public/logo.png changes
+            url: `${input.appUrl}/logo.png?v=2`,
             size: "36px",
             aspectMode: "fit",
             flex: 0,
