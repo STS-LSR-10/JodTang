@@ -81,7 +81,7 @@ import {
   rangeLabel,
   summarize,
 } from "@/lib/summary-report";
-import { handleSlipImage } from "@/lib/slips";
+import { handleSlipImage, type SlipCardExtras } from "@/lib/slips";
 import type { PdfReader } from "@/lib/ai/pdf-reader";
 import { cancelImport, confirmImport } from "@/lib/pdf-repo";
 import { handlePdfMessage, type PdfDeps } from "./pdf";
@@ -135,8 +135,8 @@ import {
 import { limitAlert } from "@/lib/card";
 import { loadCardStatuses } from "@/lib/card-repo";
 import { createTransfer, deleteTransfer } from "@/lib/transfer-repo";
-import { ensureWallets, listWallets, setEntryWallet } from "@/lib/wallet-repo";
-import { balanceOf, resolveWallet, walletLabel } from "@/lib/wallet";
+import { ensureWallets, listWallets, setEntryWallet, setSlipWallet } from "@/lib/wallet-repo";
+import { balanceOf, resolveWallet, walletLabel, type Wallet } from "@/lib/wallet";
 import { walletCapacity } from "@/lib/plan";
 import { buildSearchCard } from "./search-flex";
 import {
@@ -221,6 +221,8 @@ import {
   VOICE_CANCELLED_TEXT,
   WALLET_AMBIGUOUS_TEXT,
   WALLET_MOVE_ASK_TEXT,
+  WALLET_SLIP_ASK_TEXT,
+  WALLET_SLIP_MOVED_TEXT,
   WALLET_MOVED_TEXT,
   WALLET_NOT_FOUND_TEXT,
   CARD_LOCKED_TEXT,
@@ -410,16 +412,7 @@ export async function handleEvent(event: LineEvent, deps: HandlerDeps): Promise<
                   ocr: slip.ocr,
                   editUrl: (txId) => pageUrl(`/transactions?edit=${txId}`),
                   logoUrl: appBaseUrl() ? `${appBaseUrl()}/success-logo.png` : undefined,
-                  onRecorded: async (made) => {
-                    const out: LineMessage[] = [];
-                    for (const t of made) {
-                      for (const a of await safeAlerts(deps, user.id, t, t.category_id)) {
-                        out.push(text(a));
-                      }
-                    }
-                    out.push(...(await awardAndNotify(deps, user.id)));
-                    return out;
-                  },
+                  extras: (made) => receiptCardExtras(deps, user, made),
                 },
                 user,
                 event.message.id,
@@ -1186,6 +1179,91 @@ async function readWithAi(
   return [text(SMART_PREFACE_TEXT), ...cards];
 }
 
+/**
+ * What the card of a slip / receipt carries under its rows, like the card of a typed entry: the
+ * budget(s) these entries count against with the warning when they crossed a line, the daily-limit
+ * and card-limit warnings, and the "จ่ายด้วย" row (moves the whole slip). Never throws past a
+ * failed part: each part is best effort.
+ */
+async function receiptCardExtras(
+  deps: HandlerDeps,
+  user: UserRow,
+  made: TxRow[],
+): Promise<SlipCardExtras> {
+  const { db } = deps;
+  const now = deps.now();
+  const extras: SlipCardExtras = { budgets: [], notices: [] };
+  const first = made[0];
+  if (!first) return extras;
+
+  try {
+    const [settings, mode] = await Promise.all([
+      getSettings(db, user.id),
+      getBudgetMode(db, user.id).catch(() => "overall" as const),
+    ]);
+    extras.cycleLabel =
+      settings.budget_cycle === "weekly"
+        ? "รายสัปดาห์"
+        : `รายเดือน (วันที่ ${settings.cycle_start_day})`;
+    // the budget an entry counts against: the overall one, or its category's
+    const scopes = new Map<string, { categoryId: string | null; satang: number }>();
+    for (const t of made) {
+      const key = mode === "category" ? (t.category_id ?? "none") : "all";
+      const scope = scopes.get(key) ?? { categoryId: t.category_id, satang: 0 };
+      scope.satang += txAmountSatang(t);
+      scopes.set(key, scope);
+    }
+    for (const scope of [...scopes.values()].slice(0, 3)) {
+      const reading = await budgetReadingFor(db, {
+        userId: user.id,
+        type: "expense",
+        categoryId: scope.categoryId,
+        amountSatang: scope.satang,
+        occurredAt: new Date(first.occurred_at),
+        now,
+      });
+      if (!reading) continue;
+      extras.budgets?.push(reading.status);
+      if (reading.notice) {
+        extras.notices?.push({
+          text: reading.notice,
+          level: reading.status.level === "over" ? "over" : "warn",
+        });
+      }
+    }
+  } catch (error) {
+    log.error("slip_budget_status_failed", error);
+  }
+
+  const others = [
+    ...(await safeDailyAlerts(
+      deps,
+      user.id,
+      made.map((tx) => ({ tx })),
+    )),
+    ...(await cardLimitAlerts(
+      deps,
+      user,
+      made.map((t) => ({ walletId: null, amountSatang: txAmountSatang(t) })),
+    )),
+  ];
+  for (const text of others) extras.notices?.push({ text, level: "warn" });
+
+  try {
+    const wallets = await listWallets(db, user.id);
+    const main = wallets.find((w) => w.isDefault);
+    if (wallets.length > 1 && main) {
+      const { choices, more } = walletPills(wallets, main);
+      extras.payment = { choices, more };
+    }
+  } catch (error) {
+    log.error("slip_wallets_failed", error);
+  }
+
+  extras.after = await awardAndNotify(deps, user.id);
+  return extras;
+}
+
 async function saveEntries(
   entries: ParsedEntry[],
   user: UserRow,
@@ -1557,6 +1635,20 @@ async function offerPhoto(
   }
 }
 
+/** The "จ่ายด้วย" pills: the chosen wallet first, then the others; with more than three, two and "อื่น ๆ". */
+function walletPills(wallets: Wallet[], chosen: Wallet) {
+  const shown = wallets.length <= 3 ? 3 : 2;
+  const ordered = [chosen, ...wallets.filter((w) => w.id !== chosen.id)];
+  return {
+    choices: ordered.slice(0, shown).map((w) => ({
+      id: w.id,
+      label: walletLabel(w),
+      selected: w.id === chosen.id,
+    })),
+    more: wallets.length > shown,
+  };
+}
+
 /** What a caller adds to the entry card beyond the entry itself. */
 interface CardExtras {
   /** Everything just added to the budget this entry counts against (several entries of one message). */
@@ -1631,14 +1723,7 @@ async function confirmCard(
   let walletChoices: { id: string; label: string; selected: boolean }[] | undefined;
   let moreWallets = false;
   if (style === "full" && multi && wallet && !edited) {
-    const shown = wallets.length <= 3 ? 3 : 2;
-    const ordered = [wallet, ...wallets.filter((w) => w.id !== wallet.id)];
-    walletChoices = ordered.slice(0, shown).map((w) => ({
-      id: w.id,
-      label: walletLabel(w),
-      selected: w.id === wallet.id,
-    }));
-    moreWallets = wallets.length > shown;
+    ({ choices: walletChoices, more: moreWallets } = walletPills(wallets, wallet));
   }
   return buildConfirmMessage({
     style,
@@ -2099,6 +2184,33 @@ async function handlePostback(
     if (!tx || tx.status !== "confirmed" || !tx.slip_id) return [text(NOT_FOUND_TEXT)];
     await updateTransaction(deps.db, user.id, id, { status: "deleted" });
     return [text(`ลบแล้ว: ${tx.title} ฿${formatBaht(txAmountSatang(tx))}`)];
+  }
+  // The "จ่ายด้วย" row of that card moves the whole slip to a wallet or card.
+  if (action === "wls" || action === "wms") {
+    const slipId = params.get("s") ?? "";
+    if (!UUID_RE.test(slipId)) return [text(NOT_FOUND_TEXT)];
+    const wallets = await listWallets(deps.db, user.id);
+    if (action === "wls") {
+      if (wallets.length < 2) return [];
+      return [
+        buildWalletChooser({
+          txId: "",
+          slipId,
+          wallets,
+          currentId: null,
+          text: WALLET_SLIP_ASK_TEXT,
+        }),
+      ];
+    }
+    const target = wallets.find((w) => w.id === params.get("w"));
+    if (!target) return [text(NOT_FOUND_TEXT)];
+    const moved = await setSlipWallet(
+      deps.db,
+      user.id,
+      slipId,
+      target.isDefault ? null : target.id,
+    );
+    return [text(moved > 0 ? WALLET_SLIP_MOVED_TEXT(walletLabel(target), moved) : NOT_FOUND_TEXT)];
   }
   if (action === "rcx") {
     const slipId = params.get("s") ?? "";

@@ -2,7 +2,7 @@ import { categoryLabel } from "@/lib/category-emoji";
 import { formatBaht } from "@/lib/money";
 import { formatThaiDate } from "@/lib/thai-date";
 import type { LineMessage, TxType } from "@/lib/types";
-import { chip, COLOR } from "./flex";
+import { budgetBlock, chip, COLOR, noticeBoxes, paymentRow } from "./flex";
 
 export interface ReceiptCardEntry {
   txId: string;
@@ -23,6 +23,19 @@ export interface ReceiptCardInput {
   editUrl?: (txId: string) => string | undefined;
   /** Public https picture for the header (the mascot). */
   logoUrl?: string;
+  /** Where spending stands against the budget(s) these entries count against. */
+  budgets?: {
+    scopeName: string | null;
+    spentSatang: number;
+    limitSatang: number;
+    level: "ok" | "warn" | "over";
+  }[];
+  /** "รายเดือน (วันที่ 1)": the budget cycle, shown under the budget. */
+  cycleLabel?: string;
+  /** Warnings the card carries itself (budget, daily limit, card limit). */
+  notices?: { text: string; level: "warn" | "over" }[];
+  /** Wallets / cards to pick as the way the whole slip was paid (two or more wallets). */
+  payment?: { choices: { id: string; label: string; selected: boolean }[]; more: boolean };
 }
 
 /** Rows drawn on the card; the rest are recorded all the same and are named in a line. */
@@ -196,6 +209,34 @@ export function buildReceiptCard(input: ReceiptCardInput): LineMessage {
     header.push({ type: "image", url: input.logoUrl, size: "72px", aspectMode: "fit", flex: 0 });
   }
 
+  // budget(s), warnings and "จ่ายด้วย", like the card of an entry typed in the chat
+  const tail: unknown[] = [
+    ...(input.budgets ?? []).map((b) => budgetBlock(b, input.cycleLabel)),
+    ...noticeBoxes(input.notices ?? []),
+    ...(input.payment && input.payment.choices.length > 1
+      ? paymentRow(
+          input.payment.choices.map((c) => ({
+            label: c.label,
+            selected: c.selected,
+            action: {
+              type: "postback",
+              label: "จ่ายด้วย",
+              data: `a=wms&s=${input.slipId}&w=${c.id}`,
+              displayText: `จ่ายด้วย ${c.label}`.slice(0, 40),
+            },
+          })),
+          input.payment.more
+            ? {
+                type: "postback",
+                label: "อื่น ๆ",
+                data: `a=wls&s=${input.slipId}`,
+                displayText: "เลือกช่องทางอื่น",
+              }
+            : undefined,
+        )
+      : []),
+  ];
+
   const total = input.entries.length;
   return {
     type: "flex",
@@ -216,7 +257,7 @@ export function buildReceiptCard(input: ReceiptCardInput): LineMessage {
         layout: "vertical",
         backgroundColor: COLOR.surface,
         paddingAll: "18px",
-        contents: [...body, ...notes],
+        contents: [...body, ...notes, ...tail],
       },
       ...(total > 1
         ? {

@@ -97,4 +97,48 @@ describe("receipt card", () => {
       expect((m[1] ?? "").length).toBeLessThan(300);
     expect(out.replaceAll(/[0-9a-f]{8}-[0-9a-f-]{27}/g, "")).not.toMatch(/\d{9,}/);
   });
+
+  it("carries the budget, the warnings and the payment row like a typed entry's card", () => {
+    const out = json({
+      budgets: [{ scopeName: null, spentSatang: 1_557_400, limitSatang: 1_500_000, level: "over" }],
+      cycleLabel: "รายเดือน (วันที่ 1)",
+      notices: [{ text: "เกินงบรวมแล้ว", level: "over" }],
+      payment: {
+        choices: [
+          { id: "w1", label: "💵 เงินสด", selected: true },
+          { id: "w2", label: "💳 KTC", selected: false },
+        ],
+        more: true,
+      },
+    });
+    expect(out).toContain("งบรวม");
+    expect(out).toContain("฿15,574");
+    expect(out).toContain(" / ฿15,000");
+    expect(out).toContain("รอบงบ: รายเดือน (วันที่ 1)");
+    expect(out).toContain("🚨 เกินงบรวมแล้ว");
+    expect(out).toContain("จ่ายด้วย");
+    expect(out).toContain("✓ 💵 เงินสด");
+    expect(out).toContain('"data":"a=wms&s=s1&w=w2"');
+    expect(out).not.toContain("a=wms&s=s1&w=w1"); // the chosen one is not a button
+    expect(out).toContain('"data":"a=wls&s=s1"'); // อื่น ๆ
+  });
+
+  it("shows one block per budget (a category budget for each category) and none without a budget", () => {
+    const two = json({
+      budgets: [
+        { scopeName: "อาหาร", spentSatang: 10_000, limitSatang: 100_000, level: "ok" },
+        { scopeName: "ชอปปิ้ง", spentSatang: 95_000, limitSatang: 100_000, level: "warn" },
+      ],
+    });
+    expect(two).toContain("งบหมวดอาหาร");
+    expect(two).toContain("งบหมวดชอปปิ้ง");
+    expect(json()).not.toContain("งบ");
+    expect(json()).not.toContain("จ่ายด้วย");
+  });
+
+  it("has no payment row for a single wallet", () => {
+    expect(
+      json({ payment: { choices: [{ id: "w1", label: "เงินสด", selected: true }], more: false } }),
+    ).not.toContain("จ่ายด้วย");
+  });
 });

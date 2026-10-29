@@ -217,6 +217,24 @@ export async function deleteWallet(db: SupabaseClient, userId: string, id: strin
 }
 
 /** Point an entry at a wallet (or at none = the main wallet). Returns false if it is not theirs. */
+/** Move every recorded entry of a slip to a wallet (null = the main one). Returns how many. */
+export async function setSlipWallet(
+  db: SupabaseClient,
+  userId: string,
+  slipId: string,
+  walletId: string | null,
+): Promise<number> {
+  const { data, error } = await db
+    .from("transactions")
+    .update({ account_id: walletId })
+    .eq("user_id", userId)
+    .eq("slip_id", slipId)
+    .eq("status", "confirmed")
+    .select("id");
+  if (error) fail("move slip to wallet", error);
+  return (data ?? []).length;
+}
+
 export async function setEntryWallet(
   db: SupabaseClient,
   userId: string,

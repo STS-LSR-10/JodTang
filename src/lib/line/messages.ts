@@ -189,6 +189,9 @@ export const WALLET_AMBIGUOUS_TEXT = (hint: string, names: string[]) =>
   `"${hint}" ตรงกับหลายกระเป๋า (${names.join(" · ")}) เลยยังไม่ได้จดรายการนี้\nพิมพ์ชื่อให้ชัดขึ้นอีกนิดนะ`;
 export const WALLET_MOVED_TEXT = (title: string, wallet: string) =>
   `ย้าย "${title}" ไปที่ ${wallet} แล้ว`;
+export const WALLET_SLIP_MOVED_TEXT = (wallet: string, count: number) =>
+  count > 1 ? `ย้ายทั้ง ${count} รายการไป ${wallet} แล้ว` : `ย้ายไป ${wallet} แล้ว`;
+export const WALLET_SLIP_ASK_TEXT = "ย้ายรายการของสลิปนี้ไปกระเป๋าไหนดี?";
 export const WALLET_MOVE_ASK_TEXT = "ย้ายรายการนี้ไปกระเป๋าไหนดี?";
 export const TRANSFER_LOCKED_TEXT =
   'การโอนระหว่างกระเป๋าเป็นฟีเจอร์ของแผน Pro ขึ้นไป (มีกระเป๋าได้ถึง 5 ใบ) ลองทดลองใช้ฟรี 7 วันได้ที่เมนู "อัปเกรด" นะ';

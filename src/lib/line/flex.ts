@@ -105,7 +105,7 @@ export const chip = (
 const MAX_PILL_LABEL = 9;
 
 /** One payment channel in the "จ่ายด้วย" row: filled when it is the chosen one, outlined otherwise. */
-function payPill(label: string, selected: boolean, action?: unknown) {
+export function payPill(label: string, selected: boolean, action?: unknown) {
   const short = label.length > MAX_PILL_LABEL ? `${label.slice(0, MAX_PILL_LABEL - 1)}…` : label;
   return {
     type: "box",
@@ -133,11 +133,59 @@ function payPill(label: string, selected: boolean, action?: unknown) {
   };
 }
 
+/** Warning boxes (budget, daily limit, card limit): amber for a warning, red once over. */
+export function noticeBoxes(notices: { text: string; level: "warn" | "over" }[]): unknown[] {
+  return notices.map((notice) => {
+    const over = notice.level === "over";
+    return {
+      type: "box",
+      layout: "vertical",
+      margin: "md",
+      paddingAll: "10px",
+      cornerRadius: "12px",
+      backgroundColor: over ? "#FDECEC" : "#FFF4D6",
+      contents: [
+        {
+          type: "text",
+          text: `${over ? "🚨" : "⚠️"} ${notice.text}`,
+          size: "sm",
+          wrap: true,
+          color: over ? "#9F1239" : "#7A5209",
+        },
+      ],
+    };
+  });
+}
+
+/**
+ * The "จ่ายด้วย" row: one pill per wallet / card (the chosen one filled and not tappable), and an
+ * "อื่น ๆ" pill when there are more places than the row shows.
+ */
+export function paymentRow(
+  choices: { label: string; selected: boolean; action: unknown }[],
+  more?: unknown,
+): unknown[] {
+  return [
+    { type: "separator", margin: "lg" },
+    { type: "text", text: "จ่ายด้วย", size: "xs", color: COLOR.muted, margin: "md" },
+    {
+      type: "box",
+      layout: "horizontal",
+      spacing: "sm",
+      margin: "sm",
+      contents: [
+        ...choices.map((c) => payPill(c.label, c.selected, c.selected ? undefined : c.action)),
+        ...(more ? [payPill("อื่น ๆ", false, more)] : []),
+      ],
+    },
+  ];
+}
+
 const LEVEL_COLOR = { ok: COLOR.primary, warn: "#B45309", over: COLOR.expense } as const;
 const LEVEL_BAR = { ok: COLOR.primary, warn: "#F59E0B", over: COLOR.expense } as const;
 
 /** The budget block: "ใช้ไป / งบ", a bar that turns amber near the end and red past it, what is left. */
-function budgetBlock(
+export function budgetBlock(
   budget: NonNullable<ConfirmCardInput["budget"]>,
   cycleLabel: string | undefined,
 ) {
@@ -542,63 +590,30 @@ export function buildConfirmMessage(input: ConfirmCardInput): LineMessage {
     }
   }
 
-  for (const notice of input.notices ?? []) {
-    const over = notice.level === "over";
-    body.push({
-      type: "box",
-      layout: "vertical",
-      margin: "md",
-      paddingAll: "10px",
-      cornerRadius: "12px",
-      backgroundColor: over ? "#FDECEC" : "#FFF4D6",
-      contents: [
-        {
-          type: "text",
-          text: `${over ? "🚨" : "⚠️"} ${notice.text}`,
-          size: "sm",
-          wrap: true,
-          color: over ? "#9F1239" : "#7A5209",
-        },
-      ],
-    });
-  }
+  body.push(...noticeBoxes(input.notices ?? []));
 
   if (input.walletChoices && input.walletChoices.length > 1) {
     body.push(
-      { type: "separator", margin: "lg" },
-      { type: "text", text: "จ่ายด้วย", size: "xs", color: COLOR.muted, margin: "md" },
-      {
-        type: "box",
-        layout: "horizontal",
-        spacing: "sm",
-        margin: "sm",
-        contents: [
-          ...input.walletChoices.map((w) =>
-            payPill(
-              w.label,
-              w.selected,
-              w.selected
-                ? undefined
-                : {
-                    type: "postback",
-                    label: "จ่ายด้วย",
-                    data: `a=wm&id=${input.txId}&w=${w.id}`,
-                    displayText: `จ่ายด้วย ${w.label}`.slice(0, 40),
-                  },
-            ),
-          ),
-          ...(input.moreWallets
-            ? [
-                payPill("อื่น ๆ", false, {
-                  type: "postback",
-                  label: "อื่น ๆ",
-                  data: `a=wl&id=${input.txId}`,
-                  displayText: "เลือกช่องทางอื่น",
-                }),
-              ]
-            : []),
-        ],
-      },
+      ...paymentRow(
+        input.walletChoices.map((w) => ({
+          label: w.label,
+          selected: w.selected,
+          action: {
+            type: "postback",
+            label: "จ่ายด้วย",
+            data: `a=wm&id=${input.txId}&w=${w.id}`,
+            displayText: `จ่ายด้วย ${w.label}`.slice(0, 40),
+          },
+        })),
+        input.moreWallets
+          ? {
+              type: "postback",
+              label: "อื่น ๆ",
+              data: `a=wl&id=${input.txId}`,
+              displayText: "เลือกช่องทางอื่น",
+            }
+          : undefined,
+      ),
     );
   } else if (input.canMoveWallet) {
     body.push({

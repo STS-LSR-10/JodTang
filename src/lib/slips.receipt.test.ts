@@ -142,17 +142,58 @@ describe("a slip is recorded at once", () => {
     expect(inserted).toHaveLength(1);
   });
 
-  it("puts the extra messages (budget warnings, points) after the card", async () => {
+  it("hands the recorded rows to the extras, puts what they return on the card and the rest after it", async () => {
+    const seen: number[] = [];
     const out = await handleSlipImage(
       {
         ...deps,
-        onRecorded: async (made) => [{ type: "text", text: `after ${made.length}` }],
+        extras: async (made) => {
+          seen.push(made.length);
+          return {
+            budgets: [
+              { scopeName: null, spentSatang: 90_000, limitSatang: 100_000, level: "warn" },
+            ],
+            cycleLabel: "รายเดือน (วันที่ 1)",
+            notices: [{ text: "ใกล้เต็มงบแล้ว", level: "warn" }],
+            payment: {
+              choices: [
+                { id: "w1", label: "เงินสด", selected: true },
+                { id: "w2", label: "KTC", selected: false },
+              ],
+              more: false,
+            },
+            after: [{ type: "text", text: "after" }],
+          };
+        },
       },
       user,
       "m1",
     );
+    expect(seen).toEqual([2]);
     expect(out).toHaveLength(2);
-    expect((out[1] as unknown as { text: string }).text).toBe("after 2");
+    const card = JSON.stringify(out[0]);
+    expect(card).toContain(" / ฿1,000");
+    expect(card).toContain("⚠️ ใกล้เต็มงบแล้ว");
+    expect(card).toContain("จ่ายด้วย");
+    expect(card).toContain("a=wms&s=s1&w=w2");
+    expect((out[1] as unknown as { text: string }).text).toBe("after");
+  });
+
+  it("keeps the recorded entries and a plain card when the extras fail", async () => {
+    const out = await handleSlipImage(
+      {
+        ...deps,
+        extras: async () => {
+          throw new Error("budget lookup down");
+        },
+      },
+      user,
+      "m1",
+    );
+    expect(inserted).toHaveLength(2);
+    expect(out).toHaveLength(1);
+    expect(JSON.stringify(out[0])).toContain("จดสำเร็จ");
+    expect(JSON.stringify(out[0])).not.toContain("จ่ายด้วย");
   });
 
   it("takes the first rows back when a later one fails, and tells the caller", async () => {

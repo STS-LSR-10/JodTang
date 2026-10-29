@@ -115,6 +115,8 @@ export function buildWalletsCard(input: {
 /** Quick Reply with every wallet to move an entry to (a=wm taps are silent). */
 export function buildWalletChooser(input: {
   txId: string;
+  /** Moves every entry of this slip instead of the one entry `txId`. */
+  slipId?: string;
   wallets: Wallet[];
   currentId: string | null;
   text: string;
@@ -131,7 +133,9 @@ export function buildWalletChooser(input: {
           action: {
             type: "postback",
             label: walletLabel(w).slice(0, 20),
-            data: `a=wm&id=${input.txId}&w=${w.id}`,
+            data: input.slipId
+              ? `a=wms&s=${input.slipId}&w=${w.id}`
+              : `a=wm&id=${input.txId}&w=${w.id}`,
             displayText: walletLabel(w).slice(0, 20),
           },
         })),

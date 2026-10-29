@@ -45,6 +45,7 @@ import {
   SLIP_BUCKET,
 } from "@/lib/slip-repo";
 import { upsellReply } from "@/lib/line/upsell-reply";
+import { log } from "@/lib/log";
 import type { LineMessage } from "@/lib/types";
 
 export interface SlipDeps {
@@ -56,8 +57,20 @@ export interface SlipDeps {
   editUrl?: (txId: string) => string | undefined;
   /** Public https picture for the card header. */
   logoUrl?: string;
-  /** After the entries are recorded: budget warnings, points... (extra messages after the card). */
-  onRecorded?: (entries: TxRow[]) => Promise<LineMessage[]>;
+  /**
+   * After the entries are recorded: what the card carries below the rows (budget, warnings, the
+   * "จ่ายด้วย" row) and the messages that follow it (points...). Absent -> a plain card.
+   */
+  extras?: (entries: TxRow[]) => Promise<SlipCardExtras>;
+}
+
+export interface SlipCardExtras {
+  budgets?: NonNullable<Parameters<typeof buildReceiptCard>[0]["budgets"]>;
+  cycleLabel?: string;
+  notices?: NonNullable<Parameters<typeof buildReceiptCard>[0]["notices"]>;
+  payment?: Parameters<typeof buildReceiptCard>[0]["payment"];
+  /** Extra messages after the card (the referral bonus...). */
+  after?: LineMessage[];
 }
 
 const sha256 = (bytes: Uint8Array) => createHash("sha256").update(bytes).digest("hex");
@@ -240,6 +253,13 @@ export async function handleSlipImage(
       throw error;
     }
 
+    let extras: SlipCardExtras = {};
+    try {
+      extras = (await deps.extras?.(made)) ?? {};
+    } catch (error) {
+      // what sits below the rows is a bonus: never lose the recorded entries over it
+      log.error("slip_card_extras_failed", error);
+    }
     return [
       buildReceiptCard({
         slipId: slip.id,
@@ -247,8 +267,12 @@ export async function handleSlipImage(
         dateKnown: data.paidAt !== null,
         editUrl: deps.editUrl,
         logoUrl: deps.logoUrl,
+        budgets: extras.budgets,
+        cycleLabel: extras.cycleLabel,
+        notices: extras.notices,
+        payment: extras.payment,
       }),
-      ...((await deps.onRecorded?.(made)) ?? []),
+      ...(extras.after ?? []),
     ];
   }
 }
