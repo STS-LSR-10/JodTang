@@ -138,9 +138,12 @@ export function buildConfirmMessage(input: ConfirmCardInput): LineMessage {
               type: "text",
               text: input.edited ? "แก้ไขรายการสำเร็จ" : "จดสำเร็จ",
               weight: "bold",
-              size: "xl",
+              // the longer edit title is a notch smaller and may wrap, so the tick never runs
+              // into the mascot on a narrow phone
+              size: input.edited ? "lg" : "xl",
               color: "#0B5D4F",
-              flex: 0,
+              wrap: true,
+              flex: 1,
             },
             {
               type: "box",
