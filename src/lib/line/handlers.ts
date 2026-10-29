@@ -1,5 +1,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { budgetAlertsFor, dailyBudgetAlertsFor } from "@/lib/budget-alert";
+import {
+  budgetAlertsFor,
+  budgetReadingFor,
+  dailyBudgetAlertsFor,
+  type BudgetStatus,
+} from "@/lib/budget-alert";
 import { calendarMonthRange, cycleRange, dayRange } from "@/lib/budget-cycle";
 import { categorizeByRules, matchLeadingCategory, type CategoryLite } from "@/lib/categorize/rules";
 import { parseCommand, type Command } from "@/lib/commands";
@@ -16,6 +21,7 @@ import {
   expenseTotalSatang,
   getLatestConfirmed,
   getRecentlyEdited,
+  getBudgetMode,
   getSettings,
   getTransaction,
   claimPendingTransaction,
@@ -1240,7 +1246,64 @@ async function saveEntries(
 
   const messages: LineMessage[] = [];
 
-  if (settings.confirm_style !== "off" && confirmed.length > 0) {
+  // With the full card the warnings (budget, daily limit, card limit) ride on the card itself, so
+  // none is sent as a separate message. Other styles have no card to carry them.
+  const embed =
+    settings.confirm_style === "full" &&
+    confirmed.length > 0 &&
+    confirmed.length <= MAX_CARDS_PER_REPLY;
+  let cardWarned = false;
+  if (embed) {
+    const mode = await getBudgetMode(db, user.id).catch(() => "overall" as const);
+    // the budget an entry counts against: the overall one, or its category's
+    const scopeOf = (c: (typeof confirmed)[number]): string | null =>
+      c.entry.type !== "expense" ? null : mode === "category" ? (c.categoryId ?? "none") : "all";
+    const totals = new Map<string, number>();
+    const lastOf = new Map<string, number>();
+    confirmed.forEach((c, i) => {
+      const key = scopeOf(c);
+      if (key === null) return;
+      totals.set(key, (totals.get(key) ?? 0) + c.entry.amountSatang);
+      lastOf.set(key, i);
+    });
+    // the daily and card-limit warnings go on the last card
+    const others = [
+      ...(await safeDailyAlerts(deps, user.id, confirmed)),
+      ...(await cardLimitAlerts(
+        deps,
+        user,
+        confirmed
+          .filter((c) => c.entry.type === "expense")
+          .map((c) => ({ walletId: c.walletId, amountSatang: c.entry.amountSatang })),
+      )),
+    ].map((t) => ({ text: t, level: "warn" as const }));
+    for (const [i, c] of confirmed.entries()) {
+      const key = scopeOf(c);
+      const out = { noticed: false };
+      messages.push(
+        await confirmCard(
+          c.tx,
+          c.categoryId,
+          categories,
+          settings,
+          user,
+          deps,
+          c.entry.tags,
+          c.walletId,
+          c.entry.fx ? fxNoteOf(c.entry.fx) : null,
+          false,
+          {
+            batchSatang: key === null ? undefined : totals.get(key),
+            // one budget warning per budget, on the last card that counts against it
+            budgetNotice: key === null ? undefined : lastOf.get(key) === i,
+            notices: i === confirmed.length - 1 ? others : undefined,
+            out,
+          },
+        ),
+      );
+      cardWarned ||= out.noticed;
+    }
+  } else if (settings.confirm_style !== "off" && confirmed.length > 0) {
     if (confirmed.length <= MAX_CARDS_PER_REPLY) {
       for (const c of confirmed) {
         messages.push(
@@ -1274,23 +1337,25 @@ async function saveEntries(
 
   // Budget alerts go last so they are the freshest thing in the chat (even with cards turned off).
   const alerts: string[] = [];
-  for (const c of confirmed) {
-    alerts.push(...(await safeAlerts(deps, user.id, c.tx, c.categoryId)));
+  if (!embed) {
+    for (const c of confirmed) {
+      alerts.push(...(await safeAlerts(deps, user.id, c.tx, c.categoryId)));
+    }
+    alerts.push(...(await safeDailyAlerts(deps, user.id, confirmed)));
+    alerts.push(
+      ...(await cardLimitAlerts(
+        deps,
+        user,
+        confirmed
+          .filter((c) => c.entry.type === "expense")
+          .map((c) => ({ walletId: c.walletId, amountSatang: c.entry.amountSatang })),
+      )),
+    );
   }
-  alerts.push(...(await safeDailyAlerts(deps, user.id, confirmed)));
-  alerts.push(
-    ...(await cardLimitAlerts(
-      deps,
-      user,
-      confirmed
-        .filter((c) => c.entry.type === "expense")
-        .map((c) => ({ walletId: c.walletId, amountSatang: c.entry.amountSatang })),
-    )),
-  );
   for (const a of alerts) messages.push(text(a));
   // A friendly / cheering manner adds one line after a plain save (never on top of a budget warning).
   const first = confirmed[0];
-  if (first && alerts.length === 0 && messages.length < MAX_REPLY_MESSAGES) {
+  if (first && alerts.length === 0 && !cardWarned && messages.length < MAX_REPLY_MESSAGES) {
     const quip = savedQuip(
       (await prefsOf(deps, user)).persona,
       confirmed.some((c) => c.entry.type === "expense") ? "expense" : "income",
@@ -1492,6 +1557,18 @@ async function offerPhoto(
   }
 }
 
+/** What a caller adds to the entry card beyond the entry itself. */
+interface CardExtras {
+  /** Everything just added to the budget this entry counts against (several entries of one message). */
+  batchSatang?: number;
+  /** Put the budget warning on this card (false on the earlier cards of the same budget). */
+  budgetNotice?: boolean;
+  /** Other warnings to carry (daily limit, card limit). */
+  notices?: { text: string; level: "warn" | "over" }[];
+  /** Filled by confirmCard: whether the card shows any warning. */
+  out?: { noticed: boolean };
+}
+
 async function confirmCard(
   tx: TxRow,
   categoryId: string | null,
@@ -1503,6 +1580,7 @@ async function confirmCard(
   walletId: string | null = null,
   fxNote: string | null = null,
   edited = false,
+  extras: CardExtras = {},
 ): Promise<LineMessage> {
   const style = settings.confirm_style === "short" ? "short" : "full";
   // The wallet only shows up once there is more than one to tell apart.
@@ -1522,8 +1600,52 @@ async function confirmCard(
       to: range.to,
     });
   }
+  // Where the budget stands, and the warnings the card itself carries (no separate messages).
+  let budget: BudgetStatus | null = null;
+  const notices: { text: string; level: "warn" | "over" }[] = [...(extras.notices ?? [])];
+  if (style === "full" && tx.type === "expense") {
+    try {
+      const reading = await budgetReadingFor(deps.db, {
+        userId: user.id,
+        type: tx.type,
+        categoryId,
+        amountSatang: extras.batchSatang ?? txAmountSatang(tx),
+        occurredAt: new Date(tx.occurred_at),
+        now: deps.now(),
+      });
+      if (reading) {
+        budget = reading.status;
+        if (reading.notice && extras.budgetNotice !== false && !edited) {
+          notices.unshift({
+            text: reading.notice,
+            level: reading.status.level === "over" ? "over" : "warn",
+          });
+        }
+      }
+    } catch (error) {
+      log.error("budget_status_failed", error);
+    }
+  }
+  if (extras.out) extras.out.noticed = notices.length > 0;
+  // "จ่ายด้วย": the chosen wallet first, then the others; more than three become "อื่น ๆ"
+  let walletChoices: { id: string; label: string; selected: boolean }[] | undefined;
+  let moreWallets = false;
+  if (style === "full" && multi && wallet && !edited) {
+    const shown = wallets.length <= 3 ? 3 : 2;
+    const ordered = [wallet, ...wallets.filter((w) => w.id !== wallet.id)];
+    walletChoices = ordered.slice(0, shown).map((w) => ({
+      id: w.id,
+      label: walletLabel(w),
+      selected: w.id === wallet.id,
+    }));
+    moreWallets = wallets.length > shown;
+  }
   return buildConfirmMessage({
     style,
+    budget,
+    notices,
+    walletChoices,
+    moreWallets,
     txId: tx.id,
     type: tx.type,
     title: tx.title,
@@ -1567,6 +1689,7 @@ export async function editedCardFor(user: UserRow, deps: HandlerDeps): Promise<L
     edited.account_id,
     null,
     true,
+    { budgetNotice: false },
   );
 }
 
@@ -2214,8 +2337,12 @@ async function handlePostback(
       status: "confirmed",
     });
     if (!updated) return [text(NOT_FOUND_TEXT)];
-    const alerts = (await safeAlerts(deps, user.id, updated, categoryId)).map((a) => text(a));
     const bonus = await awardAndNotify(deps, user.id);
+    // the full card carries the budget warning itself; other styles get it as a message
+    const embed = settings.confirm_style === "full";
+    const alerts = embed
+      ? []
+      : (await safeAlerts(deps, user.id, updated, categoryId)).map((a) => text(a));
     if (settings.confirm_style === "off") return [text("จดแล้ว"), ...alerts, ...bonus];
     return [
       await confirmCard(updated, categoryId, categories, settings, user, deps),
@@ -2296,7 +2423,10 @@ async function handlePostback(
     if (settings.confirm_style === "off") out.push(text("จดแล้ว"));
     else out.push(await confirmCard(updated, categoryId, categories, settings, user, deps));
     if (learned) out.push(text(learned));
-    for (const a of await safeAlerts(deps, user.id, updated, categoryId)) out.push(text(a));
+    // the full card carries the budget warning itself; other styles get it as a message
+    if (settings.confirm_style !== "full") {
+      for (const a of await safeAlerts(deps, user.id, updated, categoryId)) out.push(text(a));
+    }
     out.push(...(await awardAndNotify(deps, user.id)));
     return out;
   }

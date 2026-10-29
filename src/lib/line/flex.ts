@@ -38,6 +38,20 @@ export interface ConfirmCardInput {
   editUrl?: string;
   /** The card confirms an edit ("แก้ไขรายการสำเร็จ") rather than a new entry. */
   edited?: boolean;
+  /** Where spending stands against the budget that applies to this entry (null/absent: no budget). */
+  budget?: {
+    /** The category the budget is for, or null for the overall budget. */
+    scopeName: string | null;
+    spentSatang: number;
+    limitSatang: number;
+    level: "ok" | "warn" | "over";
+  } | null;
+  /** Warnings the card carries itself (budget, daily limit, card limit), so none is sent apart. */
+  notices?: { text: string; level: "warn" | "over" }[];
+  /** Wallets / cards to pick as the way it was paid (two or more wallets); the chosen one is marked. */
+  walletChoices?: { id: string; label: string; selected: boolean }[];
+  /** There are more wallets than the row shows: add an "อื่น ๆ" chip that lists them all. */
+  moreWallets?: boolean;
   /** Public PNG of the mascot for the card header (omitted when the app URL is unknown). */
   logoUrl?: string;
 }
@@ -68,7 +82,13 @@ export function shareText(input: ConfirmCardInput): string {
   return `${input.title} ${sign}฿${formatBaht(input.amountSatang)} (${formatThaiDate(input.occurredAt)}) · จดด้วยจดตังค์`;
 }
 
-export const chip = (label: string, bg: string, color: string, action: unknown, width = "40px") => ({
+export const chip = (
+  label: string,
+  bg: string,
+  color: string,
+  action: unknown,
+  width = "40px",
+) => ({
   type: "box",
   layout: "vertical",
   width,
@@ -81,6 +101,152 @@ export const chip = (label: string, bg: string, color: string, action: unknown, 
   action,
   contents: [{ type: "text", text: label, size: "xs", weight: "bold", color, align: "center" }],
 });
+
+const MAX_PILL_LABEL = 9;
+
+/** One payment channel in the "จ่ายด้วย" row: filled when it is the chosen one, outlined otherwise. */
+function payPill(label: string, selected: boolean, action?: unknown) {
+  const short = label.length > MAX_PILL_LABEL ? `${label.slice(0, MAX_PILL_LABEL - 1)}…` : label;
+  return {
+    type: "box",
+    layout: "vertical",
+    flex: 1,
+    height: "34px",
+    cornerRadius: "17px",
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: selected ? COLOR.primary : COLOR.surface,
+    borderWidth: "1px",
+    borderColor: selected ? COLOR.primary : "#CBD5D1",
+    ...(action ? { action } : {}),
+    contents: [
+      {
+        type: "text",
+        text: selected ? `✓ ${short}` : short,
+        size: "xs",
+        weight: selected ? "bold" : "regular",
+        color: selected ? "#FFFFFF" : COLOR.text,
+        align: "center",
+        wrap: false,
+      },
+    ],
+  };
+}
+
+const LEVEL_COLOR = { ok: COLOR.primary, warn: "#B45309", over: COLOR.expense } as const;
+const LEVEL_BAR = { ok: COLOR.primary, warn: "#F59E0B", over: COLOR.expense } as const;
+
+/** The budget block: "ใช้ไป / งบ", a bar that turns amber near the end and red past it, what is left. */
+function budgetBlock(
+  budget: NonNullable<ConfirmCardInput["budget"]>,
+  cycleLabel: string | undefined,
+) {
+  const { spentSatang: spent, limitSatang: limit, level } = budget;
+  const pct = Math.floor((spent * 100) / limit);
+  const width = Math.min(100, Math.max(3, pct));
+  const rest = limit - spent;
+  return {
+    type: "box",
+    layout: "vertical",
+    margin: "lg",
+    spacing: "sm",
+    contents: [
+      { type: "separator" },
+      {
+        type: "box",
+        layout: "horizontal",
+        alignItems: "center",
+        margin: "md",
+        contents: [
+          {
+            type: "text",
+            text: budget.scopeName ? `งบหมวด${budget.scopeName}` : "งบรวม",
+            weight: "bold",
+            size: "md",
+            color: "#14352E",
+            wrap: true,
+            flex: 1,
+          },
+          ...(level === "ok"
+            ? []
+            : [
+                {
+                  type: "box",
+                  layout: "vertical",
+                  flex: 0,
+                  cornerRadius: "10px",
+                  paddingTop: "2px",
+                  paddingBottom: "2px",
+                  paddingStart: "8px",
+                  paddingEnd: "8px",
+                  backgroundColor: level === "over" ? "#FDECEC" : "#FFF4D6",
+                  contents: [
+                    {
+                      type: "text",
+                      text: level === "over" ? "เกินงบ" : "ใกล้เต็มงบ",
+                      size: "xs",
+                      weight: "bold",
+                      color: LEVEL_COLOR[level],
+                    },
+                  ],
+                },
+              ]),
+        ],
+      },
+      {
+        type: "text",
+        wrap: true,
+        contents: [
+          {
+            type: "span",
+            text: `฿${formatBaht(spent)}`,
+            size: "xl",
+            weight: "bold",
+            color: LEVEL_COLOR[level],
+          },
+          { type: "span", text: ` / ฿${formatBaht(limit)}`, size: "md", color: COLOR.muted },
+        ],
+      },
+      {
+        type: "box",
+        layout: "vertical",
+        height: "8px",
+        cornerRadius: "4px",
+        backgroundColor: "#E5EAEE",
+        contents: [
+          {
+            type: "box",
+            layout: "vertical",
+            width: `${width}%`,
+            height: "8px",
+            cornerRadius: "4px",
+            backgroundColor: LEVEL_BAR[level],
+            contents: [],
+          },
+        ],
+      },
+      {
+        type: "box",
+        layout: "horizontal",
+        contents: [
+          { type: "text", text: `ใช้ไป ${pct}%`, size: "xs", color: COLOR.muted, flex: 1 },
+          {
+            type: "text",
+            text: rest >= 0 ? `เหลือ ฿${formatBaht(rest)}` : `เกินงบ ฿${formatBaht(-rest)}`,
+            size: "xs",
+            weight: "bold",
+            color: rest >= 0 ? COLOR.muted : COLOR.expense,
+            align: "end",
+            flex: 1,
+          },
+        ],
+      },
+      ...(cycleLabel
+        ? [{ type: "text", text: `รอบงบ: ${cycleLabel}`, size: "xs", color: COLOR.muted }]
+        : []),
+    ],
+  };
+}
 
 export function buildConfirmMessage(input: ConfirmCardInput): LineMessage {
   const amountText = `฿${formatBaht(input.amountSatang)}`;
@@ -307,7 +473,9 @@ export function buildConfirmMessage(input: ConfirmCardInput): LineMessage {
     },
   ];
 
-  if (total !== null) {
+  if (input.budget) {
+    body.push(budgetBlock(input.budget, input.cycleLabel));
+  } else if (total !== null) {
     body.push(
       { type: "separator", margin: "lg" },
       {
@@ -374,7 +542,65 @@ export function buildConfirmMessage(input: ConfirmCardInput): LineMessage {
     }
   }
 
-  if (input.canMoveWallet) {
+  for (const notice of input.notices ?? []) {
+    const over = notice.level === "over";
+    body.push({
+      type: "box",
+      layout: "vertical",
+      margin: "md",
+      paddingAll: "10px",
+      cornerRadius: "12px",
+      backgroundColor: over ? "#FDECEC" : "#FFF4D6",
+      contents: [
+        {
+          type: "text",
+          text: `${over ? "🚨" : "⚠️"} ${notice.text}`,
+          size: "sm",
+          wrap: true,
+          color: over ? "#9F1239" : "#7A5209",
+        },
+      ],
+    });
+  }
+
+  if (input.walletChoices && input.walletChoices.length > 1) {
+    body.push(
+      { type: "separator", margin: "lg" },
+      { type: "text", text: "จ่ายด้วย", size: "xs", color: COLOR.muted, margin: "md" },
+      {
+        type: "box",
+        layout: "horizontal",
+        spacing: "sm",
+        margin: "sm",
+        contents: [
+          ...input.walletChoices.map((w) =>
+            payPill(
+              w.label,
+              w.selected,
+              w.selected
+                ? undefined
+                : {
+                    type: "postback",
+                    label: "จ่ายด้วย",
+                    data: `a=wm&id=${input.txId}&w=${w.id}`,
+                    displayText: `จ่ายด้วย ${w.label}`.slice(0, 40),
+                  },
+            ),
+          ),
+          ...(input.moreWallets
+            ? [
+                payPill("อื่น ๆ", false, {
+                  type: "postback",
+                  label: "อื่น ๆ",
+                  data: `a=wl&id=${input.txId}`,
+                  displayText: "เลือกช่องทางอื่น",
+                }),
+              ]
+            : []),
+        ],
+      },
+    );
+  } else if (input.canMoveWallet) {
     body.push({
       type: "button",
       style: "link",

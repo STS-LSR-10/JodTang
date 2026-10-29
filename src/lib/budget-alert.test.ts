@@ -21,7 +21,7 @@ vi.mock("@/lib/repo", async (original) => ({
   expenseTotalSatang: async () => todaySpent,
 }));
 
-import { budgetAlertsFor, dailyBudgetAlertsFor } from "./budget-alert";
+import { budgetAlertsFor, budgetReadingFor, dailyBudgetAlertsFor } from "./budget-alert";
 
 const run = () =>
   budgetAlertsFor({} as SupabaseClient, {
@@ -102,5 +102,70 @@ describe("dailyBudgetAlertsFor", () => {
     todaySpent = 60_000; // two entries of ฿300 and ฿300 on an empty day
     const alerts = await run({ amountSatang: 60_000 });
     expect(alerts).toHaveLength(1);
+  });
+});
+
+describe("budgetReadingFor: where the budget stands, for the card", () => {
+  const reading = (amountSatang = 10_000) =>
+    budgetReadingFor({} as SupabaseClient, {
+      userId: "u1",
+      type: "expense",
+      categoryId: null,
+      amountSatang,
+      occurredAt: new Date("2026-10-15T05:00:00Z"),
+      now: new Date("2026-10-18T05:00:00Z"),
+    });
+
+  it("gives the figures and a level, and the warning when this spending crossed a line", async () => {
+    todaySpent = 85_000; // ฿850 of ฿1,000, the last ฿100 crossed 80%
+    const r = await reading();
+    expect(r?.status).toEqual({
+      scopeName: null,
+      spentSatang: 85_000,
+      limitSatang: 100_000,
+      level: "warn",
+    });
+    expect(r?.notice).toContain("80%");
+  });
+
+  it("says over once past the budget, with no warning when it was already over", async () => {
+    todaySpent = 120_000;
+    const first = await reading(30_000); // from ฿900 to ฿1,200: crossed 100%
+    expect(first?.status.level).toBe("over");
+    expect(first?.notice).toContain("เกินงบ");
+    const later = await reading(1_000); // was already over
+    expect(later?.status.level).toBe("over");
+    expect(later?.notice).toBeNull();
+  });
+
+  it("Free still sees the figures but gets no warning text", async () => {
+    plan = "free";
+    todaySpent = 120_000;
+    const r = await reading(30_000);
+    expect(r?.status.level).toBe("over");
+    expect(r?.notice).toBeNull();
+  });
+
+  it("is null for income and for an entry outside this cycle", async () => {
+    expect(
+      await budgetReadingFor({} as SupabaseClient, {
+        userId: "u1",
+        type: "income",
+        categoryId: null,
+        amountSatang: 1,
+        occurredAt: new Date("2026-10-15T05:00:00Z"),
+        now: new Date("2026-10-18T05:00:00Z"),
+      }),
+    ).toBeNull();
+    expect(
+      await budgetReadingFor({} as SupabaseClient, {
+        userId: "u1",
+        type: "expense",
+        categoryId: null,
+        amountSatang: 1,
+        occurredAt: new Date("2026-08-15T05:00:00Z"),
+        now: new Date("2026-10-18T05:00:00Z"),
+      }),
+    ).toBeNull();
   });
 });

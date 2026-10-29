@@ -410,3 +410,94 @@ describe("emoji in front of a category's name", () => {
     expect(json).toContain("🐱 ค่าอาหารแมว");
   });
 });
+
+describe("the budget block, the warnings and the payment row on the entry card", () => {
+  const card = (over: Record<string, unknown> = {}) =>
+    JSON.stringify(
+      buildConfirmMessage({
+        ...base,
+        style: "full",
+        cycleTotalSatang: 1_000,
+        cycleLabel: "รายเดือน (วันที่ 1)",
+        ...over,
+      } as Parameters<typeof buildConfirmMessage>[0]),
+    );
+
+  it("shows spent / budget with the cycle, replacing the category total", () => {
+    const json = card({
+      budget: { scopeName: "อาหาร", spentSatang: 1_557_400, limitSatang: 1_500_000, level: "over" },
+    });
+    expect(json).toContain("งบหมวดอาหาร");
+    expect(json).toContain("฿15,574");
+    expect(json).toContain(" / ฿15,000");
+    expect(json).toContain("เกินงบ ฿574"); // how much over
+    expect(json).toContain("รอบงบ: รายเดือน (วันที่ 1)");
+    expect(json).toContain("เกินงบ"); // badge
+  });
+
+  it("the overall budget is called งบรวม, and the bar and the words follow the level", () => {
+    const ok = card({
+      budget: { scopeName: null, spentSatang: 40_000, limitSatang: 100_000, level: "ok" },
+    });
+    expect(ok).toContain("งบรวม");
+    expect(ok).toContain("เหลือ ฿600");
+    expect(ok).not.toContain("ใกล้เต็มงบ");
+    const warn = card({
+      budget: { scopeName: null, spentSatang: 85_000, limitSatang: 100_000, level: "warn" },
+    });
+    expect(warn).toContain("ใกล้เต็มงบ");
+    expect(warn).toContain("#F59E0B");
+  });
+
+  it("keeps the category total when there is no budget", () => {
+    const json = card();
+    expect(json).toContain("฿10"); // cycle total 1,000 satang
+    expect(json).not.toContain("งบรวม");
+  });
+
+  it("carries the warnings on the card", () => {
+    const json = card({
+      notices: [
+        { text: "เกินงบหมวดอาหารแล้ว", level: "over" },
+        { text: "วันนี้เกินงบวันนี้ ฿120", level: "warn" },
+      ],
+    });
+    expect(json).toContain("🚨 เกินงบหมวดอาหารแล้ว");
+    expect(json).toContain("⚠️ วันนี้เกินงบวันนี้ ฿120");
+  });
+
+  const wallets = [
+    { id: "w1", label: "💵 เงินสด", selected: true },
+    { id: "w2", label: "💳 บัตร KTC", selected: false },
+  ];
+
+  it("offers the wallets as a row: the chosen one marked, the others move the entry", () => {
+    const json = card({ walletChoices: wallets, canMoveWallet: true });
+    expect(json).toContain("จ่ายด้วย");
+    expect(json).toContain("✓ 💵 เงินสด");
+    expect(json).toContain(`"data":"a=wm&id=${base.txId}&w=w2"`);
+    expect(json).not.toContain("a=wm&id=" + base.txId + "&w=w1"); // the chosen one is not a button
+    expect(json).not.toContain("ย้ายกระเป๋า"); // the old link button is gone
+    expect(json).not.toContain("a=wl"); // nothing more to list
+  });
+
+  it("adds อื่น ๆ when there are more wallets than the row shows, and cuts long names", () => {
+    const json = card({
+      walletChoices: [
+        { id: "w1", label: "💳 บัตรเครดิตธนาคารกรุงเทพ", selected: true },
+        wallets[1],
+      ],
+      moreWallets: true,
+      canMoveWallet: true,
+    });
+    expect(json).toContain("อื่น ๆ");
+    expect(json).toContain(`"data":"a=wl&id=${base.txId}"`);
+    expect(json).not.toContain("บัตรเครดิตธนาคารกรุงเทพ");
+    expect(json).toContain("…");
+  });
+
+  it("has no row with a single wallet (it falls back to the old button when it can move)", () => {
+    expect(card()).not.toContain("จ่ายด้วย");
+    expect(card({ canMoveWallet: true })).toContain("ย้ายกระเป๋า");
+  });
+});
