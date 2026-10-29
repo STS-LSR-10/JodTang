@@ -1,7 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { bangkokDateKey } from "@/lib/points";
 
-export type UpsellFeature = "backdate" | "slip" | "voice";
+export type UpsellFeature = "backdate" | "slip" | "voice" | "pdf";
 
 /**
  * True the first time today (Bangkok) that this person is shown this upgrade card; later times the

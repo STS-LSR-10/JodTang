@@ -25,6 +25,8 @@ const SOURCE_LABEL: Record<string, string> = {
   slip: "สลิป",
   manual: "เพิ่มเอง",
   recurring: "รายการประจำ",
+  voice: "เสียง",
+  pdf: "PDF",
 };
 
 export const sourceLabel = (source: string) => SOURCE_LABEL[source] ?? source;

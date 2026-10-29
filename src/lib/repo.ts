@@ -281,7 +281,7 @@ export async function insertTransaction(
     occurredAt: Date;
     status: "confirmed" | "pending_confirm";
     rawText: string;
-    source?: "text" | "manual" | "slip" | "voice";
+    source?: "text" | "manual" | "slip" | "voice" | "pdf";
     slipId?: string;
     tags?: string[];
     /** Wallet to record in (omitted = the main wallet). */

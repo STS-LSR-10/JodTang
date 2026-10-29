@@ -63,3 +63,42 @@ export async function fetchLineAudio(
   const mimeType = (res.headers.get("content-type") ?? "").split(";")[0]?.trim() ?? "";
   return { bytes, mimeType };
 }
+
+export const MAX_PDF_BYTES = 5 * 1024 * 1024;
+export const MAX_PDF_PAGES = 10;
+
+/** Why a PDF cannot be read, found from its bytes before any paid AI call. */
+export type PdfProblem = "not_pdf" | "locked" | "too_many_pages";
+
+/**
+ * Cheap look at the file (no PDF library): the magic number, an /Encrypt entry (password-protected
+ * statements) and a page count where the page objects are visible. Files that hide their page
+ * objects in compressed streams count as unknown pages and pass; the AI provider has its own limit.
+ */
+export function inspectPdf(bytes: Uint8Array): PdfProblem | null {
+  const head = new TextDecoder("latin1").decode(bytes.subarray(0, 8));
+  if (!head.startsWith("%PDF-")) return "not_pdf";
+  const body = new TextDecoder("latin1").decode(bytes);
+  if (/\/Encrypt\b/.test(body)) return "locked";
+  const pages = body.match(/\/Type\s*\/Page(?![A-Za-z])/g)?.length ?? 0;
+  if (pages > MAX_PDF_PAGES) return "too_many_pages";
+  return null;
+}
+
+/** Download a file message's content from LINE (status only in errors, never the payload). */
+export async function fetchLinePdf(
+  accessToken: string,
+  messageId: string,
+  fetchImpl: typeof fetch = fetch,
+): Promise<Uint8Array> {
+  const res = await fetchImpl(`${API_DATA}/message/${encodeURIComponent(messageId)}/content`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+    signal: AbortSignal.timeout(20_000),
+  });
+  if (!res.ok) throw new ImageError("download_failed", `LINE content failed: ${res.status}`);
+  const declared = Number(res.headers.get("content-length") ?? 0);
+  if (declared > MAX_PDF_BYTES) throw new ImageError("too_large", "pdf too large");
+  const bytes = new Uint8Array(await res.arrayBuffer());
+  if (bytes.byteLength > MAX_PDF_BYTES) throw new ImageError("too_large", "pdf too large");
+  return bytes;
+}

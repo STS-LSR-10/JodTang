@@ -238,7 +238,11 @@ function amountIsInText(amountSatang: number, text: string): boolean {
   });
 }
 
-function parseDate(value: string | null | undefined, now: Date): Date | null {
+export function parseDate(
+  value: string | null | undefined,
+  now: Date,
+  maxAgeDays = MAX_AGE_DAYS,
+): Date | null {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value ?? "");
   if (!m) return null;
   let year = Number(m[1]);
@@ -250,7 +254,7 @@ function parseDate(value: string | null | undefined, now: Date): Date | null {
   if (year === today.year && month === today.month && day === today.day) return now;
   const at = fromBangkok(year, month, day, 12);
   if (at.getTime() > now.getTime()) return null;
-  if (now.getTime() - at.getTime() > MAX_AGE_DAYS * 86_400_000) return null;
+  if (now.getTime() - at.getTime() > maxAgeDays * 86_400_000) return null;
   return at;
 }
 

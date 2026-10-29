@@ -1,4 +1,4 @@
-import { SLIP_LIMIT, VOICE_LIMIT } from "@/lib/plan";
+import { PDF_LIMIT, SLIP_LIMIT, VOICE_LIMIT } from "@/lib/plan";
 import { LAUNCH_ENDS_TEXT, launchActive, priceFor, TRIAL_DAYS } from "@/lib/pricing";
 import type { LineMessage } from "@/lib/types";
 import { COLOR } from "./flex";
@@ -7,7 +7,7 @@ import { COLOR } from "./flex";
 const MAX_POSTBACK = 300;
 
 export interface UpsellCardInput {
-  feature: "backdate" | "slip" | "voice";
+  feature: "backdate" | "slip" | "voice" | "pdf";
   /** The Pro trial can still be started from the chat. */
   trialAvailable: boolean;
   /** Public /upgrade page; the button is left out when the app URL is unknown. */
@@ -28,6 +28,10 @@ const COPY = {
   voice: {
     title: "จดด้วยเสียงสำหรับสมาชิก Pro",
     body: "พูดสั้น ๆ เช่น “กาแฟสามสิบบาท” แล้วบอทจดให้ ไม่ต้องพิมพ์ ใช้สิทธิ์ลองจดด้วยเสียงฟรีครบแล้ว",
+  },
+  pdf: {
+    title: "จดจากไฟล์ PDF สำหรับสมาชิก Pro",
+    body: "ส่งไฟล์ PDF บิลหรือรายการเดินบัญชีมา ให้ AI แยกรายรับ/รายจ่ายแล้วจดให้ทีเดียว ไม่ต้องพิมพ์ทีละรายการ ยังไม่ได้จดไฟล์นี้นะ",
   },
   slip: {
     title: "ให้บอทอ่านสลิปให้อัตโนมัติ",
@@ -54,9 +58,11 @@ export function buildUpsellCard(input: UpsellCardInput): LineMessage {
   const price =
     input.feature === "slip"
       ? `Pro ฿${plus}/เดือน อ่านสลิปได้ ${SLIP_PRO} ใบ/เดือน · Elite ฿${ultimate}/เดือน อ่านสลิปไม่จำกัด${launch}`
-      : input.feature === "voice"
-        ? `Pro ฿${plus}/เดือน จดด้วยเสียงได้ ${VOICE_LIMIT.plus} ครั้ง/เดือน · Elite ฿${ultimate}/เดือน ไม่จำกัด${launch}`
-        : `อัปเกรดวันนี้เพียง ฿${plus}/เดือน${launch}${input.trialAvailable ? ` หรือทดลองใช้ฟรี ${TRIAL_DAYS} วัน!` : ""}`;
+      : input.feature === "pdf"
+        ? `Pro ฿${plus}/เดือน อ่าน PDF ได้ ${PDF_LIMIT.plus} ไฟล์/เดือน · Elite ฿${ultimate}/เดือน ${PDF_LIMIT.ultimate} ไฟล์/เดือน${launch}`
+        : input.feature === "voice"
+          ? `Pro ฿${plus}/เดือน จดด้วยเสียงได้ ${VOICE_LIMIT.plus} ครั้ง/เดือน · Elite ฿${ultimate}/เดือน ไม่จำกัด${launch}`
+          : `อัปเกรดวันนี้เพียง ฿${plus}/เดือน${launch}${input.trialAvailable ? ` หรือทดลองใช้ฟรี ${TRIAL_DAYS} วัน!` : ""}`;
 
   const buttons: unknown[] = [];
   if (input.trialAvailable) {

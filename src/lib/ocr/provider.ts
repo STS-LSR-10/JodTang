@@ -91,12 +91,13 @@ export async function postJson(
   headers: Record<string, string>,
   body: unknown,
   fetchImpl: typeof fetch,
+  timeoutMs = TIMEOUT_MS,
 ): Promise<unknown> {
   const res = await fetchImpl(url, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...headers },
     body: JSON.stringify(body),
-    signal: AbortSignal.timeout(TIMEOUT_MS),
+    signal: AbortSignal.timeout(timeoutMs),
   });
   if (!res.ok) throw new Error(`${label} request failed: ${res.status}`);
   return res.json();

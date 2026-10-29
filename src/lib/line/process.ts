@@ -2,12 +2,13 @@ import { getServerEnv } from "@/lib/env";
 import { buildSlipReader } from "@/lib/ocr/factory";
 import { rateLimit } from "@/lib/rate-limit";
 import { buildInsightWriter } from "@/lib/ai/insight-writer";
+import { buildPdfReader } from "@/lib/ai/pdf-reader";
 import { buildTextStructurer } from "@/lib/ai/text-structurer";
 import { buildTranscriber } from "@/lib/voice/transcribe";
 import { claimEvent, releaseEvent } from "@/lib/repo";
 import { getAdminClient } from "@/lib/supabase/admin";
 import { createLineClient } from "./client";
-import { fetchLineAudio, fetchLineImage } from "./content";
+import { fetchLineAudio, fetchLineImage, fetchLinePdf } from "./content";
 import { handleEvent, type HandlerDeps, type LineEvent } from "./handlers";
 import { ERROR_TEXT, text } from "./messages";
 import { log } from "@/lib/log";
@@ -71,6 +72,15 @@ export async function processEvents(rawEvents: unknown[]): Promise<void> {
   if (structurer) deps.structurer = structurer;
   const insightWriter = buildInsightWriter(env);
   if (insightWriter) deps.insightWriter = insightWriter;
+
+  // PDF files (statements, bills) are read by the same AI provider; without a key they get a polite no.
+  const pdfReader = buildPdfReader(env);
+  if (pdfReader) {
+    deps.pdf = {
+      fetchPdf: (messageId) => fetchLinePdf(env.LINE_CHANNEL_ACCESS_TOKEN, messageId),
+      reader: pdfReader,
+    };
+  }
 
   // Voice messages need an AI that can hear (Gemini or OpenAI key); without one they get a polite no.
   const transcriber = buildTranscriber(env);

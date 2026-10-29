@@ -67,6 +67,9 @@ export const FAIR_USE = { slips: 300, voice: 200, smartParse: 300 } as const;
 /** Voice messages a person can have read per month, by plan (Free has one free taste for life). */
 export const VOICE_LIMIT: Record<Plan, number> = { free: 0, plus: 20, ultimate: FAIR_USE.voice };
 
+/** PDF files (statements, bills, lists) a person can have read per month. Free has none. */
+export const PDF_LIMIT: Record<Plan, number> = { free: 0, plus: 10, ultimate: 30 };
+
 /** Recurring entries ("รายการประจำ") a plan may have set up at once. */
 const RECURRING_LIMIT: Record<Plan, number> = { free: 0, plus: 20, ultimate: 100 };
 export const recurringLimit = (plan: Plan): number => RECURRING_LIMIT[plan];

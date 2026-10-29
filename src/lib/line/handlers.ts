@@ -76,6 +76,9 @@ import {
   summarize,
 } from "@/lib/summary-report";
 import { handleSlipImage } from "@/lib/slips";
+import type { PdfReader } from "@/lib/ai/pdf-reader";
+import { cancelImport, confirmImport } from "@/lib/pdf-repo";
+import { handlePdfMessage, type PdfDeps } from "./pdf";
 import { handlePhotoImage, photoBlockedReply } from "@/lib/photos";
 import { needsSmartParse, runSmartParse } from "@/lib/ai/smart-parse";
 import type { TextStructurer } from "@/lib/ai/text-structurer";
@@ -261,6 +264,10 @@ import {
   TRANSFER_SAME_TEXT,
   TRANSFER_USAGE_TEXT,
   VOICE_UNAVAILABLE_TEXT,
+  PDF_ALREADY_DONE_TEXT,
+  PDF_CANCELLED_TEXT,
+  PDF_UNAVAILABLE_TEXT,
+  pdfRecordedText,
   text,
 } from "./messages";
 import { log } from "@/lib/log";
@@ -272,7 +279,15 @@ export interface LineEvent {
   webhookEventId?: string;
   replyToken?: string;
   source?: { type: string; userId?: string; groupId?: string };
-  message?: { type: string; id?: string; text?: string; duration?: number };
+  message?: {
+    type: string;
+    id?: string;
+    text?: string;
+    duration?: number;
+    /** File messages: the name and size LINE reports. */
+    fileName?: string;
+    fileSize?: number;
+  };
   postback?: {
     data: string;
     /** Filled by the LINE date picker: { date: "2026-10-12" }. */
@@ -306,6 +321,11 @@ export interface HandlerDeps {
     fetchAudio: VoiceDeps["fetchAudio"];
     transcriber: Transcriber;
   };
+  /** PDF files (statements, bills). Absent (no AI key) -> a polite "not available" reply. */
+  pdf?: {
+    fetchPdf: PdfDeps["fetchPdf"];
+    reader: PdfReader;
+  };
 }
 
 const MAX_REPLY_MESSAGES = 5;
@@ -324,6 +344,7 @@ export async function handleEvent(event: LineEvent, deps: HandlerDeps): Promise<
   if (deps.limit && (event.type === "message" || event.type === "postback")) {
     const isImage = event.message?.type === "image";
     const isAudio = event.message?.type === "audio";
+    const isFile = event.message?.type === "file";
     const [bucket, rule] =
       event.type === "postback"
         ? (["postback", LIMITS.postback] as const)
@@ -331,7 +352,9 @@ export async function handleEvent(event: LineEvent, deps: HandlerDeps): Promise<
           ? (["chat_image", LIMITS.chatImage] as const)
           : isAudio
             ? (["chat_voice", LIMITS.chatVoice] as const)
-            : (["chat", LIMITS.chat] as const);
+            : isFile
+              ? (["chat_pdf", LIMITS.chatPdf] as const)
+              : (["chat", LIMITS.chat] as const);
     const result = await deps.limit(bucket, lineUserId, rule);
     if (!result.allowed) {
       if (result.hits === result.limit + 1 && event.replyToken) {
@@ -381,6 +404,30 @@ export async function handleEvent(event: LineEvent, deps: HandlerDeps): Promise<
           }
         } else {
           await reply([text(SLIP_SOON_TEXT)]);
+        }
+      } else if (event.message?.type === "file" && event.message.id) {
+        const { pdf } = deps;
+        if (!pdf) {
+          await reply([text(PDF_UNAVAILABLE_TEXT)]);
+        } else {
+          await reply(
+            await handlePdfMessage(
+              {
+                db: deps.db,
+                now: deps.now,
+                fetchPdf: pdf.fetchPdf,
+                reader: pdf.reader,
+                limit: deps.limit,
+              },
+              user,
+              {
+                id: event.message.id,
+                fileName: event.message.fileName,
+                fileSize: event.message.fileSize,
+              },
+              lineUserId,
+            ),
+          );
         }
       } else if (event.message?.type === "audio" && event.message.id) {
         const { voice } = deps;
@@ -1903,6 +1950,18 @@ async function handlePostback(
   const action = params.get("a");
   // Rich Menu "จดตังค์": answer with the how-to card; its button opens the keyboard (a=compose-go).
   if (action === "compose") return [buildComposeCard()];
+  // The check card of a PDF: record or drop every entry of that file at once.
+  if (action === "pdfok" || action === "pdfx") {
+    const importId = params.get("i") ?? "";
+    if (!/^[0-9a-f-]{36}$/.test(importId)) return [text(NOT_FOUND_TEXT)];
+    if (action === "pdfx") {
+      const dropped = await cancelImport(deps.db, user.id, importId);
+      return [text(dropped > 0 ? PDF_CANCELLED_TEXT : PDF_ALREADY_DONE_TEXT)];
+    }
+    const recorded = await confirmImport(deps.db, user.id, importId);
+    if (recorded === 0) return [text(PDF_ALREADY_DONE_TEXT)];
+    return [text(pdfRecordedText(recorded)), ...(await awardAndNotify(deps, user.id))];
+  }
   // A topic chip under the help question: that topic's card (it carries the chips along, so they stay).
   if (action === "help") {
     const topic = params.get("t");

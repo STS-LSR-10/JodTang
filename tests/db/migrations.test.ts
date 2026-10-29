@@ -3002,3 +3002,20 @@ describe("the photo offer setting (0040)", () => {
     expect(await read()).toBe(false);
   });
 });
+
+describe("PDF entries (0041)", () => {
+  it("accepts the pdf source and remembers a file once per person", async () => {
+    const u = await newUser(db, `pdf-${Math.random()}`);
+    const hash = "a".repeat(64);
+    await db.query(
+      "insert into transactions (user_id, type, title, amount, source, status) values ($1, 'expense', 'x', 10, 'pdf', 'pending_confirm')",
+      [u],
+    );
+    await db.query("insert into pdf_imports (user_id, sha256) values ($1, $2)", [u, hash]);
+    await expect(
+      db.query("insert into pdf_imports (user_id, sha256) values ($1, $2)", [u, hash]),
+    ).rejects.toThrow();
+    const other = await newUser(db, `pdf-${Math.random()}`);
+    await db.query("insert into pdf_imports (user_id, sha256) values ($1, $2)", [other, hash]);
+  });
+});
