@@ -501,3 +501,21 @@ describe("the budget block, the warnings and the payment row on the entry card",
     expect(card({ canMoveWallet: true })).toContain("ย้ายกระเป๋า");
   });
 });
+
+describe("the card title", () => {
+  const title = (over: Record<string, unknown> = {}) =>
+    JSON.stringify(
+      buildConfirmMessage({ ...base, style: "full", ...over } as Parameters<
+        typeof buildConfirmMessage
+      >[0]),
+    );
+
+  it("has the tick right after the words, in the same text", () => {
+    expect(title()).toContain('"text":"จดสำเร็จ ✅"');
+    expect(title({ edited: true })).toContain('"text":"แก้ไขรายการสำเร็จ ✅"');
+  });
+
+  it("has no separate tick badge to run into the mascot", () => {
+    expect(title({ logoUrl: "https://x.test/a.png" })).not.toContain('"text":"✓"');
+  });
+});

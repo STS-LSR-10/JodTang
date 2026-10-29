@@ -370,35 +370,14 @@ export function buildConfirmMessage(input: ConfirmCardInput): LineMessage {
       spacing: "xs",
       contents: [
         {
-          type: "box",
-          layout: "horizontal",
-          spacing: "sm",
-          alignItems: "center",
-          contents: [
-            {
-              type: "text",
-              text: input.edited ? "แก้ไขรายการสำเร็จ" : "จดสำเร็จ",
-              weight: "bold",
-              // the longer edit title is a notch smaller and may wrap, so the tick never runs
-              // into the mascot on a narrow phone
-              size: input.edited ? "lg" : "xl",
-              color: "#0B5D4F",
-              wrap: true,
-              flex: 1,
-            },
-            {
-              type: "box",
-              layout: "vertical",
-              width: "24px",
-              height: "24px",
-              cornerRadius: "7px",
-              backgroundColor: "#2ECB7A",
-              justifyContent: "center",
-              alignItems: "center",
-              flex: 0,
-              contents: [{ type: "text", text: "✓", size: "sm", color: "#FFFFFF", weight: "bold" }],
-            },
-          ],
+          type: "text",
+          // the tick sits right after the words (it wraps along with them on a narrow phone)
+          text: input.edited ? "แก้ไขรายการสำเร็จ ✅" : "จดสำเร็จ ✅",
+          weight: "bold",
+          // the longer edit title is a notch smaller
+          size: input.edited ? "lg" : "xl",
+          color: "#0B5D4F",
+          wrap: true,
         },
         {
           type: "text",
