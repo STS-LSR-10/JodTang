@@ -208,25 +208,47 @@ describe("choosing how it was paid", () => {
     expect(cardOf(reply)).not.toContain("a=wl");
   });
 
-  it("with four wallets the row shows three places and อื่น ๆ for the rest", async () => {
+  it("up to four wallets are all shown; with more, three and อื่น ๆ for the rest", async () => {
     budgetSpent = 400_000;
-    wallets = [
+    const four = [
       wallet({}),
       wallet({ id: "w2", name: "KTC", kind: "card", isDefault: false }),
       wallet({ id: "w3", name: "ออมสิน", kind: "bank", isDefault: false }),
       wallet({ id: "w4", name: "ทรูมันนี่", kind: "ewallet", isDefault: false }),
     ];
-    const { deps, reply } = setup();
-    await handleEvent(say("กาแฟ 50"), deps);
-    expect(cardOf(reply)).toContain("a=wl");
-    expect(cardOf(reply)).toContain("อื่น ๆ");
-    expect(cardOf(reply)).not.toContain("&w=w4");
+    wallets = four;
+    const a = setup();
+    await handleEvent(say("กาแฟ 50"), a.deps);
+    expect(cardOf(a.reply)).toContain("&w=w4");
+    expect(cardOf(a.reply)).not.toContain("a=wl");
+
+    wallets = [...four, wallet({ id: "w5", name: "ShopeePay", kind: "ewallet", isDefault: false })];
+    const b = setup();
+    await handleEvent(say("กาแฟ 50"), b.deps);
+    expect(cardOf(b.reply)).toContain("a=wl");
+    expect(cardOf(b.reply)).toContain("อื่น ๆ");
+    expect(cardOf(b.reply)).not.toContain("&w=w4");
+    expect(cardOf(b.reply)).not.toContain("&w=w5");
   });
 
-  it("with one wallet there is no row", async () => {
+  it("Pro with only the cash wallet sees it chosen and a way to add a channel", async () => {
     budgetSpent = 400_000;
+    process.env.NEXT_PUBLIC_LIFF_ID = "1234-abcd";
+    const { deps, reply } = setup();
+    await handleEvent(say("กาแฟ 50"), deps);
+    expect(cardOf(reply)).toContain("จ่ายด้วย");
+    expect(cardOf(reply)).toContain("✓ 💵 เงินสด");
+    expect(cardOf(reply)).toContain("＋ เพิ่มช่องทาง");
+    expect(cardOf(reply)).toContain('"uri":"https://liff.line.me/1234-abcd/wallets"');
+  });
+
+  it("choosing how it was paid is for Pro and above: Free has no row, even with several wallets", async () => {
+    budgetSpent = 400_000;
+    plan = "free";
+    wallets = [wallet({}), wallet({ id: "w-ktc", name: "KTC", kind: "card", isDefault: false })];
     const { deps, reply } = setup();
     await handleEvent(say("กาแฟ 50"), deps);
     expect(cardOf(reply)).not.toContain("จ่ายด้วย");
+    expect(cardOf(reply)).not.toContain("a=wm");
   });
 });

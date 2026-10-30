@@ -519,3 +519,78 @@ describe("the card title", () => {
     expect(title({ logoUrl: "https://x.test/a.png" })).not.toContain('"text":"✓"');
   });
 });
+
+describe("the look of the saved-entry card", () => {
+  const full = (over: Record<string, unknown> = {}) =>
+    buildConfirmMessage({
+      ...base,
+      style: "full",
+      logoUrl: "https://x.test/logo.png",
+      ...over,
+    } as Parameters<typeof buildConfirmMessage>[0]);
+  const json = (over: Record<string, unknown> = {}) => JSON.stringify(full(over));
+
+  it("has a green header with the tick after the title, on a cream body", () => {
+    const out = json();
+    expect(out).toContain('"text":"จดสำเร็จ ✅"');
+    expect(out).toContain('"size":"xxl"');
+    expect(out).toContain("#FAF8F2"); // the cream body
+  });
+
+  it("edit and delete are icon buttons beside the amount", () => {
+    const out = json();
+    expect(out).toContain('"text":"✏️"');
+    expect(out).toContain('"text":"🗑️"');
+    expect(out).toContain('"data":"a=del&id=');
+  });
+
+  it("the budget sits in its own white card with a thick bar", () => {
+    const out = json({
+      budget: { scopeName: "อาหาร", spentSatang: 357_100, limitSatang: 300_000, level: "over" },
+      cycleLabel: "รายเดือน (วันที่ 1)",
+    });
+    expect(out).toContain('"cornerRadius":"18px"');
+    expect(out).toContain('"size":"3xl"'); // the amount spent
+    expect(out).toContain('"height":"12px"'); // the bar
+    expect(out).toContain("ใช้ไป 119%");
+    expect(out).toContain("เกินงบ ฿571");
+  });
+
+  it("the payment channels are two to a row, the chosen one ticked", () => {
+    const wallets = [
+      { id: "w1", label: "💵 เงินสด", selected: true },
+      { id: "w2", label: "💳 KTC", selected: false },
+      { id: "w3", label: "📱 TrueMoney", selected: false },
+    ];
+    const card = full({ walletChoices: wallets, addWalletUrl: "https://liff.line.me/1/wallets" });
+    const out = JSON.stringify(card);
+    expect(out).toContain("✓ 💵 เงินสด");
+    expect(out).toContain("＋ เพิ่มช่องทาง"); // the fourth pill, with the third on a row of its own
+    expect(out).toContain('"borderWidth":"2px"'); // the chosen one
+    expect(out.match(/"text":"จ่ายด้วย"/g)).toHaveLength(1);
+  });
+
+  it("the แนบรูป pill is wide and centred along the foot", () => {
+    const out = json({ photoButton: true });
+    expect(out).toContain('"text":"📎 แนบรูป"');
+    expect(out).toContain('"height":"46px"');
+    expect(out).not.toContain('"type":"filler"');
+  });
+
+  it("the chosen card theme still recolours the header and the pills", async () => {
+    const { applyTheme } = await import("@/lib/personalize");
+    const themed = JSON.stringify(
+      applyTheme(
+        [
+          full({
+            walletChoices: [{ id: "w1", label: "เงินสด", selected: true }],
+            photoButton: true,
+          }),
+        ],
+        "ocean",
+      ),
+    );
+    expect(themed).not.toContain("#CCFBF1"); // the header, the chosen pill and the attach pill
+    expect(themed).toContain("#E0F2FE");
+  });
+});

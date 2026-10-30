@@ -136,9 +136,13 @@ describe("receipt card", () => {
     expect(json()).not.toContain("จ่ายด้วย");
   });
 
-  it("has no payment row for a single wallet", () => {
-    expect(
-      json({ payment: { choices: [{ id: "w1", label: "เงินสด", selected: true }], more: false } }),
-    ).not.toContain("จ่ายด้วย");
+  it("a single wallet shows only itself, and the add-channel pill when the page is known", () => {
+    const one = { choices: [{ id: "w1", label: "เงินสด", selected: true }], more: false };
+    const plain = json({ payment: one });
+    expect(plain).toContain("✓ เงินสด");
+    expect(plain).not.toContain("เพิ่มช่องทาง");
+    const withAdd = json({ payment: { ...one, addUrl: "https://liff.line.me/x/wallets" } });
+    expect(withAdd).toContain("＋ เพิ่มช่องทาง");
+    expect(withAdd).toContain('"uri":"https://liff.line.me/x/wallets"');
   });
 });

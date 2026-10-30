@@ -181,8 +181,12 @@ describe("what a slip card carries under its rows", () => {
     expect(JSON.stringify(e.notices)).toContain("฿120");
   });
 
-  it("a payment row with two wallets, none with one", async () => {
+  it("a payment row for Pro and above (even with one wallet, to add more), none for Free", async () => {
+    const one = (await extrasFor([tx()])).payment;
+    expect(one?.choices.map((c) => c.id)).toEqual(["w-cash"]);
+    plan = "free";
     expect((await extrasFor([tx()])).payment).toBeUndefined();
+    plan = "plus";
     wallets = [wallet({}), wallet({ id: "w-ktc", name: "KTC", kind: "card", isDefault: false })];
     const e = await extrasFor([tx()]);
     expect(e.payment?.choices.map((c) => [c.id, c.selected])).toEqual([

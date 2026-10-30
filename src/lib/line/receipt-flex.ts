@@ -35,7 +35,12 @@ export interface ReceiptCardInput {
   /** Warnings the card carries itself (budget, daily limit, card limit). */
   notices?: { text: string; level: "warn" | "over" }[];
   /** Wallets / cards to pick as the way the whole slip was paid (two or more wallets). */
-  payment?: { choices: { id: string; label: string; selected: boolean }[]; more: boolean };
+  payment?: {
+    choices: { id: string; label: string; selected: boolean }[];
+    more: boolean;
+    /** The page where a wallet / card is added ("＋ เพิ่มช่องทาง"; https only). */
+    addUrl?: string;
+  };
 }
 
 /** Rows drawn on the card; the rest are recorded all the same and are named in a line. */
@@ -213,7 +218,7 @@ export function buildReceiptCard(input: ReceiptCardInput): LineMessage {
   const tail: unknown[] = [
     ...(input.budgets ?? []).map((b) => budgetBlock(b, input.cycleLabel)),
     ...noticeBoxes(input.notices ?? []),
-    ...(input.payment && input.payment.choices.length > 1
+    ...(input.payment && input.payment.choices.length > 0
       ? paymentRow(
           input.payment.choices.map((c) => ({
             label: c.label,
@@ -232,6 +237,9 @@ export function buildReceiptCard(input: ReceiptCardInput): LineMessage {
                 data: `a=wls&s=${input.slipId}`,
                 displayText: "เลือกช่องทางอื่น",
               }
+            : undefined,
+          input.payment.addUrl?.startsWith("https://")
+            ? { type: "uri", label: "เพิ่มช่องทาง", uri: input.payment.addUrl }
             : undefined,
         )
       : []),

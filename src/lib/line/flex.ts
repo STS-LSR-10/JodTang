@@ -52,6 +52,8 @@ export interface ConfirmCardInput {
   walletChoices?: { id: string; label: string; selected: boolean }[];
   /** There are more wallets than the row shows: add an "อื่น ๆ" chip that lists them all. */
   moreWallets?: boolean;
+  /** The page where a wallet / card is added: shows a "＋ เพิ่มช่องทาง" pill (https only). */
+  addWalletUrl?: string;
   /** Show the small "📎 แนบรูป" button at the bottom-left; a tap starts the photo step. */
   photoButton?: boolean;
   /** Public PNG of the mascot for the card header (omitted when the app URL is unknown). */
@@ -84,50 +86,55 @@ export function shareText(input: ConfirmCardInput): string {
   return `${input.title} ${sign}฿${formatBaht(input.amountSatang)} (${formatThaiDate(input.occurredAt)}) · จดด้วยจดตังค์`;
 }
 
+/** The soft backdrop of the saved-entry card. */
+const CREAM = "#FAF8F2";
+// colours below are the base palette's, so the chosen card theme still recolours them
+const TINT_STRONG = "#14352E";
+
 export const chip = (
   label: string,
   bg: string,
   color: string,
   action: unknown,
-  width = "40px",
+  width = "44px",
 ) => ({
   type: "box",
   layout: "vertical",
   width,
-  height: "36px",
-  cornerRadius: "10px",
+  height: "40px",
+  cornerRadius: "12px",
   backgroundColor: bg,
   justifyContent: "center",
   alignItems: "center",
   flex: 0,
   action,
-  contents: [{ type: "text", text: label, size: "xs", weight: "bold", color, align: "center" }],
+  contents: [{ type: "text", text: label, size: "md", weight: "bold", color, align: "center" }],
 });
 
-const MAX_PILL_LABEL = 9;
+const MAX_PILL_LABEL = 14;
 
-/** One payment channel in the "จ่ายด้วย" row: filled when it is the chosen one, outlined otherwise. */
+/** One payment channel in the "จ่ายด้วย" grid: tinted with a border and a tick when chosen, outlined otherwise. */
 export function payPill(label: string, selected: boolean, action?: unknown) {
   const short = label.length > MAX_PILL_LABEL ? `${label.slice(0, MAX_PILL_LABEL - 1)}…` : label;
   return {
     type: "box",
     layout: "vertical",
     flex: 1,
-    height: "34px",
-    cornerRadius: "17px",
+    height: "42px",
+    cornerRadius: "21px",
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: selected ? COLOR.primary : COLOR.surface,
-    borderWidth: "1px",
-    borderColor: selected ? COLOR.primary : "#CBD5D1",
+    backgroundColor: selected ? COLOR.primarySoft : "#FFFFFF",
+    borderWidth: selected ? "2px" : "1px",
+    borderColor: selected ? COLOR.primary : "#D8DCE3",
     ...(action ? { action } : {}),
     contents: [
       {
         type: "text",
         text: selected ? `✓ ${short}` : short,
-        size: "xs",
+        size: "sm",
         weight: selected ? "bold" : "regular",
-        color: selected ? "#FFFFFF" : COLOR.text,
+        color: selected ? "#0B5D4F" : COLOR.text,
         align: "center",
         wrap: false,
       },
@@ -160,39 +167,46 @@ export function noticeBoxes(notices: { text: string; level: "warn" | "over" }[])
 }
 
 /**
- * The "จ่ายด้วย" row: one pill per wallet / card (the chosen one filled and not tappable), and an
- * "อื่น ๆ" pill when there are more places than the row shows.
+ * The "จ่ายด้วย" grid: one pill per wallet / card, two to a row (the chosen one tinted with a tick and
+ * not tappable), then "อื่น ๆ" when there are more places than shown, and "＋ เพิ่มช่องทาง" to add one.
  */
 export function paymentRow(
   choices: { label: string; selected: boolean; action: unknown }[],
   more?: unknown,
+  add?: unknown,
 ): unknown[] {
+  const pills: unknown[] = [
+    ...choices.map((c) => payPill(c.label, c.selected, c.selected ? undefined : c.action)),
+    ...(more ? [payPill("อื่น ๆ", false, more)] : []),
+    ...(add ? [payPill("＋ เพิ่มช่องทาง", false, add)] : []),
+  ];
+  const rows: unknown[] = [];
+  for (let i = 0; i < pills.length; i += 2) {
+    const pair = pills.slice(i, i + 2);
+    // an odd pill keeps its half-width: an empty box takes the other half
+    if (pair.length === 1) pair.push({ type: "box", layout: "vertical", flex: 1, contents: [] });
+    rows.push({ type: "box", layout: "horizontal", spacing: "sm", margin: "sm", contents: pair });
+  }
   return [
-    { type: "separator", margin: "lg" },
-    { type: "text", text: "จ่ายด้วย", size: "xs", color: COLOR.muted, margin: "md" },
     {
-      type: "box",
-      layout: "horizontal",
-      spacing: "sm",
-      margin: "sm",
-      contents: [
-        ...choices.map((c) => payPill(c.label, c.selected, c.selected ? undefined : c.action)),
-        ...(more ? [payPill("อื่น ๆ", false, more)] : []),
-      ],
+      type: "text",
+      text: "จ่ายด้วย",
+      size: "md",
+      weight: "bold",
+      color: TINT_STRONG,
+      margin: "xl",
     },
+    ...rows,
   ];
 }
 
-/** The small "📎 แนบรูป" pill: a tap opens the camera / album step for this entry. */
+/** The wide "📎 แนบรูป" pill along the foot of the card: a tap opens the camera / album step. */
 function attachPhotoPill(txId: string) {
   return {
     type: "box",
     layout: "horizontal",
-    flex: 0,
-    height: "32px",
-    cornerRadius: "16px",
-    paddingStart: "12px",
-    paddingEnd: "14px",
+    height: "46px",
+    cornerRadius: "23px",
     justifyContent: "center",
     alignItems: "center",
     backgroundColor: COLOR.primarySoft,
@@ -203,7 +217,14 @@ function attachPhotoPill(txId: string) {
       data: `a=ph&id=${txId}`,
     },
     contents: [
-      { type: "text", text: "📎 แนบรูป", size: "xs", weight: "bold", color: "#0B5D4F", flex: 0 },
+      {
+        type: "text",
+        text: "📎 แนบรูป",
+        size: "md",
+        weight: "bold",
+        color: "#0B5D4F",
+        align: "center",
+      },
     ],
   };
 }
@@ -225,19 +246,22 @@ export function budgetBlock(
     layout: "vertical",
     margin: "lg",
     spacing: "sm",
+    paddingAll: "16px",
+    cornerRadius: "18px",
+    backgroundColor: "#FFFFFF",
+    borderWidth: "1px",
+    borderColor: "#ECE8DE",
     contents: [
-      { type: "separator" },
       {
         type: "box",
         layout: "horizontal",
         alignItems: "center",
-        margin: "md",
         contents: [
           {
             type: "text",
             text: budget.scopeName ? `งบหมวด${budget.scopeName}` : "งบรวม",
             weight: "bold",
-            size: "md",
+            size: "lg",
             color: "#14352E",
             wrap: true,
             flex: 1,
@@ -275,26 +299,26 @@ export function budgetBlock(
           {
             type: "span",
             text: `฿${formatBaht(spent)}`,
-            size: "xl",
+            size: "3xl",
             weight: "bold",
             color: LEVEL_COLOR[level],
           },
-          { type: "span", text: ` / ฿${formatBaht(limit)}`, size: "md", color: COLOR.muted },
+          { type: "span", text: ` / ฿${formatBaht(limit)}`, size: "lg", color: COLOR.muted },
         ],
       },
       {
         type: "box",
         layout: "vertical",
-        height: "8px",
-        cornerRadius: "4px",
+        height: "12px",
+        cornerRadius: "6px",
         backgroundColor: "#E5EAEE",
         contents: [
           {
             type: "box",
             layout: "vertical",
             width: `${width}%`,
-            height: "8px",
-            cornerRadius: "4px",
+            height: "12px",
+            cornerRadius: "6px",
             backgroundColor: LEVEL_BAR[level],
             contents: [],
           },
@@ -375,7 +399,7 @@ export function buildConfirmMessage(input: ConfirmCardInput): LineMessage {
           text: input.edited ? "แก้ไขรายการสำเร็จ ✅" : "จดสำเร็จ ✅",
           weight: "bold",
           // the longer edit title is a notch smaller
-          size: input.edited ? "lg" : "xl",
+          size: input.edited ? "xl" : "xxl",
           color: "#0B5D4F",
           wrap: true,
         },
@@ -416,16 +440,16 @@ export function buildConfirmMessage(input: ConfirmCardInput): LineMessage {
           layout: "vertical",
           backgroundColor: accent,
           cornerRadius: "14px",
-          paddingTop: "4px",
-          paddingBottom: "4px",
-          paddingStart: "12px",
-          paddingEnd: "12px",
+          paddingTop: "6px",
+          paddingBottom: "6px",
+          paddingStart: "16px",
+          paddingEnd: "16px",
           flex: 0,
           contents: [
             {
               type: "text",
               text: TYPE_LABEL[input.type],
-              size: "sm",
+              size: "md",
               weight: "bold",
               color: "#FFFFFF",
             },
@@ -435,7 +459,7 @@ export function buildConfirmMessage(input: ConfirmCardInput): LineMessage {
           type: "text",
           text: `- ${category}`,
           weight: "bold",
-          size: "lg",
+          size: "xl",
           color: "#14352E",
           flex: 1,
         },
@@ -491,8 +515,8 @@ export function buildConfirmMessage(input: ConfirmCardInput): LineMessage {
           type: "text",
           text: input.title,
           weight: "bold",
-          size: "lg",
-          color: "#334155",
+          size: "xl",
+          color: "#1F2933",
           wrap: true,
           flex: 1,
         },
@@ -500,12 +524,12 @@ export function buildConfirmMessage(input: ConfirmCardInput): LineMessage {
           type: "text",
           text: `${income ? "+" : ""}${amountText}`,
           weight: "bold",
-          size: "lg",
+          size: "xl",
           color: accent,
           flex: 0,
         },
         chip(
-          "แก้",
+          "✏️",
           "#EAEEF0",
           "#334155",
           input.editUrl
@@ -517,7 +541,7 @@ export function buildConfirmMessage(input: ConfirmCardInput): LineMessage {
                 displayText: "แก้ไข",
               },
         ),
-        chip("ลบ", accentSoft, COLOR.expense, {
+        chip("🗑️", accentSoft, COLOR.expense, {
           type: "postback",
           label: "ลบ",
           data: `a=del&id=${input.txId}`,
@@ -598,7 +622,7 @@ export function buildConfirmMessage(input: ConfirmCardInput): LineMessage {
 
   body.push(...noticeBoxes(input.notices ?? []));
 
-  if (input.walletChoices && input.walletChoices.length > 1) {
+  if (input.walletChoices && input.walletChoices.length > 0) {
     body.push(
       ...paymentRow(
         input.walletChoices.map((w) => ({
@@ -618,6 +642,9 @@ export function buildConfirmMessage(input: ConfirmCardInput): LineMessage {
               data: `a=wl&id=${input.txId}`,
               displayText: "เลือกช่องทางอื่น",
             }
+          : undefined,
+        input.addWalletUrl?.startsWith("https://")
+          ? { type: "uri", label: "เพิ่มช่องทาง", uri: input.addWalletUrl }
           : undefined,
       ),
     );
@@ -646,13 +673,13 @@ export function buildConfirmMessage(input: ConfirmCardInput): LineMessage {
         layout: "horizontal",
         alignItems: "center",
         backgroundColor: COLOR.primarySoft,
-        paddingAll: "18px",
+        paddingAll: "20px",
         contents: header,
       },
       body: {
         type: "box",
         layout: "vertical",
-        backgroundColor: COLOR.surface,
+        backgroundColor: CREAM,
         paddingAll: "18px",
         contents: body,
       },
@@ -660,13 +687,13 @@ export function buildConfirmMessage(input: ConfirmCardInput): LineMessage {
         ? {
             footer: {
               type: "box",
-              layout: "horizontal",
-              backgroundColor: COLOR.surface,
+              layout: "vertical",
+              backgroundColor: CREAM,
               paddingTop: "0px",
-              paddingBottom: "14px",
+              paddingBottom: "18px",
               paddingStart: "18px",
               paddingEnd: "18px",
-              contents: [attachPhotoPill(input.txId), { type: "filler" }],
+              contents: [attachPhotoPill(input.txId)],
             },
           }
         : {}),

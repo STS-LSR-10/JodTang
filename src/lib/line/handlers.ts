@@ -1283,10 +1283,10 @@ async function receiptCardExtras(
 
   try {
     const wallets = await listWallets(db, user.id);
-    const main = wallets.find((w) => w.isDefault);
-    if (wallets.length > 1 && main) {
+    const main = wallets.find((w) => w.isDefault) ?? wallets[0];
+    if (main && can(effectivePlan(user.plan, user.plan_expires_at, now), "multiAccount")) {
       const { choices, more } = walletPills(wallets, main);
-      extras.payment = { choices, more };
+      extras.payment = { choices, more, addUrl: pageUrl("/wallets") };
     }
   } catch (error) {
     log.error("slip_wallets_failed", error);
@@ -1633,9 +1633,9 @@ async function safeDailyAlerts(
   }
 }
 
-/** The "จ่ายด้วย" pills: the chosen wallet first, then the others; with more than three, two and "อื่น ๆ". */
+/** The "จ่ายด้วย" pills: the chosen wallet first, then the others; with more than four, three and "อื่น ๆ". */
 function walletPills(wallets: Wallet[], chosen: Wallet) {
-  const shown = wallets.length <= 3 ? 3 : 2;
+  const shown = wallets.length <= 4 ? 4 : 3;
   const ordered = [chosen, ...wallets.filter((w) => w.id !== chosen.id)];
   return {
     choices: ordered.slice(0, shown).map((w) => ({
@@ -1720,8 +1720,12 @@ async function confirmCard(
   // "จ่ายด้วย": the chosen wallet first, then the others; more than three become "อื่น ๆ"
   let walletChoices: { id: string; label: string; selected: boolean }[] | undefined;
   let moreWallets = false;
-  if (style === "full" && multi && wallet && !edited) {
-    ({ choices: walletChoices, more: moreWallets } = walletPills(wallets, wallet));
+  const chosenWallet =
+    wallets.find((w) => w.id === walletId) ?? wallets.find((w) => w.isDefault) ?? wallets[0];
+  // choosing how it was paid is for Pro and above (the wallets and cards they set up)
+  const canChoose = can(effectivePlan(user.plan, user.plan_expires_at, deps.now()), "multiAccount");
+  if (style === "full" && canChoose && chosenWallet && !edited) {
+    ({ choices: walletChoices, more: moreWallets } = walletPills(wallets, chosenWallet));
   }
   // "📎 แนบรูป" at the bottom-left of the card (Pro and above, unless the person turned it off):
   // only a tap on it makes the next image this entry's photo, so a bill sent next is just a bill.
@@ -1737,6 +1741,7 @@ async function confirmCard(
     notices,
     walletChoices,
     moreWallets,
+    addWalletUrl: pageUrl("/wallets"),
     txId: tx.id,
     type: tx.type,
     title: tx.title,

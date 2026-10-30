@@ -81,7 +81,7 @@ beforeEach(() => {
 });
 
 describe("the แนบรูป button on the saved card (Pro and above)", () => {
-  it("sits at the bottom-left of the card and points at that entry", async () => {
+  it("is a wide pill along the foot of the card and points at that entry", async () => {
     const { deps, reply } = setup();
     await handleEvent(say("ข้าว 50"), deps);
     const card = sent(reply)[0] as unknown as {
@@ -89,9 +89,10 @@ describe("the แนบรูป button on the saved card (Pro and above)", () =
         footer: { contents: { type: string; action?: { data: string; displayText?: string } }[] };
       };
     };
-    const [pill, filler] = card.contents.footer.contents;
+    const pills = card.contents.footer.contents;
+    const pill = pills[0];
+    expect(pills).toHaveLength(1);
     expect(pill?.action?.data).toBe("a=ph&id=t-ข้าว");
-    expect(filler?.type).toBe("filler"); // pushes the pill to the left
     // the tap is silent: no "แนบรูป" message appears in the chat, only the camera / album buttons
     expect(pill?.action?.displayText).toBeUndefined();
     expect(everything(reply)).toContain("📎 แนบรูป");
