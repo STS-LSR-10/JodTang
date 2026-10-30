@@ -31,10 +31,10 @@ const IMAGE_PATH = resolve("assets/richmenu.jpg");
 // Tiles that open a LIFF page: tile key -> path (LIFF appends it to the endpoint URL)
 const LIFF_PAGES: Partial<Record<TileKey, string>> = {
   summary: "summary",
-  analytics: "analytics",
-  budgets: "budgets",
-  transactions: "transactions",
+  remind: "reminders",
+  note: "notes",
   settings: "settings",
+  invite: "invite",
   upgrade: "upgrade",
 };
 
@@ -136,9 +136,9 @@ async function main() {
       case "help":
         // sends "วิธีใช้งาน" as the user's message; the bot asks what they want to know (topic chips)
         return { type: "message", label, text: "วิธีใช้งาน" };
-      case "invite":
-        // the invite page: code, share button, how it works
-        return { type: "uri", label, uri: `${liffUrl}/invite` };
+      case "ask":
+        // sends "ถามพี่ฮูก" as the user's message; the bot opens the ask mode (example questions)
+        return { type: "message", label, text: "ถามพี่ฮูก" };
       default:
         return { type: "uri", label, uri: `${liffUrl}/summary` };
     }

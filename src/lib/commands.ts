@@ -15,6 +15,7 @@ export type Command =
   | { kind: "note-add"; body: string }
   | { kind: "remind-add"; text: string }
   | { kind: "owl-start" }
+  | { kind: "open-page"; page: "summary" | "transactions" | "budgets" | "analytics" }
   | { kind: "owl-ask"; question: string }
   | { kind: "owl-end" }
   | { kind: "remind-list" }
@@ -74,6 +75,18 @@ export function parseCommand(input: string): Command | null {
   const note = /^โน[้๊็]ต(?:\s+([\s\S]+))?$/.exec(raw);
   if (note)
     return note[1]?.trim() ? { kind: "note-add", body: note[1].trim() } : { kind: "note-list" };
+
+  // The pages that are not on the Rich Menu any more open from a short chat command.
+  if (["หน้ารายการ", "รายการทั้งหมด", "ประวัติ", "ประวัติรายการ"].includes(text)) {
+    return { kind: "open-page", page: "transactions" };
+  }
+  if (["หน้างบ", "งบ", "หมวด/งบ", "หมวดและงบ", "จัดการงบ", "หน้าหมวด"].includes(text)) {
+    return { kind: "open-page", page: "budgets" };
+  }
+  if (["หน้าวิเคราะห์", "กราฟ", "หน้ากราฟ"].includes(text)) {
+    return { kind: "open-page", page: "analytics" };
+  }
+  if (["หน้าสรุป", "สรุป"].includes(text)) return { kind: "open-page", page: "summary" };
 
   // พี่ฮูก (the AI assistant): "ถามพี่ฮูก" starts a few minutes of questions, "ฮูก ใช้ไปเท่าไร" asks one,
   // "จบ" leaves the mode. The name must stand alone ("ฮูกกี้ 50" is still an entry).

@@ -14,19 +14,20 @@ describe("the Rich Menu tap areas", () => {
   it("every tile is there, with its place in the menu", () => {
     const keys = new Set(TILES.map((t) => t.key));
     for (const k of [
-      "compose",
       "summary",
-      "analytics",
-      "budgets",
-      "transactions",
+      "remind",
+      "note",
+      "ask",
       "settings",
       "help",
-      "upgrade",
-      "invite",
+      "compose",
       "scan",
+      "invite",
+      "upgrade",
     ]) {
       expect(keys.has(k as never)).toBe(true);
     }
+    expect(TILES).toHaveLength(10);
   });
 
   it("stay inside the 2500x1686 menu and have a size", () => {
@@ -53,7 +54,7 @@ describe("the Rich Menu tap areas", () => {
 
   it("a box of the picture is carried over with the same crop and scale", () => {
     // the whole picture is the whole menu
-    expect(toMenuBounds([0, 0, 1264, 848])).toEqual({
+    expect(toMenuBounds([0, 0, 2000, 1342])).toEqual({
       x: 0,
       y: 0,
       width: RICH_MENU_WIDTH,

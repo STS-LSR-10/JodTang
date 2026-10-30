@@ -326,3 +326,31 @@ describe("พี่ฮูก commands", () => {
     expect(parseCommand("จบงาน 500")).toBeNull();
   });
 });
+
+describe("commands that open the pages that left the Rich Menu", () => {
+  it.each([
+    ["หน้ารายการ", "transactions"],
+    ["รายการทั้งหมด", "transactions"],
+    ["ประวัติ", "transactions"],
+    ["งบ", "budgets"],
+    ["หน้างบ", "budgets"],
+    ["หมวด/งบ", "budgets"],
+    ["กราฟ", "analytics"],
+    ["หน้าวิเคราะห์", "analytics"],
+    ["สรุป", "summary"],
+    ["หน้าสรุป", "summary"],
+  ])("%s", (input, page) => {
+    expect(parseCommand(input)).toEqual({ kind: "open-page", page });
+  });
+
+  it("do not take over the commands and entries that start the same way", () => {
+    expect(parseCommand("วิเคราะห์")).toEqual({ kind: "insight" });
+    expect(parseCommand("สรุปเดือนนี้")).toEqual({ kind: "summary", scope: "month" });
+    expect(parseCommand("งบวัน 500")).toEqual({
+      kind: "daily-budget",
+      action: "set",
+      amountSatang: 50_000,
+    });
+    expect(parseCommand("งบ 500")).toBeNull();
+  });
+});

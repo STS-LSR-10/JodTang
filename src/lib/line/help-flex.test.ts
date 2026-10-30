@@ -32,6 +32,7 @@ const READ_ONLY = new Set([
   "goals",
   "remind-list",
   "owl-start",
+  "open-page",
 ]);
 
 describe("help topics", () => {

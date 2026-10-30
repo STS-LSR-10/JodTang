@@ -143,6 +143,7 @@ import {
 } from "@/lib/user-reminder-repo";
 import { describeReminder, parseReminder, reminderCapacity } from "@/lib/user-reminder";
 import { buildReminderCard } from "./reminder-flex";
+import { buildOpenPageCard, PAGE_INFO } from "./page-flex";
 import type { Owl } from "@/lib/ai/owl";
 import { inOwlMode, owlAsk, owlEnd, owlStart, type OwlDeps } from "./owl";
 import { cleanNoteBody, MAX_NOTE_LENGTH, noteCapacity, noteTitle } from "@/lib/note";
@@ -2111,6 +2112,15 @@ async function runCommand(
       if ((await countNotes(db, user.id)) >= limit) return [text(NOTE_FULL_TEXT(limit))];
       await createNote(db, user.id, body);
       return [text(NOTE_SAVED_TEXT(noteTitle(body, 60), pageUrl("/notes")))];
+    }
+
+    case "open-page": {
+      const url = pageUrl(`/${command.page}`);
+      return [
+        url
+          ? buildOpenPageCard(command.page, url)
+          : text(`เปิดหน้า${PAGE_INFO[command.page].title} ได้จากเมนูด้านล่างของแอป`),
+      ];
     }
 
     case "owl-start":

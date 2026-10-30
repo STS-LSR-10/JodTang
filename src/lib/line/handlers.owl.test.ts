@@ -163,3 +163,15 @@ describe("พี่ฮูก in the chat", () => {
     expect(entries).toEqual(["ฮูกกี้"]);
   });
 });
+
+describe("opening the pages that are not on the menu", () => {
+  it("answers with a card that has a button to the page", async () => {
+    process.env.NEXT_PUBLIC_LIFF_ID = "1234-abcd";
+    const { deps, reply } = setup();
+    await handleEvent(say("หน้ารายการ"), deps);
+    const json = JSON.stringify(reply.mock.calls[0]?.[1]);
+    expect(json).toContain("https://liff.line.me/1234-abcd/transactions");
+    await handleEvent(say("งบ"), deps);
+    expect(JSON.stringify(reply.mock.calls[1]?.[1])).toContain("/budgets");
+  });
+});
