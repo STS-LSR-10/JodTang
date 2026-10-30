@@ -44,8 +44,8 @@ vi.mock("./upsell-reply", () => ({
   ],
 }));
 
-const answer = vi.fn(async (input: { question: string; data: string }) =>
-  input.data ? "**ใช้ไป** ฿1,000" : "",
+const answer = vi.fn<(input: { question: string; data: string }) => Promise<string>>(
+  async (input) => (input.data ? "**ใช้ไป** ฿1,000" : ""),
 );
 const owl: Owl = { name: "t", answer };
 const deps = (over: Partial<OwlDeps> = {}): OwlDeps => ({
