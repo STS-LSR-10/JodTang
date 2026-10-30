@@ -1,0 +1,255 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { calendarMonthRange, cycleRange } from "@/lib/budget-cycle";
+import { formatBaht, toSatang } from "@/lib/money";
+import { listNotes } from "@/lib/note-repo";
+import { log, safeMessage } from "@/lib/log";
+import {
+  expenseTotalSatang,
+  getBudgetMode,
+  getSettings,
+  loadBudgets,
+  loadCategories,
+  periodSummary,
+} from "@/lib/repo";
+import { loadCategorySpend } from "@/lib/summary-load";
+import { bangkokParts, formatThaiDate, formatThaiMonthShort, fromBangkok } from "@/lib/thai-date";
+import { describeReminder, type Repeat } from "@/lib/user-reminder";
+import { listReminders } from "@/lib/user-reminder-repo";
+
+const MAX_RECENT = 15;
+const MAX_CATEGORIES = 8;
+const MAX_REMINDERS = 8;
+const MAX_NOTES = 8;
+const MAX_NOTE_CHARS = 300;
+const MAX_BUDGET_LINES = 8;
+
+export interface Money {
+  incomeSatang: number;
+  expenseSatang: number;
+  count: number;
+}
+
+/** Everything the assistant may see about one person, as plain numbers and short texts. */
+export interface OwlFacts {
+  now: Date;
+  month: Money | null;
+  previousMonth: Money | null;
+  year: Money | null;
+  topCategories: { name: string; amountSatang: number }[];
+  budgets: { scope: string | null; spentSatang: number; limitSatang: number }[];
+  cycleLabel: string | null;
+  recent: {
+    occurredAt: Date;
+    type: "income" | "expense";
+    title: string;
+    amountSatang: number;
+    category: string | null;
+  }[];
+  reminders: { remindAt: Date; body: string; repeat: Repeat | null }[];
+  notes: { createdAt: Date; body: string }[];
+}
+
+const baht = (satang: number) => `฿${formatBaht(satang)}`;
+
+function moneyLine(label: string, m: Money | null): string | null {
+  if (!m) return null;
+  return `${label}: รายรับ ${baht(m.incomeSatang)} · รายจ่าย ${baht(m.expenseSatang)} · คงเหลือ ${baht(m.incomeSatang - m.expenseSatang)} · ${m.count} รายการ`;
+}
+
+const oneLine = (s: string, max = 80) => s.replace(/\s+/g, " ").trim().slice(0, max);
+
+/** The facts as the text the model reads (Thai, one fact per line, nothing but what is listed). */
+export function renderOwlContext(f: OwlFacts): string {
+  const p = bangkokParts(f.now);
+  const prev = fromBangkok(p.year, p.month - 1, 15);
+  const lines: (string | null)[] = [
+    `วันนี้: ${formatThaiDate(f.now)} (เวลาไทย)`,
+    moneyLine(`เดือนนี้ (${formatThaiMonthShort(f.now)})`, f.month),
+    moneyLine(`เดือนก่อน (${formatThaiMonthShort(prev)})`, f.previousMonth),
+    moneyLine(`ปีนี้ (${p.year + 543})`, f.year),
+  ];
+  if (f.topCategories.length > 0) {
+    lines.push(
+      `หมวดรายจ่ายเดือนนี้ (มากไปน้อย): ${f.topCategories.map((c) => `${c.name} ${baht(c.amountSatang)}`).join(" · ")}`,
+    );
+  }
+  if (f.budgets.length > 0) {
+    lines.push(
+      `งบ${f.cycleLabel ? ` (รอบ${f.cycleLabel})` : ""}: ${f.budgets
+        .map((b) => {
+          const pct = b.limitSatang > 0 ? Math.floor((b.spentSatang * 100) / b.limitSatang) : 0;
+          return `${b.scope ? `หมวด${b.scope}` : "งบรวม"} ใช้ไป ${baht(b.spentSatang)} จาก ${baht(b.limitSatang)} (${pct}%)`;
+        })
+        .join(" | ")}`,
+    );
+  }
+  if (f.recent.length > 0) {
+    lines.push("รายการล่าสุด (ใหม่ไปเก่า):");
+    for (const r of f.recent) {
+      lines.push(
+        `- ${formatThaiDate(r.occurredAt, true)} | ${r.type === "income" ? "รายรับ" : "รายจ่าย"} | ${oneLine(r.title)} | ${baht(r.amountSatang)}${r.category ? ` | ${r.category}` : ""}`,
+      );
+    }
+  }
+  if (f.reminders.length > 0) {
+    lines.push("เตือนที่รออยู่:");
+    for (const r of f.reminders) {
+      lines.push(`- ${describeReminder(r.remindAt, r.repeat)} | ${oneLine(r.body, 100)}`);
+    }
+  }
+  if (f.notes.length > 0) {
+    lines.push("โน้ตของผู้ใช้ที่เกี่ยวกับคำถาม:");
+    for (const n of f.notes) {
+      lines.push(
+        `- ${formatThaiDate(n.createdAt)}: ${n.body.replace(/\s+/g, " ").trim().slice(0, MAX_NOTE_CHARS)}`,
+      );
+    }
+  }
+  return lines.filter((l): l is string => l !== null).join("\n");
+}
+
+/** Words of the question to look for in notes (Thai has no spaces, so only spaced words count). */
+export function noteSearchWords(question: string): string[] {
+  const words = question
+    .split(/[\s,;?!]+/)
+    .map((w) => w.trim())
+    .filter((w) => w.length >= 2 && w.length <= 30);
+  return [...new Set(words)].slice(0, 3);
+}
+
+/** Does the question ask about the person's notes in general? */
+export const asksAboutNotes = (question: string) => /โน้ต|บันทึกไว้|จดไว้/.test(question);
+
+/** Run one part of the facts; a failing part is left out (and logged) instead of failing the answer. */
+async function part<T>(name: string, run: () => Promise<T>, fallback: T): Promise<T> {
+  try {
+    return await run();
+  } catch (error) {
+    log.warn("owl_context_part_failed", { part: name, reason: safeMessage(error) });
+    return fallback;
+  }
+}
+
+/**
+ * Collect what the assistant may see: this month, last month and this year in numbers, the biggest
+ * categories, the budget(s), the last entries, waiting reminders, and notes only when the question
+ * asks for them (all notes, or those that contain a word of the question).
+ */
+export async function loadOwlFacts(
+  db: SupabaseClient,
+  userId: string,
+  question: string,
+  now: Date,
+): Promise<OwlFacts> {
+  const p = bangkokParts(now);
+  const month = calendarMonthRange(now);
+  const previous = { from: fromBangkok(p.year, p.month - 1, 1), to: month.from };
+  const year = { from: fromBangkok(p.year, 1, 1), to: fromBangkok(p.year + 1, 1, 1) };
+
+  const [thisMonth, lastMonth, thisYear, categories, budgetPart, recent, reminders, notes] =
+    await Promise.all([
+      part("month", () => periodSummary(db, { userId, ...month }), null),
+      part("previous_month", () => periodSummary(db, { userId, ...previous }), null),
+      part("year", () => periodSummary(db, { userId, ...year }), null),
+      part("categories", () => loadCategorySpend(db, userId, month), []),
+      part(
+        "budgets",
+        async () => {
+          const [settings, mode, budgets, cats] = await Promise.all([
+            getSettings(db, userId),
+            getBudgetMode(db, userId),
+            loadBudgets(db, userId),
+            loadCategories(db, userId),
+          ]);
+          const range = cycleRange(now, settings.budget_cycle, settings.cycle_start_day);
+          const wanted = budgets
+            .filter((b) => (mode === "category" ? b.category_id !== null : b.category_id === null))
+            .slice(0, MAX_BUDGET_LINES);
+          const rows = await Promise.all(
+            wanted.map(async (b) => ({
+              scope: b.category_id
+                ? (cats.find((c) => c.id === b.category_id)?.name ?? null)
+                : null,
+              limitSatang: toSatang(b.amount),
+              spentSatang: await expenseTotalSatang(db, {
+                userId,
+                ...range,
+                categoryId: b.category_id ?? undefined,
+              }),
+            })),
+          );
+          return {
+            rows: rows.filter(
+              (r) => r.limitSatang > 0 && (mode !== "category" || r.scope !== null),
+            ),
+            label:
+              settings.budget_cycle === "weekly"
+                ? "รายสัปดาห์"
+                : `รายเดือน วันที่ ${settings.cycle_start_day}`,
+          };
+        },
+        { rows: [], label: "" },
+      ),
+      part(
+        "recent",
+        async () => {
+          const { data, error } = await db
+            .from("transactions")
+            .select("occurred_at,type,title,amount,categories(name)")
+            .eq("user_id", userId)
+            .eq("status", "confirmed")
+            .order("occurred_at", { ascending: false })
+            .limit(MAX_RECENT);
+          if (error) throw new Error(error.message);
+          return (data ?? []).map((r) => {
+            const cat = Array.isArray(r.categories) ? r.categories[0] : r.categories;
+            return {
+              occurredAt: new Date(r.occurred_at as string),
+              type: r.type as "income" | "expense",
+              title: String(r.title ?? ""),
+              amountSatang: toSatang(r.amount as string | number),
+              category: (cat as { name?: string } | null)?.name ?? null,
+            };
+          });
+        },
+        [],
+      ),
+      part("reminders", () => listReminders(db, userId, MAX_REMINDERS), []),
+      part(
+        "notes",
+        async () => {
+          if (asksAboutNotes(question)) {
+            return (await listNotes(db, userId, { limit: MAX_NOTES })).items;
+          }
+          const found = new Map<string, { createdAt: string; body: string }>();
+          for (const w of noteSearchWords(question)) {
+            for (const n of (await listNotes(db, userId, { q: w, limit: 3 })).items) {
+              found.set(n.id, n);
+            }
+          }
+          return [...found.values()].slice(0, 5);
+        },
+        [],
+      ),
+    ]);
+
+  return {
+    now,
+    month: thisMonth,
+    previousMonth: lastMonth,
+    year: thisYear,
+    topCategories: categories.slice(0, MAX_CATEGORIES).map((c) => ({
+      name: c.name,
+      amountSatang: c.amountSatang,
+    })),
+    budgets: budgetPart.rows,
+    cycleLabel: budgetPart.label || null,
+    recent,
+    reminders: reminders.map((r) => ({
+      remindAt: new Date(r.remindAt),
+      body: r.body,
+      repeat: r.repeat,
+    })),
+    notes: notes.map((n) => ({ createdAt: new Date(n.createdAt), body: n.body })),
+  };
+}

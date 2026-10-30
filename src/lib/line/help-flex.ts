@@ -153,6 +153,13 @@ export const HELP_TOPICS: HelpTopic[] = [
       { icon: "🔎", cmd: "ค้นหา กาแฟ", desc: "หารายการพร้อมยอดรวม", need: "plus" },
       { icon: "🔮", cmd: "พยากรณ์", desc: "คาดเงินปลายรอบ", need: "ultimate", send: "พยากรณ์" },
       { icon: "🧠", cmd: "วิเคราะห์", desc: "AI วิเคราะห์การใช้จ่าย", need: "ultimate" },
+      {
+        icon: "🦉",
+        cmd: "ถามพี่ฮูก",
+        desc: "ถาม AI เรื่องรายรับรายจ่าย งบ เตือน โน้ต · หรือ ฮูก ใช้ไปเท่าไร",
+        need: "free",
+        send: "ถามพี่ฮูก",
+      },
     ],
   },
   {

@@ -386,3 +386,25 @@ export const reminderPushText = (body: string, repeatLabel: string | null, url?:
     `⏰ เตือน: ${body}`,
     ...(repeatLabel ? [`(${repeatLabel}${url ? ` · ยกเลิกได้ที่ ${url}` : ""})`] : []),
   ].join("\n");
+
+// ── พี่ฮูก (AI assistant) ──
+export const OWL_UNAVAILABLE_TEXT = "พี่ฮูกยังไม่เปิดให้ถามตอนนี้ ลองใหม่ภายหลังนะ";
+export const OWL_PROMPT_TEXT =
+  '🦉 พี่ฮูกมาแล้ว ถามเรื่องรายรับรายจ่าย งบ เตือน หรือโน้ตของคุณได้เลย\n(พิมพ์ "จบ" เมื่ออยากกลับไปจดรายการ)';
+export const OWL_EXAMPLES = [
+  "เดือนนี้ใช้ไปเท่าไร",
+  "หมวดไหนใช้เยอะสุด",
+  "เหลืองบเท่าไร",
+  "มีเตือนอะไรบ้าง",
+] as const;
+export const OWL_END_TEXT = "กลับมาจดรายการตามปกติแล้ว 🦉";
+export const OWL_NOT_IN_MODE_TEXT = 'ตอนนี้ไม่ได้ถามพี่ฮูกอยู่นะ พิมพ์ "ถามพี่ฮูก" เมื่ออยากถาม';
+export const OWL_TOO_LONG_TEXT = (max: number) => `ถามสั้นลงหน่อยนะ (ไม่เกิน ${max} ตัวอักษร)`;
+export const OWL_FAILED_TEXT = "พี่ฮูกตอบไม่ได้ตอนนี้ ลองถามใหม่อีกครั้งนะ (ไม่นับโควตาครั้งนี้)";
+export const OWL_DAY_LIMIT_TEXT = "วันนี้ถามพี่ฮูกเยอะแล้ว พรุ่งนี้ค่อยมาถามใหม่นะ";
+export const owlQuotaText = (plan: "free" | "plus" | "ultimate", limit: number) =>
+  plan === "free"
+    ? `เดือนนี้ถามพี่ฮูกครบ ${limit} ครั้งแล้ว (แผน Free) อัปเกรดเป็น Pro ถามได้ 50 ครั้ง/เดือน หรือรอโควตารีเซ็ตต้นเดือนหน้านะ`
+    : plan === "plus"
+      ? `เดือนนี้ถามพี่ฮูกครบ ${limit} ครั้งแล้ว (แผน Pro) อัปเกรดเป็น Elite ถามได้ 300 ครั้ง/เดือน หรือรอโควตารีเซ็ตต้นเดือนหน้านะ`
+      : `เดือนนี้ถามพี่ฮูกครบ ${limit} ครั้งตามเกณฑ์ใช้งานปกติแล้ว ถามได้ใหม่ต้นเดือนหน้านะ`;

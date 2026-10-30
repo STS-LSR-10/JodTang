@@ -2,6 +2,7 @@ import { getServerEnv } from "@/lib/env";
 import { buildSlipReader } from "@/lib/ocr/factory";
 import { rateLimit } from "@/lib/rate-limit";
 import { buildInsightWriter } from "@/lib/ai/insight-writer";
+import { buildOwl } from "@/lib/ai/owl";
 import { buildPdfReader } from "@/lib/ai/pdf-reader";
 import { buildTextStructurer } from "@/lib/ai/text-structurer";
 import { buildTranscriber } from "@/lib/voice/transcribe";
@@ -72,6 +73,10 @@ export async function processEvents(rawEvents: unknown[]): Promise<void> {
   if (structurer) deps.structurer = structurer;
   const insightWriter = buildInsightWriter(env);
   if (insightWriter) deps.insightWriter = insightWriter;
+
+  // พี่ฮูก (questions about the person's own money) uses the same AI provider; without a key it is "not available".
+  const owl = buildOwl(env);
+  if (owl) deps.owl = owl;
 
   // PDF files (statements, bills) are read by the same AI provider; without a key they get a polite no.
   const pdfReader = buildPdfReader(env);

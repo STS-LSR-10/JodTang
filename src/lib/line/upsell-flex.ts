@@ -1,4 +1,4 @@
-import { PDF_LIMIT, SLIP_LIMIT, VOICE_LIMIT } from "@/lib/plan";
+import { OWL_LIMIT, PDF_LIMIT, SLIP_LIMIT, VOICE_LIMIT } from "@/lib/plan";
 import { LAUNCH_ENDS_TEXT, launchActive, priceFor, TRIAL_DAYS } from "@/lib/pricing";
 import type { LineMessage } from "@/lib/types";
 import { COLOR } from "./flex";
@@ -7,7 +7,7 @@ import { COLOR } from "./flex";
 const MAX_POSTBACK = 300;
 
 export interface UpsellCardInput {
-  feature: "backdate" | "slip" | "voice" | "pdf";
+  feature: "backdate" | "slip" | "voice" | "pdf" | "owl";
   /** The Pro trial can still be started from the chat. */
   trialAvailable: boolean;
   /** Public /upgrade page; the button is left out when the app URL is unknown. */
@@ -28,6 +28,10 @@ const COPY = {
   voice: {
     title: "จดด้วยเสียงสำหรับสมาชิก Pro",
     body: "พูดสั้น ๆ เช่น “กาแฟสามสิบบาท” แล้วบอทจดให้ ไม่ต้องพิมพ์ ใช้สิทธิ์ลองจดด้วยเสียงฟรีครบแล้ว",
+  },
+  owl: {
+    title: "ถามพี่ฮูกได้มากขึ้น",
+    body: "ถามพี่ฮูก (AI) เรื่องรายรับรายจ่าย งบ เตือน และโน้ตของคุณได้เลย ใช้สิทธิ์ถามฟรีของเดือนนี้ครบแล้ว",
   },
   pdf: {
     title: "จดจากไฟล์ PDF สำหรับสมาชิก Pro",
@@ -58,11 +62,13 @@ export function buildUpsellCard(input: UpsellCardInput): LineMessage {
   const price =
     input.feature === "slip"
       ? `Pro ฿${plus}/เดือน อ่านสลิปได้ ${SLIP_PRO} ใบ/เดือน · Elite ฿${ultimate}/เดือน อ่านสลิปไม่จำกัด${launch}`
-      : input.feature === "pdf"
-        ? `Pro ฿${plus}/เดือน อ่าน PDF ได้ ${PDF_LIMIT.plus} ไฟล์/เดือน · Elite ฿${ultimate}/เดือน ${PDF_LIMIT.ultimate} ไฟล์/เดือน${launch}`
-        : input.feature === "voice"
-          ? `Pro ฿${plus}/เดือน จดด้วยเสียงได้ ${VOICE_LIMIT.plus} ครั้ง/เดือน · Elite ฿${ultimate}/เดือน ไม่จำกัด${launch}`
-          : `อัปเกรดวันนี้เพียง ฿${plus}/เดือน${launch}${input.trialAvailable ? ` หรือทดลองใช้ฟรี ${TRIAL_DAYS} วัน!` : ""}`;
+      : input.feature === "owl"
+        ? `Pro ฿${plus}/เดือน ถามพี่ฮูกได้ ${OWL_LIMIT.plus} ครั้ง/เดือน · Elite ฿${ultimate}/เดือน ${OWL_LIMIT.ultimate} ครั้ง/เดือน${launch}`
+        : input.feature === "pdf"
+          ? `Pro ฿${plus}/เดือน อ่าน PDF ได้ ${PDF_LIMIT.plus} ไฟล์/เดือน · Elite ฿${ultimate}/เดือน ${PDF_LIMIT.ultimate} ไฟล์/เดือน${launch}`
+          : input.feature === "voice"
+            ? `Pro ฿${plus}/เดือน จดด้วยเสียงได้ ${VOICE_LIMIT.plus} ครั้ง/เดือน · Elite ฿${ultimate}/เดือน ไม่จำกัด${launch}`
+            : `อัปเกรดวันนี้เพียง ฿${plus}/เดือน${launch}${input.trialAvailable ? ` หรือทดลองใช้ฟรี ${TRIAL_DAYS} วัน!` : ""}`;
 
   const buttons: unknown[] = [];
   if (input.trialAvailable) {

@@ -87,7 +87,7 @@ Vercel (Production) · ตัวที่ขึ้นต้น `NEXT_PUBLIC_*` �
 - AI: `AI_PROVIDER` (`gemini` ค่าเริ่มต้น | `anthropic` | `openai` — **ต้องไม่ว่าง**) + key ของค่ายที่เลือก (`GEMINI_API_KEY` …), ตัวเสริม `AI_MODEL`, `EASYSLIP_API_KEY`, `SLIP_READERS` (อย่าสร้างตัวแปรเสริมแบบค่าว่าง)
 - Stripe: `STRIPE_SECRET_KEY` (`sk_test_`/`sk_live_`), `STRIPE_WEBHOOK_SECRET` (`whsec_`) — ถ้าไม่ตั้ง ปุ่มชำระเงินตอบ "ยังไม่เปิดให้ชำระเงิน"
 
-## 7) ฐานข้อมูล: migrations `supabase/migrations/0001…0043` (รันตามลำดับ รันซ้ำได้)
+## 7) ฐานข้อมูล: migrations `supabase/migrations/0001…0044` (รันตามลำดับ รันซ้ำได้)
 
 | ไฟล์      | ทำอะไร                                                                                                                                                                                                                                                                                                                   |
 | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -128,6 +128,7 @@ Vercel (Production) · ตัวที่ขึ้นต้น `NEXT_PUBLIC_*` �
 | 0037      | หารบิลรอบ 3: สถานะ `setup` ของบิล, `qr_announced_at`, `last_reminded_on`, `split_bill_slips.qr_hash` (unique = QR บนสลิปใบเดียวจ่ายได้ส่วนเดียว) + `split_bill_confirm` (เลือกคน+ล็อกยอดแบบ atomic), `split_bill_mark_announced`, `split_bill_mark_reminded`, `split_bill_pay_by_slip` รับ qr_hash                       |
 | 0038      | `split_bill_join` ใช้ได้กับบิลสถานะ `setup` (เพื่อนกด "ร่วมหารด้วย" ระหว่างที่คนจ่ายกำลังเลือก; รายชื่อสุดท้ายคือที่คนจ่ายเลือก)                                                                                                                                                                                         |
 | 0039      | หารบิล: คนจ่ายเท่านั้นที่ยืนยันว่าเงินเข้า — `split_bill_members.claim_via` (slip / slip_unverified), `split_bill_claim_by_slip` แทน `split_bill_pay_by_slip` (สลิปที่บอทตรวจแล้วแค่ "รอคนจ่ายยืนยัน" ไม่ติ๊กจ่ายเอง), `split_bill_mark_paid` / `split_bill_unpay` ล้างสถานะรอ                                           |
+| 0044      | โหมดถามพี่ฮูก: ตาราง `ask_waits` (ผู้ใช้ละ 1 แถว, หมดอายุใน 5 นาทีหลังถามล่าสุด; server-only) |
 | 0043      | เตือน: ตาราง `user_reminders` (ข้อความ เวลา ความถี่ ทุกวัน/สัปดาห์/เดือน) + ฟังก์ชัน `claim_due_reminders` (หยิบเตือนที่ถึงเวลาทีละครั้ง ล็อกแถว ขยับรอบถัดไปตามเวลาไทย; server-only) |
 | 0042      | โน้ต: ตาราง `notes` (ข้อความ 1–2,000 ตัวอักษร ต่อผู้ใช้; RLS เจ้าของเท่านั้น) |
 | 0041      | จดจาก PDF: ค่า `tx_source = 'pdf'` และตาราง `pdf_imports` (แฮชของไฟล์ที่อ่านแล้ว กันอ่านซ้ำ; server-only) |

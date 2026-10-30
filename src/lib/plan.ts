@@ -70,6 +70,9 @@ export const VOICE_LIMIT: Record<Plan, number> = { free: 0, plus: 20, ultimate: 
 /** PDF files (statements, bills, lists) a person can have read per month. Free has none. */
 export const PDF_LIMIT: Record<Plan, number> = { free: 0, plus: 10, ultimate: 30 };
 
+/** Questions to พี่ฮูก (the AI assistant) per month, by plan. Each one is a paid AI call. */
+export const OWL_LIMIT: Record<Plan, number> = { free: 5, plus: 50, ultimate: 300 };
+
 /** Recurring entries ("รายการประจำ") a plan may have set up at once. */
 const RECURRING_LIMIT: Record<Plan, number> = { free: 0, plus: 20, ultimate: 100 };
 export const recurringLimit = (plan: Plan): number => RECURRING_LIMIT[plan];

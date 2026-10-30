@@ -14,6 +14,9 @@ export type Command =
   | { kind: "search-usage" }
   | { kind: "note-add"; body: string }
   | { kind: "remind-add"; text: string }
+  | { kind: "owl-start" }
+  | { kind: "owl-ask"; question: string }
+  | { kind: "owl-end" }
   | { kind: "remind-list" }
   | { kind: "note-list" }
   | { kind: "note-search"; term: string | null }
@@ -71,6 +74,13 @@ export function parseCommand(input: string): Command | null {
   const note = /^โน[้๊็]ต(?:\s+([\s\S]+))?$/.exec(raw);
   if (note)
     return note[1]?.trim() ? { kind: "note-add", body: note[1].trim() } : { kind: "note-list" };
+
+  // พี่ฮูก (the AI assistant): "ถามพี่ฮูก" starts a few minutes of questions, "ฮูก ใช้ไปเท่าไร" asks one,
+  // "จบ" leaves the mode. The name must stand alone ("ฮูกกี้ 50" is still an entry).
+  if (["ถามพี่ฮูก", "ถามฮูก", "พี่ฮูก", "ฮูก"].includes(text)) return { kind: "owl-start" };
+  if (["จบ", "จบการถาม", "เลิกถาม", "พอแล้ว"].includes(text)) return { kind: "owl-end" };
+  const owlAsk = /^(?:ถาม)?(?:พี่)?ฮูก\s+([\s\S]+)$/.exec(raw);
+  if (owlAsk?.[1]?.trim()) return { kind: "owl-ask", question: owlAsk[1].trim() };
 
   // Reminders: "เตือน พรุ่งนี้ 9 โมง จ่ายค่าไฟ" sets one ("เตือนฉัน ..." / "เตือนให้ ..." too), "เตือน"
   // or "รายการเตือน" lists them. "เตือน" must stand alone ("เตือนใจ 100" is still an entry).

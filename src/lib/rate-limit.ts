@@ -29,6 +29,9 @@ export const LIMITS = {
   /** PDF files per user: each one is a paid AI reading of a whole document. */
   chatPdf: { limit: 3, windowSeconds: 60 },
   pdfDay: { limit: 20, windowSeconds: 86_400 },
+  /** Questions to พี่ฮูก: each one is a paid AI call. */
+  owl: { limit: 6, windowSeconds: 60 },
+  owlDay: { limit: 40, windowSeconds: 86_400 },
   /** AI-assisted reading of long sentences: one paid call each, so a daily ceiling per person. */
   smartDay: { limit: 60, windowSeconds: 86_400 },
   /** AI Insight on request: one paid call each. */

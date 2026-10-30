@@ -3115,3 +3115,36 @@ describe("user reminders (0043)", () => {
     await expect(add(u, "x", "2026-10-29T02:00:00Z", "yearly")).rejects.toThrow();
   });
 });
+
+describe("ask mode (0044)", () => {
+  it("keeps one row per person and goes with the person", async () => {
+    const u = await newUser(db, `ask-${Math.random()}`);
+    await db.query(
+      "insert into ask_waits (user_id, expires_at) values ($1, now() + interval '5 minutes')",
+      [u],
+    );
+    await db.query(
+      "insert into ask_waits (user_id, expires_at) values ($1, now() + interval '10 minutes') on conflict (user_id) do update set expires_at = excluded.expires_at",
+      [u],
+    );
+    expect(
+      (
+        await one<{ n: number }>(
+          db,
+          "select count(*)::int as n from ask_waits where user_id = $1",
+          [u],
+        )
+      ).n,
+    ).toBe(1);
+    await db.query("delete from users where id = $1", [u]);
+    expect(
+      (
+        await one<{ n: number }>(
+          db,
+          "select count(*)::int as n from ask_waits where user_id = $1",
+          [u],
+        )
+      ).n,
+    ).toBe(0);
+  });
+});

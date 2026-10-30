@@ -143,6 +143,8 @@ import {
 } from "@/lib/user-reminder-repo";
 import { describeReminder, parseReminder, reminderCapacity } from "@/lib/user-reminder";
 import { buildReminderCard } from "./reminder-flex";
+import type { Owl } from "@/lib/ai/owl";
+import { inOwlMode, owlAsk, owlEnd, owlStart, type OwlDeps } from "./owl";
 import { cleanNoteBody, MAX_NOTE_LENGTH, noteCapacity, noteTitle } from "@/lib/note";
 import { countNotes, createNote, listNotes } from "@/lib/note-repo";
 import { ensureWallets, listWallets, setEntryWallet, setSlipWallet } from "@/lib/wallet-repo";
@@ -346,6 +348,8 @@ export interface HandlerDeps {
     fetchAudio: VoiceDeps["fetchAudio"];
     transcriber: Transcriber;
   };
+  /** พี่ฮูก, the AI assistant. Absent (no AI key) -> a polite "not available". */
+  owl?: Owl;
   /** PDF files (statements, bills). Absent (no AI key) -> a polite "not available" reply. */
   pdf?: {
     fetchPdf: PdfDeps["fetchPdf"];
@@ -502,6 +506,11 @@ function appBaseUrl(): string | undefined {
   return process.env.APP_BASE_URL?.replace(/\/$/, "") || undefined;
 }
 
+/** What the assistant needs from the handler's dependencies. */
+function owlDeps(deps: HandlerDeps): OwlDeps {
+  return { db: deps.db, now: deps.now, owl: deps.owl, limit: deps.limit };
+}
+
 async function handleText(input: string, user: UserRow, deps: HandlerDeps): Promise<LineMessage[]> {
   const command = parseCommand(input);
   if (command?.kind === "transfer") {
@@ -538,6 +547,11 @@ async function handleText(input: string, user: UserRow, deps: HandlerDeps): Prom
     if (done) return done;
   } else if (command) {
     return runCommand(command, user, deps);
+  }
+
+  // In พี่ฮูก mode (a few minutes after "ถามพี่ฮูก") what is typed is a question, not an entry.
+  if (await inOwlMode(owlDeps(deps), user)) {
+    return owlAsk(owlDeps(deps), user, input, true, user.line_user_id);
   }
 
   const parsed = parseMessage(input, deps.now(), { currencies: true });
@@ -2099,6 +2113,15 @@ async function runCommand(
       return [text(NOTE_SAVED_TEXT(noteTitle(body, 60), pageUrl("/notes")))];
     }
 
+    case "owl-start":
+      return owlStart(owlDeps(deps), user);
+
+    case "owl-end":
+      return owlEnd(owlDeps(deps), user);
+
+    case "owl-ask":
+      return owlAsk(owlDeps(deps), user, command.question, false, user.line_user_id);
+
     case "remind-list": {
       const items = await listReminders(db, user.id, 5);
       if (items.length === 0) return [text(REMINDER_EMPTY_TEXT)];
@@ -2255,6 +2278,8 @@ async function handlePostback(
   const action = params.get("a");
   // Rich Menu "จดตังค์": answer with the how-to card; its button opens the keyboard (a=compose-go).
   if (action === "compose") return [buildComposeCard()];
+  // "จบการถาม" under an answer of พี่ฮูก.
+  if (action === "owlx") return owlEnd(owlDeps(deps), user);
   // "ยกเลิกเตือนนี้" on the card of a reminder that was just set.
   if (action === "rmx") {
     const id = params.get("id") ?? "";

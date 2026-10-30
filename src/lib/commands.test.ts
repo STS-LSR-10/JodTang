@@ -304,3 +304,25 @@ describe("reminder commands", () => {
     expect(parseCommand("เตือนภัย 50")).toBeNull();
   });
 });
+
+describe("พี่ฮูก commands", () => {
+  it.each([
+    ["ถามพี่ฮูก", { kind: "owl-start" }],
+    ["ฮูก", { kind: "owl-start" }],
+    ["พี่ฮูก", { kind: "owl-start" }],
+    ["ฮูก เดือนนี้ใช้ไปเท่าไร", { kind: "owl-ask", question: "เดือนนี้ใช้ไปเท่าไร" }],
+    ["ถามพี่ฮูก หมวดไหนเยอะสุด", { kind: "owl-ask", question: "หมวดไหนเยอะสุด" }],
+    ["ถามฮูก ในโน้ตมีอะไร\nบ้าง", { kind: "owl-ask", question: "ในโน้ตมีอะไร\nบ้าง" }],
+    ["จบ", { kind: "owl-end" }],
+    ["จบการถาม", { kind: "owl-end" }],
+    ["เลิกถาม", { kind: "owl-end" }],
+    ["พอแล้ว", { kind: "owl-end" }],
+  ])("%j", (input, expected) => {
+    expect(parseCommand(input)).toEqual(expected);
+  });
+
+  it("the name must stand alone", () => {
+    expect(parseCommand("ฮูกกี้ 50")).toBeNull();
+    expect(parseCommand("จบงาน 500")).toBeNull();
+  });
+});
