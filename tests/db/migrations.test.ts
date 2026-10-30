@@ -3042,3 +3042,76 @@ describe("notes (0042)", () => {
     ).toBe(0);
   });
 });
+
+describe("user reminders (0043)", () => {
+  const rows = (ru: string) =>
+    db.query<{ status: string }>(
+      "select status from user_reminders where user_id = $1 order by remind_at",
+      [ru],
+    );
+  const claim = async (now: string, limit = 100) =>
+    (await db.query("select * from claim_due_reminders($1::timestamptz, $2)", [now, limit]))
+      .rows as {
+      r_id: string;
+      r_user: string;
+      r_line: string;
+      r_body: string;
+      r_repeat: string | null;
+    }[];
+  const add = (u: string, body: string, at: string, repeat: string | null) =>
+    db.query(
+      "insert into user_reminders (user_id, body, remind_at, repeat) values ($1, $2, $3::timestamptz, $4)",
+      [u, body, at, repeat],
+    );
+
+  it("takes a one-off once, when it is due, and marks it done", async () => {
+    const u = await newUser(db, `rm-${Math.random()}`);
+    await add(u, "จ่ายค่าไฟ", "2026-10-29T02:00:00Z", null);
+    await add(u, "ยังไม่ถึง", "2026-10-30T02:00:00Z", null);
+    expect(await claim("2026-10-29T01:59:00Z")).toHaveLength(0);
+    const due = (await claim("2026-10-29T02:03:00Z")).filter((r) => r.r_user === u);
+    expect(due.map((r) => r.r_body)).toEqual(["จ่ายค่าไฟ"]);
+    expect(due[0]?.r_repeat).toBeNull();
+    expect((await claim("2026-10-29T02:05:00Z")).filter((r) => r.r_user === u)).toHaveLength(0);
+    expect((await rows(u)).rows.map((r) => r.status)).toEqual(["done", "active"]);
+  });
+
+  it("moves a repeating one to its next time after now, so a missed day is not sent twice", async () => {
+    const u = await newUser(db, `rm-${Math.random()}`);
+    // 09:00 Bangkok every day, last due 3 days ago
+    await add(u, "กินยา", "2026-10-26T02:00:00Z", "daily");
+    const due = (await claim("2026-10-29T03:00:00Z")).filter((r) => r.r_user === u);
+    expect(due).toHaveLength(1);
+    const next = await one<{ at: string }>(
+      db,
+      "select to_char(remind_at at time zone 'Asia/Bangkok', 'YYYY-MM-DD HH24:MI') as at from user_reminders where user_id = $1",
+      [u],
+    );
+    expect(next.at).toBe("2026-10-30 09:00");
+    expect((await claim("2026-10-29T04:00:00Z")).filter((r) => r.r_user === u)).toHaveLength(0);
+  });
+
+  it.each([
+    ["weekly", "2026-10-05T01:00:00Z", "2026-10-30T03:00:00Z", "2026-11-02 08:00"],
+    ["monthly", "2026-09-05T01:00:00Z", "2026-10-30T03:00:00Z", "2026-11-05 08:00"],
+  ])("%s steps in Bangkok local time", async (repeat, at, now, expected) => {
+    const u = await newUser(db, `rm-${Math.random()}`);
+    await add(u, "x", at, repeat);
+    await claim(now);
+    const next = await one<{ at: string }>(
+      db,
+      "select to_char(remind_at at time zone 'Asia/Bangkok', 'YYYY-MM-DD HH24:MI') as at from user_reminders where user_id = $1",
+      [u],
+    );
+    expect(next.at).toBe(expected);
+  });
+
+  it("respects the limit, and rejects bad rows", async () => {
+    const u = await newUser(db, `rm-${Math.random()}`);
+    for (let i = 0; i < 3; i++) await add(u, `r${i}`, "2026-10-29T02:00:00Z", null);
+    expect((await claim("2026-10-29T03:00:00Z", 2)).filter((r) => r.r_user === u)).toHaveLength(2);
+    expect((await claim("2026-10-29T03:00:00Z", 2)).filter((r) => r.r_user === u)).toHaveLength(1);
+    await expect(add(u, "", "2026-10-29T02:00:00Z", null)).rejects.toThrow();
+    await expect(add(u, "x", "2026-10-29T02:00:00Z", "yearly")).rejects.toThrow();
+  });
+});

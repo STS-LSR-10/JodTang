@@ -361,3 +361,28 @@ export const NOTE_FULL_TEXT = (limit: number) =>
 export const NOTE_EMPTY_TEXT = 'ยังไม่มีโน้ต พิมพ์ เช่น "โน้ต ซื้อนม รหัสไวไฟ 1234" ได้เลย';
 export const NOTE_SEARCH_USAGE_TEXT = 'พิมพ์คำที่ต้องการหาต่อท้าย เช่น "ค้นหาโน้ต ไวไฟ"';
 export const noteNotFoundText = (term: string) => `ไม่เจอโน้ตที่มีคำว่า "${term}"`;
+
+// ── reminders ──
+export const REMINDER_USAGE_TEXT = [
+  "ตั้งเตือน พิมพ์วันเวลาแล้วตามด้วยเรื่องที่ให้เตือน เช่น",
+  "• เตือน พรุ่งนี้ 9 โมง จ่ายค่าไฟ",
+  "• เตือน 25/12 ซื้อของขวัญ",
+  "• เตือน อีก 30 นาที พักสายตา",
+  "• เตือน ทุกวัน 8 โมง กินยา",
+  "• เตือน ทุกวันที่ 1 จ่ายค่าเช่า",
+].join("\n");
+export const REMINDER_NO_TEXT_TEXT =
+  'บอกด้วยว่าให้เตือนเรื่องอะไร เช่น "เตือน พรุ่งนี้ 9 โมง จ่ายค่าไฟ"';
+export const REMINDER_PAST_TEXT = 'เวลานั้นผ่านไปแล้ว ลองระบุใหม่ เช่น "เตือน พรุ่งนี้ 9 โมง …"';
+export const REMINDER_TOO_FAR_TEXT = "ตั้งเตือนล่วงหน้าได้ไม่เกิน 1 ปีนะ ลองเช็กวันที่อีกครั้ง";
+export const REMINDER_FULL_TEXT = (limit: number) =>
+  `มีเตือนที่รออยู่ครบ ${limit} รายการแล้ว ลบอันที่ไม่ใช้ที่หน้าเตือน หรืออัปเกรดแผนเพื่อตั้งเพิ่มนะ`;
+export const REMINDER_EMPTY_TEXT = ["ยังไม่มีเตือนที่รออยู่", "", REMINDER_USAGE_TEXT].join("\n");
+export const REMINDER_CANCELLED_TEXT = "ยกเลิกเตือนแล้ว";
+export const REMINDER_GONE_TEXT = "ไม่พบเตือนนี้แล้ว (อาจส่งไปแล้วหรือถูกยกเลิก)";
+/** The push that arrives at the time. */
+export const reminderPushText = (body: string, repeatLabel: string | null, url?: string) =>
+  [
+    `⏰ เตือน: ${body}`,
+    ...(repeatLabel ? [`(${repeatLabel}${url ? ` · ยกเลิกได้ที่ ${url}` : ""})`] : []),
+  ].join("\n");

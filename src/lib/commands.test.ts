@@ -284,3 +284,23 @@ describe("note commands", () => {
     expect(parseCommand("ค้นหา กาแฟ")).toEqual({ kind: "search", term: "กาแฟ" });
   });
 });
+
+describe("reminder commands", () => {
+  it.each([
+    ["เตือน พรุ่งนี้ 9 โมง จ่ายค่าไฟ", { kind: "remind-add", text: "พรุ่งนี้ 9 โมง จ่ายค่าไฟ" }],
+    ["เตือนฉัน พรุ่งนี้ 9 โมง จ่ายค่าไฟ", { kind: "remind-add", text: "พรุ่งนี้ 9 โมง จ่ายค่าไฟ" }],
+    ["เตือนให้ จ่ายค่าไฟ พรุ่งนี้", { kind: "remind-add", text: "จ่ายค่าไฟ พรุ่งนี้" }],
+    ["เตือนผม ให้ ซื้อนม ทุกวัน", { kind: "remind-add", text: "ซื้อนม ทุกวัน" }],
+    ["เตือน", { kind: "remind-list" }],
+    ["เตือนฉัน", { kind: "remind-list" }],
+    ["รายการเตือน", { kind: "remind-list" }],
+    ["เตือนทั้งหมด", { kind: "remind-list" }],
+  ])("%j", (input, expected) => {
+    expect(parseCommand(input)).toEqual(expected);
+  });
+
+  it("the word must stand alone: เตือนใจ 100 is still an entry", () => {
+    expect(parseCommand("เตือนใจ 100")).toBeNull();
+    expect(parseCommand("เตือนภัย 50")).toBeNull();
+  });
+});

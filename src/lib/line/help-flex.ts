@@ -33,6 +33,7 @@ export type HelpTopicId =
   | "wallet"
   | "budget"
   | "debt"
+  | "remind"
   | "other"
   | "shortcuts";
 
@@ -258,6 +259,37 @@ export const HELP_TOPICS: HelpTopic[] = [
     ],
   },
   {
+    id: "remind",
+    chip: "⏰ เตือน/โน้ต",
+    icon: "⏰",
+    title: "เตือนและโน้ต",
+    subtitle: "ให้บอทช่วยจำ",
+    tagline: "ตั้งเตือนตามเวลา จดโน้ตไว้ค้นทีหลัง",
+    items: [
+      {
+        icon: "⏰",
+        cmd: "เตือน พรุ่งนี้ 9 โมง จ่ายค่าไฟ",
+        desc: "บอทส่งข้อความเตือนตอนถึงเวลา",
+        need: "free",
+      },
+      {
+        icon: "🔁",
+        cmd: "เตือน ทุกวัน 8 โมง กินยา",
+        desc: "เตือนซ้ำ ทุกวัน/ทุกสัปดาห์/ทุกเดือนได้",
+        need: "free",
+      },
+      {
+        icon: "📋",
+        cmd: "เตือน",
+        desc: "ดูเตือนที่ตั้งไว้ (ยกเลิกได้ที่การ์ด)",
+        need: "free",
+        send: "เตือน",
+      },
+      { icon: "📝", cmd: "โน้ต ซื้อนม รหัสไวไฟ 1234", desc: "จดโน้ตไว้", need: "free" },
+      { icon: "🔎", cmd: "ค้นหาโน้ต ไวไฟ", desc: "หาในโน้ตที่จดไว้", need: "free" },
+    ],
+  },
+  {
     id: "other",
     chip: "✏️ อื่น ๆ",
     icon: "✏️",
@@ -267,12 +299,6 @@ export const HELP_TOPICS: HelpTopic[] = [
     items: [
       { icon: "🗑️", cmd: "ลบล่าสุด", desc: "ลบรายการล่าสุด", need: "free" },
       { icon: "✏️", cmd: "แก้ล่าสุด 45", desc: "เปลี่ยนจำนวนเงินรายการล่าสุด", need: "free" },
-      {
-        icon: "📝",
-        cmd: "โน้ต ซื้อนม",
-        desc: "จดโน้ตไว้ค้นทีหลัง · พิมพ์ โน้ต ดูล่าสุด · ค้นหาโน้ต ไวไฟ",
-        need: "free",
-      },
       {
         icon: "🎁",
         cmd: "เหรียญสะสม",

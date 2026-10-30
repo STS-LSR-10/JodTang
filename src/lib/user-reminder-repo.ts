@@ -1,0 +1,119 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
+import type { Repeat, ReminderDto } from "@/lib/user-reminder";
+
+function fail(context: string, error: { message: string }): never {
+  throw new Error(`${context}: ${error.message}`);
+}
+
+interface Row {
+  id: string;
+  body: string;
+  remind_at: string;
+  repeat: Repeat | null;
+}
+const COLUMNS = "id,body,remind_at,repeat";
+const toDto = (r: Row): ReminderDto => ({
+  id: r.id,
+  body: r.body,
+  remindAt: r.remind_at,
+  repeat: r.repeat,
+});
+
+/** Reminders still waiting (not yet sent, or repeating), soonest first. */
+export async function listReminders(
+  db: SupabaseClient,
+  userId: string,
+  limit = 200,
+): Promise<ReminderDto[]> {
+  const { data, error } = await db
+    .from("user_reminders")
+    .select(COLUMNS)
+    .eq("user_id", userId)
+    .eq("status", "active")
+    .order("remind_at", { ascending: true })
+    .limit(limit);
+  if (error) fail("list reminders", error);
+  return ((data ?? []) as Row[]).map(toDto);
+}
+
+export async function countActiveReminders(db: SupabaseClient, userId: string): Promise<number> {
+  const { count, error } = await db
+    .from("user_reminders")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", userId)
+    .eq("status", "active");
+  if (error) fail("count reminders", error);
+  return count ?? 0;
+}
+
+export async function createReminder(
+  db: SupabaseClient,
+  userId: string,
+  input: { body: string; remindAt: Date; repeat: Repeat | null },
+): Promise<ReminderDto> {
+  const { data, error } = await db
+    .from("user_reminders")
+    .insert({
+      user_id: userId,
+      body: input.body,
+      remind_at: input.remindAt.toISOString(),
+      repeat: input.repeat,
+    })
+    .select(COLUMNS)
+    .single();
+  if (error) fail("create reminder", error);
+  return toDto(data as Row);
+}
+
+/** False when it is not theirs, or already gone. */
+export async function cancelReminder(
+  db: SupabaseClient,
+  userId: string,
+  id: string,
+): Promise<boolean> {
+  const { data, error } = await db
+    .from("user_reminders")
+    .delete()
+    .eq("id", id)
+    .eq("user_id", userId)
+    .select("id")
+    .maybeSingle();
+  if (error) fail("cancel reminder", error);
+  return data !== null;
+}
+
+export interface DueReminder {
+  id: string;
+  userId: string;
+  lineUserId: string;
+  body: string;
+  repeat: Repeat | null;
+}
+
+/** Take the reminders due at `now` (each one once; repeating ones are moved to their next time). */
+export async function claimDueReminders(
+  db: SupabaseClient,
+  now: Date,
+  limit = 200,
+): Promise<DueReminder[]> {
+  const { data, error } = await db.rpc("claim_due_reminders", {
+    p_now: now.toISOString(),
+    p_limit: limit,
+  });
+  if (error) fail("claim due reminders", error);
+  return (
+    (data ?? []) as {
+      r_id: string;
+      r_user: string;
+      r_line: string;
+      r_body: string;
+      r_repeat: Repeat | null;
+    }[]
+  ).map((r) => ({
+    id: r.r_id,
+    userId: r.r_user,
+    lineUserId: r.r_line,
+    body: r.r_body,
+    repeat: r.r_repeat,
+  }));
+}

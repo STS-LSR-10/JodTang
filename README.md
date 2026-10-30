@@ -170,6 +170,7 @@ pnpm lint && pnpm typecheck && pnpm test
 | งาน           | endpoint              | ตัวเรียก                                                 |
 | ------------- | --------------------- | -------------------------------------------------------- |
 | จดรายการประจำ | `/api/cron/recurring` | GitHub Actions ทุกชั่วโมง (`.github/workflows/cron.yml`) |
+| เตือนที่ผู้ใช้ตั้ง | `/api/cron/user-reminders` | GitHub Actions ทุก 5 นาที (`.github/workflows/cron-reminders.yml`) |
 | เตือนรายวัน   | `/api/cron/reminders` | GitHub Actions ทุกชั่วโมง (`.github/workflows/cron.yml`) |
 
 ตัวตั้งเวลาอยู่ที่ GitHub Actions ทั้งหมด ไม่ผูกกับโฮสต์ (ย้ายจาก Vercel ไป Cloudflare ฯลฯ ได้โดยไม่ต้องแก้) สองงานเรียกซ้ำได้อย่างปลอดภัย: รายการประจำที่ค้างจะถูกตามให้ครบและแต่ละกฎถูกจองครั้งเดียวต่อวันครบกำหนด

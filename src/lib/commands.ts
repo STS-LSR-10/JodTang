@@ -13,6 +13,8 @@ export type Command =
   | { kind: "search"; term: string }
   | { kind: "search-usage" }
   | { kind: "note-add"; body: string }
+  | { kind: "remind-add"; text: string }
+  | { kind: "remind-list" }
   | { kind: "note-list" }
   | { kind: "note-search"; term: string | null }
   | { kind: "recent" }
@@ -69,6 +71,16 @@ export function parseCommand(input: string): Command | null {
   const note = /^โน[้๊็]ต(?:\s+([\s\S]+))?$/.exec(raw);
   if (note)
     return note[1]?.trim() ? { kind: "note-add", body: note[1].trim() } : { kind: "note-list" };
+
+  // Reminders: "เตือน พรุ่งนี้ 9 โมง จ่ายค่าไฟ" sets one ("เตือนฉัน ..." / "เตือนให้ ..." too), "เตือน"
+  // or "รายการเตือน" lists them. "เตือน" must stand alone ("เตือนใจ 100" is still an entry).
+  if (text === "รายการเตือน" || text === "เตือนทั้งหมด") return { kind: "remind-list" };
+  const remind = /^เตือน(?:ฉัน|ผม|ดิฉัน|หนู)?(?:\s*ให้(?=\s))?(?:\s+([\s\S]+))?$/.exec(raw);
+  if (remind) {
+    return remind[1]?.trim()
+      ? { kind: "remind-add", text: remind[1].trim() }
+      : { kind: "remind-list" };
+  }
 
   if (["ช่วยเหลือ", "วิธีใช้", "วิธีใช้งาน", "help", "?", "เมนู"].includes(text))
     return { kind: "help" };

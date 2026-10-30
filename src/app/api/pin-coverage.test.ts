@@ -26,6 +26,7 @@ const NOT_SESSION_ROUTES: Record<string, string> = {
   "stripe/webhook/route.ts": "Stripe calls it; checked by the Stripe signature",
   "cron/reminders/route.ts": "the scheduler calls it; checked by CRON_SECRET",
   "cron/recurring/route.ts": "the scheduler calls it; checked by CRON_SECRET",
+  "cron/user-reminders/route.ts": "the scheduler calls it; checked by CRON_SECRET",
   "auth/liff/route.ts": "signs in with a LINE ID token (issues the session)",
   "split-bill/qr/[token]/route.ts":
     "LINE fetches the picture for the chat; the only key is the random token of one share (a 404 otherwise)",

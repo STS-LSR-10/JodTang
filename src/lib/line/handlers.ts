@@ -135,6 +135,14 @@ import {
 import { limitAlert } from "@/lib/card";
 import { loadCardStatuses } from "@/lib/card-repo";
 import { createTransfer, deleteTransfer } from "@/lib/transfer-repo";
+import {
+  cancelReminder,
+  countActiveReminders,
+  createReminder,
+  listReminders,
+} from "@/lib/user-reminder-repo";
+import { describeReminder, parseReminder, reminderCapacity } from "@/lib/user-reminder";
+import { buildReminderCard } from "./reminder-flex";
 import { cleanNoteBody, MAX_NOTE_LENGTH, noteCapacity, noteTitle } from "@/lib/note";
 import { countNotes, createNote, listNotes } from "@/lib/note-repo";
 import { ensureWallets, listWallets, setEntryWallet, setSlipWallet } from "@/lib/wallet-repo";
@@ -215,6 +223,14 @@ import {
   USE_CODE_USAGE_TEXT,
   VOICE_CANCELLED_TEXT,
   WALLET_AMBIGUOUS_TEXT,
+  REMINDER_CANCELLED_TEXT,
+  REMINDER_EMPTY_TEXT,
+  REMINDER_FULL_TEXT,
+  REMINDER_GONE_TEXT,
+  REMINDER_NO_TEXT_TEXT,
+  REMINDER_PAST_TEXT,
+  REMINDER_TOO_FAR_TEXT,
+  REMINDER_USAGE_TEXT,
   NOTE_EMPTY_TEXT,
   NOTE_FULL_TEXT,
   NOTE_SAVED_TEXT,
@@ -2083,6 +2099,56 @@ async function runCommand(
       return [text(NOTE_SAVED_TEXT(noteTitle(body, 60), pageUrl("/notes")))];
     }
 
+    case "remind-list": {
+      const items = await listReminders(db, user.id, 5);
+      if (items.length === 0) return [text(REMINDER_EMPTY_TEXT)];
+      const lines = items.map(
+        (r) => `• ${describeReminder(new Date(r.remindAt), r.repeat)}  ${r.body}`,
+      );
+      const url = pageUrl("/reminders");
+      return [
+        text(
+          ["เตือนที่รออยู่ ⏰", ...lines, ...(url ? [`ดู แก้ไข หรือลบ: ${url}`] : [])].join("\n"),
+        ),
+      ];
+    }
+
+    case "remind-add": {
+      const parsed = parseReminder(command.text, deps.now());
+      if (!parsed.ok) {
+        return [
+          text(
+            parsed.reason === "no_text"
+              ? REMINDER_NO_TEXT_TEXT
+              : parsed.reason === "past"
+                ? REMINDER_PAST_TEXT
+                : parsed.reason === "too_far"
+                  ? REMINDER_TOO_FAR_TEXT
+                  : REMINDER_USAGE_TEXT,
+          ),
+        ];
+      }
+      const limit = reminderCapacity(effectivePlan(user.plan, user.plan_expires_at, deps.now()));
+      if ((await countActiveReminders(db, user.id)) >= limit) {
+        return [text(REMINDER_FULL_TEXT(limit))];
+      }
+      const made = await createReminder(db, user.id, {
+        body: parsed.body,
+        remindAt: parsed.remindAt,
+        repeat: parsed.repeat,
+      });
+      return [
+        buildReminderCard({
+          id: made.id,
+          body: made.body,
+          remindAt: parsed.remindAt,
+          repeat: parsed.repeat,
+          timeDefaulted: parsed.timeDefaulted,
+          listUrl: pageUrl("/reminders"),
+        }),
+      ];
+    }
+
     case "note-list": {
       const { items } = await listNotes(db, user.id, { limit: 5 });
       if (items.length === 0) return [text(NOTE_EMPTY_TEXT)];
@@ -2189,6 +2255,16 @@ async function handlePostback(
   const action = params.get("a");
   // Rich Menu "จดตังค์": answer with the how-to card; its button opens the keyboard (a=compose-go).
   if (action === "compose") return [buildComposeCard()];
+  // "ยกเลิกเตือนนี้" on the card of a reminder that was just set.
+  if (action === "rmx") {
+    const id = params.get("id") ?? "";
+    if (!UUID_RE.test(id)) return [text(NOT_FOUND_TEXT)];
+    return [
+      text(
+        (await cancelReminder(deps.db, user.id, id)) ? REMINDER_CANCELLED_TEXT : REMINDER_GONE_TEXT,
+      ),
+    ];
+  }
   // The card of a recorded slip / receipt: ❌ on a row deletes that entry, "ยกเลิกทั้งใบ" all of them.
   if (action === "rdx") {
     const id = params.get("id") ?? "";

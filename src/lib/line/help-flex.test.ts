@@ -30,6 +30,7 @@ const READ_ONLY = new Set([
   "my-code",
   "bills",
   "goals",
+  "remind-list",
 ]);
 
 describe("help topics", () => {

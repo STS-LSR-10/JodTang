@@ -1,0 +1,34 @@
+name: Reminders cron
+
+# Pushes the reminders people set with "เตือน …" when they are due. Runs every 5 minutes, separate
+# from the hourly jobs in cron.yml. The endpoint is safe to call often: each due reminder is claimed
+# once (a one-off is marked done, a repeating one is moved to its next time), so overlapping or
+# repeated runs never send it twice.
+# Needs the same two repository secrets as cron.yml: APP_BASE_URL and CRON_SECRET. Without them the
+# job exits quietly.
+# GitHub may start a scheduled run a few minutes late (or skip one under load): a reminder then
+# arrives a little after its time, never twice. The app tells people "within about 10 minutes".
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+jobs:
+  reminders:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    env:
+      APP_BASE_URL: ${{ secrets.APP_BASE_URL }}
+      CRON_SECRET: ${{ secrets.CRON_SECRET }}
+    steps:
+      - name: Call /api/cron/user-reminders
+        run: |
+          if [ -z "$APP_BASE_URL" ] || [ -z "$CRON_SECRET" ]; then
+            echo "APP_BASE_URL / CRON_SECRET secrets are not set; skipping."
+            exit 0
+          fi
+          curl --fail --silent --show-error --max-time 60 \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            "${APP_BASE_URL%/}/api/cron/user-reminders"
+          echo
