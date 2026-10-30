@@ -337,8 +337,8 @@ describe("commands that open the pages that left the Rich Menu", () => {
     ["หมวด/งบ", "budgets"],
     ["กราฟ", "analytics"],
     ["หน้าวิเคราะห์", "analytics"],
-    ["สรุป", "summary"],
     ["หน้าสรุป", "summary"],
+    ["เปิดหน้าสรุป", "summary"],
   ])("%s", (input, page) => {
     expect(parseCommand(input)).toEqual({ kind: "open-page", page });
   });
@@ -352,5 +352,64 @@ describe("commands that open the pages that left the Rich Menu", () => {
       amountSatang: 50_000,
     });
     expect(parseCommand("งบ 500")).toBeNull();
+  });
+});
+
+describe("summary: the menu, the ready-made ones and the many ways to name a range", () => {
+  it("สรุป alone asks which summary", () => {
+    expect(parseCommand("สรุป")).toEqual({ kind: "summary-menu" });
+    expect(parseCommand("  สรุป  ")).toEqual({ kind: "summary-menu" });
+  });
+
+  it.each([
+    ["สรุปเมื่อวาน", "yesterday"],
+    ["สรุปสัปดาห์นี้", "this-week"],
+    ["สรุปอาทิตย์นี้", "this-week"],
+    ["สรุปสัปดาห์ที่แล้ว", "last-week"],
+    ["สรุปสัปดาห์ก่อน", "last-week"],
+    ["สรุปเดือนที่แล้ว", "last-month"],
+    ["สรุปเดือนก่อน", "last-month"],
+  ])("%s", (input, preset) => {
+    expect(parseCommand(input)).toEqual({ kind: "summary-preset", preset });
+  });
+
+  it("the date picker has its own command", () => {
+    for (const t of ["สรุปช่วง", "สรุปช่วงวันที่", "เลือกช่วงวันที่"]) {
+      expect(parseCommand(t)).toEqual({ kind: "summary-range-pick" });
+    }
+  });
+
+  const range = (
+    a: [number, number, number | null],
+    b: [number, number, number | null] | "today",
+  ) => ({
+    kind: "summary-range",
+    start: { day: a[0], month: a[1], year: a[2] },
+    end: b === "today" ? "today" : { day: b[0], month: b[1], year: b[2] },
+  });
+
+  it.each([
+    ["สรุป 20oct-30oct", range([20, 10, null], [30, 10, null])],
+    ["สรุป20oct-30oct", range([20, 10, null], [30, 10, null])],
+    ["สรุป 20/10-30/10", range([20, 10, null], [30, 10, null])],
+    ["สรุป 20 ต.ค. - 30 ต.ค.", range([20, 10, null], [30, 10, null])],
+    ["สรุป 20 ตุลาคม ถึง 30 ตุลาคม", range([20, 10, null], [30, 10, null])],
+    ["สรุป 1-15 ต.ค.", range([1, 10, null], [15, 10, null])],
+    ["สรุป 20.10-30.10", range([20, 10, null], [30, 10, null])],
+    ["สรุป 2026-10-20 to 2026-10-30", range([20, 10, 2026], [30, 10, 2026])],
+    ["สรุป ตั้งแต่ 20/10 ถึงวันนี้", range([20, 10, null], "today")],
+    ["สรุป ตั้งแต่ 20 oct", range([20, 10, null], "today")],
+    ["สรุปช่วง 20/10-30/10", range([20, 10, null], [30, 10, null])],
+    ["summary 20oct-30oct", range([20, 10, null], [30, 10, null])],
+    ["สรุป oct 20 - oct 30", range([20, 10, null], [30, 10, null])],
+  ])("%s", (input, expected) => {
+    expect(parseCommand(input)).toEqual(expected);
+  });
+
+  it("a date that is not a whole range gets the help text, other words are left alone", () => {
+    expect(parseCommand("สรุป 20oct")).toEqual({ kind: "summary-range-usage" });
+    expect(parseCommand("สรุป 20/10 ถึง")).toEqual({ kind: "summary-range-usage" });
+    expect(parseCommand("สรุปอะไรดี")).toBeNull();
+    expect(parseCommand("สรุปวันนี้ 30")).toBeNull();
   });
 });

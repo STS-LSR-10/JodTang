@@ -149,7 +149,12 @@ export const HELP_TOPICS: HelpTopic[] = [
     subtitle: "เจาะลึกการใช้จ่ายของคุณ",
     tagline: "ให้ตัวเลขช่วยตัดสินใจ",
     items: [
-      { icon: "🗓️", cmd: "สรุป 1/10 ถึง 15/10", desc: "เลือกช่วงวันเอง", need: "plus" },
+      {
+        icon: "🗓️",
+        cmd: "สรุป 20/10-30/10",
+        desc: "เลือกช่วงวันเอง พิมพ์ได้หลายแบบ เช่น 20oct-30oct · 1-15 ต.ค. · สรุปสัปดาห์นี้",
+        need: "plus",
+      },
       { icon: "🔎", cmd: "ค้นหา กาแฟ", desc: "หารายการพร้อมยอดรวม", need: "plus" },
       { icon: "🔮", cmd: "พยากรณ์", desc: "คาดเงินปลายรอบ", need: "ultimate", send: "พยากรณ์" },
       { icon: "🧠", cmd: "วิเคราะห์", desc: "AI วิเคราะห์การใช้จ่าย", need: "ultimate" },

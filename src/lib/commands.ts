@@ -1,4 +1,5 @@
 import type { DaySpec } from "@/lib/summary-range";
+import { hasDateToken, parseRangeText, type SummaryPreset } from "@/lib/summary-range-text";
 import { parseDebtText, type DebtCommand } from "@/lib/debt";
 import { parseBillText, type BillCommand } from "@/lib/bill";
 import { parseGoalText, type GoalCommand } from "@/lib/goal";
@@ -10,6 +11,9 @@ export type Command =
   | { kind: "help" }
   | { kind: "summary-range"; start: DaySpec; end: DaySpec | "today" }
   | { kind: "summary-range-usage" }
+  | { kind: "summary-range-pick" }
+  | { kind: "summary-menu" }
+  | { kind: "summary-preset"; preset: SummaryPreset }
   | { kind: "search"; term: string }
   | { kind: "search-usage" }
   | { kind: "note-add"; body: string }
@@ -53,16 +57,6 @@ export type Command =
   | { kind: "payment-bank"; bank: string; account: string; name: string | null }
   | { kind: "payment-clear"; what: "promptpay" | "bank" };
 
-const DAY = String.raw`(\d{1,2})/(\d{1,2})(?:/(\d{2,4}))?`;
-// "สรุป 1/10 ถึง 15/10", "สรุป 25/9 - 24/10/2569", "สรุปวันที่ 1/10 ถึงวันนี้"
-const SUMMARY_RANGE_RE = new RegExp(
-  `^สรุป(?:วันที่)?\\s+${DAY}\\s*(?:ถึงวันที่|ถึง|ไป|-|–|—)\\s*(?:${DAY}|วันนี้)$`,
-);
-
-function typedDay(d: string | undefined, m: string | undefined, y: string | undefined): DaySpec {
-  return { day: Number(d), month: Number(m), year: y === undefined ? null : Number(y) };
-}
-
 /** Recognize the short commands. Returns null for anything that should be parsed as a transaction. */
 export function parseCommand(input: string): Command | null {
   const text = normalizeThaiDigits(input).trim().replace(/\s+/g, " ").toLowerCase();
@@ -86,7 +80,7 @@ export function parseCommand(input: string): Command | null {
   if (["หน้าวิเคราะห์", "กราฟ", "หน้ากราฟ"].includes(text)) {
     return { kind: "open-page", page: "analytics" };
   }
-  if (["หน้าสรุป", "สรุป"].includes(text)) return { kind: "open-page", page: "summary" };
+  if (["หน้าสรุป", "เปิดหน้าสรุป"].includes(text)) return { kind: "open-page", page: "summary" };
 
   // พี่ฮูก (the AI assistant): "ถามพี่ฮูก" starts a few minutes of questions, "ฮูก ใช้ไปเท่าไร" asks one,
   // "จบ" leaves the mode. The name must stand alone ("ฮูกกี้ 50" is still an entry).
@@ -164,16 +158,31 @@ export function parseCommand(input: string): Command | null {
   if (["สรุปปีที่แล้ว", "สรุปปีก่อน"].includes(text)) return { kind: "year-summary", year: "last" };
   const yearMatch = /^(?:สรุปปี|สรุปรายปี)\s+(\d{4})$/.exec(text);
   if (yearMatch?.[1]) return { kind: "year-summary", year: Number(yearMatch[1]) };
-  const range = SUMMARY_RANGE_RE.exec(text);
-  if (range) {
-    return {
-      kind: "summary-range",
-      start: typedDay(range[1], range[2], range[3]),
-      end: range[4] === undefined ? "today" : typedDay(range[4], range[5], range[6]),
-    };
+  // "สรุป" alone asks which summary; the ready-made ones and the date picker are named commands
+  if (text === "สรุป") return { kind: "summary-menu" };
+  if (["สรุปเมื่อวาน", "สรุปเมื่อวานนี้"].includes(text)) {
+    return { kind: "summary-preset", preset: "yesterday" };
   }
-  // "สรุป" followed by a date that is not a full range: show how to write one
-  if (/^สรุป(?:วันที่)?\s+\d{1,2}\/\d{1,2}/.test(text)) return { kind: "summary-range-usage" };
+  if (["สรุปสัปดาห์นี้", "สรุปอาทิตย์นี้", "สรุปรายสัปดาห์"].includes(text)) {
+    return { kind: "summary-preset", preset: "this-week" };
+  }
+  if (["สรุปสัปดาห์ที่แล้ว", "สรุปสัปดาห์ก่อน", "สรุปอาทิตย์ที่แล้ว"].includes(text)) {
+    return { kind: "summary-preset", preset: "last-week" };
+  }
+  if (["สรุปเดือนที่แล้ว", "สรุปเดือนก่อน"].includes(text)) {
+    return { kind: "summary-preset", preset: "last-month" };
+  }
+  if (["สรุปช่วง", "สรุปช่วงวันที่", "สรุปช่วงเวลา", "เลือกช่วงวันที่"].includes(text)) {
+    return { kind: "summary-range-pick" };
+  }
+  // "สรุป 20/10-30/10", "สรุป 20oct-30oct", "สรุป 1-15 ต.ค.", "สรุป ตั้งแต่ 20/10 ถึงวันนี้"…
+  const rangeText = /^(?:สรุป|summary)(?:ช่วง)?\s*(.+)$/.exec(text)?.[1];
+  if (rangeText) {
+    const range = parseRangeText(rangeText);
+    if (range) return { kind: "summary-range", ...range };
+    // a date that is not a whole range: show how to write one
+    if (hasDateToken(rangeText)) return { kind: "summary-range-usage" };
+  }
   // "ค้นหา กาแฟ" / "ค้นหา #ปาร์ตี้": the term is taken from the original text so it keeps its case
   if (text === "ค้นหา") return { kind: "search-usage" };
   if (text.startsWith("ค้นหา ")) {

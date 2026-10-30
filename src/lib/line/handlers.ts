@@ -144,6 +144,8 @@ import {
 import { describeReminder, parseReminder, reminderCapacity } from "@/lib/user-reminder";
 import { buildReminderCard } from "./reminder-flex";
 import { buildOpenPageCard, PAGE_INFO } from "./page-flex";
+import { buildSummaryMenu } from "./summary-menu";
+import { PRESET_TITLE, presetRange } from "@/lib/summary-range-text";
 import type { Owl } from "@/lib/ai/owl";
 import { inOwlMode, owlAsk, owlEnd, owlStart, type OwlDeps } from "./owl";
 import { cleanNoteBody, MAX_NOTE_LENGTH, noteCapacity, noteTitle } from "@/lib/note";
@@ -1131,6 +1133,7 @@ async function summaryForRange(
   deps: HandlerDeps,
   start: DaySpec,
   end: DaySpec | null,
+  title = "สรุปช่วงที่เลือก",
 ): Promise<LineMessage[]> {
   const result = resolveRange(start, end, deps.now());
   if (!result.ok) {
@@ -1146,11 +1149,11 @@ async function summaryForRange(
   }
   const subtitle = `${formatThaiDate(result.range.from)} – ${formatThaiDate(result.lastDay)} (${result.days} วัน)`;
   const data = await loadSummaryData(deps.db, user.id, result.range, result.previous);
-  if (data.current.count === 0) return [text(`สรุปช่วงที่เลือก\n${subtitle}\nยังไม่มีรายการเลย`)];
+  if (data.current.count === 0) return [text(`${title}\n${subtitle}\nยังไม่มีรายการเลย`)];
   const base = process.env.APP_BASE_URL?.replace(/\/$/, "");
   return [
     buildSummaryCard({
-      title: "สรุปช่วงที่เลือก",
+      title,
       range: result.range,
       data,
       against: "ช่วงก่อนหน้า",
@@ -1873,6 +1876,24 @@ async function runCommand(
 
     case "summary-range-usage":
       return [text(SUMMARY_RANGE_USAGE_TEXT)];
+
+    case "summary-menu":
+      return [buildSummaryMenu(pageUrl("/summary"))];
+
+    case "summary-range-pick": {
+      if (!can(effectivePlan(user.plan, user.plan_expires_at, deps.now()), "customRange")) {
+        return [text(SUMMARY_RANGE_LOCKED_TEXT)];
+      }
+      return [buildRangeStartPicker(deps.now())];
+    }
+
+    case "summary-preset": {
+      if (!can(effectivePlan(user.plan, user.plan_expires_at, deps.now()), "customRange")) {
+        return [text(SUMMARY_RANGE_LOCKED_TEXT)];
+      }
+      const { start, end } = presetRange(command.preset, deps.now());
+      return summaryForRange(user, deps, start, end, PRESET_TITLE[command.preset]);
+    }
 
     case "recent": {
       const items = await loadSearchItems(db, user.id, { q: null, tag: null }, 5);

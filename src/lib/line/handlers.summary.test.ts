@@ -302,3 +302,98 @@ describe("the two-step calendar (a=sr, a=sr1, a=sr2)", () => {
     expect(rangeCalls).toHaveLength(0);
   });
 });
+
+describe("สรุป alone, the ready-made summaries and more ways to type a range", () => {
+  type Quick = {
+    quickReply?: { items: { action: { type: string; text?: string; uri?: string } }[] };
+  };
+
+  it("สรุป asks which summary, with a button for each (and one that opens the page)", async () => {
+    process.env.NEXT_PUBLIC_LIFF_ID = "1234-abcd";
+    const { deps, reply } = setup();
+    await handleEvent(say("สรุป"), deps);
+    const msg = sent(reply)[0] as unknown as { text: string } & Quick;
+    expect(msg.text).toContain("อยากดูสรุปแบบไหน");
+    const items = msg.quickReply?.items ?? [];
+    const texts = items.filter((i) => i.action.type === "message").map((i) => i.action.text);
+    expect(texts).toEqual(
+      expect.arrayContaining([
+        "สรุปวันนี้",
+        "สรุปเมื่อวาน",
+        "สรุปสัปดาห์นี้",
+        "สรุปเดือนนี้",
+        "สรุปเดือนที่แล้ว",
+        "สรุปหมวด",
+        "เทียบเดือน",
+        "สรุปปีนี้",
+        "สรุปช่วง",
+      ]),
+    );
+    expect(items.length).toBeLessThanOrEqual(13); // LINE's limit
+    expect(items.at(-1)?.action.uri).toBe("https://liff.line.me/1234-abcd/summary");
+    expect(rangeCalls).toHaveLength(0); // asking loads nothing
+  });
+
+  it("every button's command is really understood", async () => {
+    const { SUMMARY_MENU_ITEMS } = await import("./summary-menu");
+    const { parseCommand } = await import("@/lib/commands");
+    for (const item of SUMMARY_MENU_ITEMS) {
+      expect(parseCommand(item.text), item.text).not.toBeNull();
+      expect(item.label.length).toBeLessThanOrEqual(20);
+    }
+  });
+
+  it.each([
+    ["สรุปเมื่อวาน", "สรุปเมื่อวาน", "2026-10-15T17:00:00.000Z", "2026-10-16T17:00:00.000Z"],
+    ["สรุปสัปดาห์นี้", "สรุปสัปดาห์นี้", "2026-10-11T17:00:00.000Z", "2026-10-17T17:00:00.000Z"],
+    [
+      "สรุปสัปดาห์ที่แล้ว",
+      "สรุปสัปดาห์ที่แล้ว",
+      "2026-10-04T17:00:00.000Z",
+      "2026-10-11T17:00:00.000Z",
+    ],
+    [
+      "สรุปเดือนที่แล้ว",
+      "สรุปเดือนที่แล้ว",
+      "2026-08-31T17:00:00.000Z",
+      "2026-09-30T17:00:00.000Z",
+    ],
+  ])("Pro: %s is a card for exactly those days", async (input, title, from, to) => {
+    plan = "plus";
+    const { deps, reply } = setup();
+    await handleEvent(say(input), deps);
+    expect(JSON.stringify(sent(reply)[0])).toContain(title);
+    expect(rangeCalls[0]).toMatchObject({ from, to });
+  });
+
+  it("Free is told these are for Pro and nothing is loaded", async () => {
+    const { deps, reply } = setup();
+    await handleEvent(say("สรุปสัปดาห์นี้"), deps);
+    expect(sent(reply)[0]?.text).toContain("Pro ขึ้นไป");
+    expect(rangeCalls).toHaveLength(0);
+  });
+
+  it("สรุปช่วง opens the calendar for Pro, and turns Free away", async () => {
+    const free = setup();
+    await handleEvent(say("สรุปช่วง"), free.deps);
+    expect(sent(free.reply)[0]?.text).toContain("Pro ขึ้นไป");
+    plan = "plus";
+    const pro = setup();
+    await handleEvent(say("สรุปช่วง"), pro.deps);
+    const item = (sent(pro.reply)[0] as unknown as Quick).quickReply?.items[0]?.action;
+    expect(item?.type).toBe("datetimepicker");
+  });
+
+  it.each(["สรุป 1oct-15oct", "สรุป 1-15 ต.ค.", "สรุป 1.10-15.10", "สรุป 1 ตุลาคม ถึง 15 ตุลาคม"])(
+    "Pro: %s gives the same days as 1/10 ถึง 15/10",
+    async (input) => {
+      plan = "plus";
+      const { deps } = setup();
+      await handleEvent(say(input), deps);
+      expect(rangeCalls[0]).toMatchObject({
+        from: "2026-09-30T17:00:00.000Z",
+        to: "2026-10-15T17:00:00.000Z",
+      });
+    },
+  );
+});
