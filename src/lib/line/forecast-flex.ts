@@ -2,6 +2,7 @@ import type { Forecast, Occurrence, Scenario } from "@/lib/forecast";
 import { formatBaht } from "@/lib/money";
 import { formatThaiDayMonth } from "@/lib/thai-date";
 import type { LineMessage } from "@/lib/types";
+import { cardHeader, pillFooter, TINT } from "./card-style";
 import { COLOR } from "./flex";
 
 const DAY_MS = 86_400_000;
@@ -10,14 +11,50 @@ const MAX_LISTED = 4;
 const money = (satang: number) => `${satang < 0 ? "-" : ""}฿${formatBaht(Math.abs(satang))}`;
 const tone = (satang: number) => (satang < 0 ? COLOR.expense : COLOR.income);
 
-const row = (label: string, value: string, color: string = COLOR.text) => ({
+const row = (label: string, value: string, color: string = TINT.strong) => ({
   type: "box",
   layout: "horizontal",
-  margin: "sm",
+  alignItems: "center",
+  margin: "md",
   contents: [
-    { type: "text", text: label, size: "sm", color: COLOR.muted, flex: 5, wrap: true },
-    { type: "text", text: value, size: "sm", weight: "bold", color, align: "end", flex: 4 },
+    { type: "text", text: label, size: "md", color: TINT.strong, flex: 5, wrap: true },
+    { type: "text", text: value, size: "md", weight: "bold", color, align: "end", flex: 5 },
   ],
+});
+
+/** A filled status pill: green when all is well, red when the money runs short. */
+const statusPill = (text: string, good: boolean) => ({
+  type: "box",
+  layout: "horizontal",
+  margin: "md",
+  contents: [
+    {
+      type: "box",
+      layout: "vertical",
+      flex: 0,
+      cornerRadius: "10px",
+      backgroundColor: good ? "#2F9E5B" : TINT.bad,
+      paddingTop: "5px",
+      paddingBottom: "5px",
+      paddingStart: "10px",
+      paddingEnd: "10px",
+      contents: [{ type: "text", text, size: "sm", weight: "bold", color: "#FFFFFF", wrap: true }],
+    },
+    { type: "filler" },
+  ],
+});
+
+/** What-if line in a soft blue box. */
+const scenarioBox = (text: string) => ({
+  type: "box",
+  layout: "vertical",
+  margin: "lg",
+  paddingAll: "12px",
+  cornerRadius: "12px",
+  backgroundColor: TINT.cool,
+  borderWidth: "1px",
+  borderColor: "#C9DAF8",
+  contents: [{ type: "text", text, size: "sm", weight: "bold", color: TINT.strong, wrap: true }],
 });
 
 const note = (text: string, color: string = COLOR.muted) => ({
@@ -64,29 +101,29 @@ export function buildForecastCard(input: {
 }): LineMessage {
   const f = input.forecast;
   const body: unknown[] = [
-    { type: "text", text: "คาดว่าสิ้นรอบจะเหลือ", size: "xs", color: COLOR.muted },
+    { type: "text", text: "คาดว่าสิ้นรอบจะเหลือ", size: "md", color: TINT.strong },
     {
       type: "text",
       text: money(f.endBalanceSatang),
-      size: "xxl",
+      size: "3xl",
       weight: "bold",
       color: tone(f.endBalanceSatang),
     },
   ];
 
   if (f.alreadyNegative) {
-    body.push(note("ตอนนี้รายจ่ายมากกว่ารายรับของรอบนี้แล้ว", COLOR.expense));
+    body.push(statusPill("⚠️ ตอนนี้รายจ่ายมากกว่ารายรับของรอบนี้แล้ว", false));
   } else if (f.runsOutOn) {
-    body.push(note(`เงินจะหมดประมาณ ${runOutText(f.runsOutOn, input.today)}`, COLOR.expense));
+    body.push(statusPill(`⚠️ เงินจะหมดประมาณ ${runOutText(f.runsOutOn, input.today)}`, false));
   } else {
-    body.push(note("เงินพอใช้ไปถึงสิ้นรอบ", COLOR.income));
+    body.push(statusPill("✅ เงินพอใช้ไปถึงสิ้นรอบ 👍", true));
   }
 
   body.push(
-    { type: "separator", margin: "lg" },
+    { type: "separator", margin: "lg", color: "#EDEDF2" },
     row("เหลือตอนนี้", money(f.netNowSatang), tone(f.netNowSatang)),
     row("ใช้จ่ายทั่วไปต่อวัน", money(f.dailyRateSatang)),
-    row("เหลืออีก", `${f.remainingDays} วัน`),
+    row("เหลืออีก", `📆 ${f.remainingDays} วัน`),
   );
 
   if (f.upcomingIncomes.length > 0 || f.upcomingExpenses.length > 0) {
@@ -103,10 +140,7 @@ export function buildForecastCard(input: {
   }
 
   if (f.trend) {
-    body.push(
-      { type: "separator", margin: "lg" },
-      note(scenarioLine("ถ้าใช้จ่ายเท่า 7 วันล่าสุด", f.trend)),
-    );
+    body.push(scenarioBox(scenarioLine("ถ้าใช้จ่ายเท่า 7 วันล่าสุด", f.trend)));
   }
 
   if (f.budget) {
@@ -133,40 +167,11 @@ export function buildForecastCard(input: {
   const bubble: Record<string, unknown> = {
     type: "bubble",
     size: "mega",
-    header: {
-      type: "box",
-      layout: "vertical",
-      backgroundColor: "#CCFBF1",
-      paddingAll: "16px",
-      contents: [
-        { type: "text", text: "พยากรณ์เงินปลายรอบ", weight: "bold", size: "lg", color: "#0B5D4F" },
-        {
-          type: "text",
-          text: input.subtitle,
-          size: "xs",
-          color: "#3F6B63",
-          margin: "xs",
-          wrap: true,
-        },
-      ],
-    },
-    body: { type: "box", layout: "vertical", paddingAll: "16px", contents: body },
+    header: cardHeader("พยากรณ์เงินปลายรอบ", [input.subtitle], "🐷"),
+    body: { type: "box", layout: "vertical", paddingAll: "18px", contents: body },
   };
-  if (input.moreUrl?.startsWith("https://")) {
-    bubble.footer = {
-      type: "box",
-      layout: "vertical",
-      contents: [
-        {
-          type: "button",
-          style: "primary",
-          color: "#0F766E",
-          height: "sm",
-          action: { type: "uri", label: "ดูสรุปในแอป", uri: input.moreUrl },
-        },
-      ],
-    };
-  }
+  const foot = pillFooter("ดูสรุปในแอป 📈", input.moreUrl);
+  if (foot) bubble.footer = foot;
   return {
     type: "flex",
     altText: `พยากรณ์: สิ้นรอบจะเหลือ ${money(f.endBalanceSatang)}${

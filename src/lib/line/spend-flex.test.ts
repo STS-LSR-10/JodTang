@@ -69,7 +69,7 @@ describe("buildCategorySpendCard", () => {
       }),
     );
     expect(json).not.toContain("ดูกราฟในแอป");
-    expect(json).toContain('"width":"2%"');
+    expect(json).toContain('"width":"3%"');
   });
 });
 
@@ -228,5 +228,55 @@ describe("emoji in the recent and category cards", () => {
     );
     expect(json).toContain("🐱 ค่าอาหารแมว");
     expect(json).not.toContain("utensils");
+  });
+});
+
+describe("the look of the category and comparison cards", () => {
+  it("each category has its own bar colour, and the footer button has the chart emoji", () => {
+    const json = JSON.stringify(
+      buildCategorySpendCard({
+        subtitle: "ต.ค.",
+        slices: buildCategorySlices([
+          { name: "อาหาร", amountSatang: 30_000 },
+          { name: "เดินทาง", amountSatang: 10_000 },
+        ]),
+        totalSatang: 40_000,
+        moreUrl: "https://liff.line.me/1/analytics",
+      }),
+    );
+    expect(json).toContain("#A583E0");
+    expect(json).toContain("#FB923C");
+    expect(json).toContain("ดูกราฟในแอป 📈");
+  });
+
+  it("the comparison shows each change as a tinted tag: red for up/new, green for down", () => {
+    const rows = buildCompareRows(
+      [
+        { name: "อาหาร", amountSatang: 30_000 },
+        { name: "เดินทาง", amountSatang: 5_000 },
+        { name: "ใหม่เอี่ยม", amountSatang: 2_000 },
+      ],
+      [
+        { name: "อาหาร", amountSatang: 20_000 },
+        { name: "เดินทาง", amountSatang: 10_000 },
+      ],
+    );
+    const json = JSON.stringify(
+      buildCompareCard({
+        currentLabel: "1 ต.ค. – 30 ต.ค.",
+        previousLabel: "1 ก.ย. – 30 ก.ย.",
+        rows,
+        currentSatang: 37_000,
+        previousSatang: 30_000,
+        totalChange: { kind: "up", changePercent: 23 },
+        moreUrl: "https://liff.line.me/1/analytics",
+      }),
+    );
+    expect(json).toContain("⚖️");
+    expect(json).toContain("▲ 50%");
+    expect(json).toContain("▼ 50%");
+    expect(json).toContain('"text":"ใหม่"');
+    expect(json).toContain("#FDE4E8"); // up / new
+    expect(json).toContain("#DDF7E8"); // down
   });
 });

@@ -1,6 +1,32 @@
 import type { Insight } from "@/lib/insight";
 import type { LineMessage } from "@/lib/types";
+import { cardHeader, pillFooter, TINT } from "./card-style";
 import { COLOR } from "./flex";
+
+/** The soft tints the observations take in turn (lavender, peach, sky). */
+const LINE_TINTS = [
+  { bg: TINT.lavender, accent: "#7E22CE" },
+  { bg: TINT.peach, accent: "#C2410C" },
+  { bg: TINT.cool, accent: "#1D4ED8" },
+] as const;
+
+const AMOUNT = /(฿\s?[\d,]+(?:\.\d+)?)/g;
+
+/** A sentence as text spans, with each amount (฿1,234) picked out in the tint's accent colour. */
+function highlighted(line: string, accent: string) {
+  const parts = line.split(AMOUNT).filter((p) => p !== "");
+  return {
+    type: "text",
+    wrap: true,
+    size: "sm",
+    color: TINT.strong,
+    contents: parts.map((part) =>
+      /^฿/.test(part)
+        ? { type: "span", text: part, weight: "bold", color: accent }
+        : { type: "span", text: part },
+    ),
+  };
+}
 
 /** "AI Insight": a few observations about the spending, one tip, and where they came from. */
 export function buildInsightCard(input: {
@@ -10,29 +36,31 @@ export function buildInsightCard(input: {
   moreUrl?: string;
 }): LineMessage {
   const { insight } = input;
-  const body: unknown[] = insight.lines.map((line, i) => ({
-    type: "box",
-    layout: "horizontal",
-    margin: i === 0 ? "none" : "md",
-    spacing: "sm",
-    contents: [
-      { type: "text", text: "•", size: "sm", color: COLOR.primary, flex: 0 },
-      { type: "text", text: line, size: "sm", color: COLOR.text, wrap: true, flex: 1 },
-    ],
-  }));
+  const body: unknown[] = insight.lines.map((line, i) => {
+    const tint = LINE_TINTS[i % LINE_TINTS.length] ?? LINE_TINTS[0];
+    return {
+      type: "box",
+      layout: "vertical",
+      margin: i === 0 ? "none" : "md",
+      paddingAll: "12px",
+      cornerRadius: "14px",
+      backgroundColor: tint.bg,
+      contents: [highlighted(line, tint.accent)],
+    };
+  });
 
   if (insight.tip) {
     body.push({
       type: "box",
-      layout: "horizontal",
-      margin: "lg",
-      spacing: "sm",
-      paddingAll: "10px",
-      cornerRadius: "10px",
-      backgroundColor: "#F0FDFA",
+      layout: "vertical",
+      margin: "md",
+      spacing: "xs",
+      paddingAll: "12px",
+      cornerRadius: "14px",
+      backgroundColor: TINT.warm,
       contents: [
-        { type: "text", text: "💡", size: "sm", flex: 0 },
-        { type: "text", text: insight.tip, size: "sm", color: "#0B5D4F", wrap: true, flex: 1 },
+        { type: "text", text: "💡 คำแนะนำเพื่อคุณ", weight: "bold", size: "sm", color: "#7A4B00" },
+        { type: "text", text: insight.tip, size: "sm", color: TINT.strong, wrap: true },
       ],
     });
   }
@@ -51,40 +79,11 @@ export function buildInsightCard(input: {
   const bubble: Record<string, unknown> = {
     type: "bubble",
     size: "mega",
-    header: {
-      type: "box",
-      layout: "vertical",
-      backgroundColor: "#CCFBF1",
-      paddingAll: "16px",
-      contents: [
-        { type: "text", text: "AI Insight", weight: "bold", size: "lg", color: "#0B5D4F" },
-        {
-          type: "text",
-          text: input.subtitle,
-          size: "xs",
-          color: "#3F6B63",
-          margin: "xs",
-          wrap: true,
-        },
-      ],
-    },
+    header: cardHeader("AI Insight ✨", [input.subtitle], "🧠"),
     body: { type: "box", layout: "vertical", paddingAll: "16px", contents: body },
   };
-  if (input.moreUrl?.startsWith("https://")) {
-    bubble.footer = {
-      type: "box",
-      layout: "vertical",
-      contents: [
-        {
-          type: "button",
-          style: "primary",
-          color: "#0F766E",
-          height: "sm",
-          action: { type: "uri", label: "ดูรายละเอียดในแอป", uri: input.moreUrl },
-        },
-      ],
-    };
-  }
+  const foot = pillFooter("ดูรายละเอียดในแอป ➡️", input.moreUrl);
+  if (foot) bubble.footer = foot;
   return {
     type: "flex",
     altText: `AI Insight: ${insight.lines[0] ?? "วิเคราะห์การใช้จ่าย"}`,

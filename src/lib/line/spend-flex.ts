@@ -5,6 +5,7 @@ import type { TxDto } from "@/lib/dto";
 import { formatBaht } from "@/lib/money";
 import { formatThaiDate, formatThaiMonthShort } from "@/lib/thai-date";
 import type { LineMessage } from "@/lib/types";
+import { badge, bar, barColor, cardHeader, pillFooter, TINT } from "./card-style";
 import { COLOR } from "./flex";
 
 const footer = (label: string, uri: string | undefined) =>
@@ -35,7 +36,7 @@ const header = (title: string, subtitle: string) => ({
   ],
 });
 
-/** "ใช้จ่ายตามหมวด": each category with its amount, share and a bar. */
+/** "ใช้จ่ายตามหมวด": each category with its amount, share and a thick coloured bar. */
 export function buildCategorySpendCard(input: {
   subtitle: string;
   slices: CategorySlice[];
@@ -43,77 +44,63 @@ export function buildCategorySpendCard(input: {
   moreUrl?: string;
 }): LineMessage {
   const body: unknown[] = [];
-  for (const s of input.slices) {
+  input.slices.forEach((s, i) => {
     body.push({
       type: "box",
       layout: "vertical",
-      margin: "md",
-      spacing: "xs",
+      margin: i === 0 ? "none" : "lg",
+      spacing: "sm",
       contents: [
         {
           type: "box",
           layout: "horizontal",
+          alignItems: "center",
           contents: [
             {
               type: "text",
               text: categoryLabel(s.name, s.icon),
-              size: "sm",
-              color: COLOR.text,
-              flex: 4,
+              size: "md",
+              weight: "bold",
+              color: TINT.strong,
+              flex: 5,
               wrap: true,
             },
             {
               type: "text",
               text: `฿${formatBaht(s.amountSatang)} · ${s.percent}%`,
-              size: "sm",
-              color: COLOR.muted,
+              size: "md",
+              color: TINT.strong,
               align: "end",
               flex: 5,
             },
           ],
         },
-        {
-          type: "box",
-          layout: "vertical",
-          height: "6px",
-          cornerRadius: "3px",
-          backgroundColor: "#E5EAEE",
-          contents: [
-            {
-              type: "box",
-              layout: "vertical",
-              width: `${Math.max(2, s.percent)}%`,
-              height: "6px",
-              cornerRadius: "3px",
-              backgroundColor: s.other ? COLOR.muted : COLOR.expense,
-              contents: [],
-            },
-          ],
-        },
+        bar(s.percent, s.other ? "#9CA3AF" : barColor(i), "12px"),
       ],
     });
-  }
+  });
   body.push(
-    { type: "separator", margin: "lg" },
+    { type: "separator", margin: "xl", color: "#EDEDF2" },
     {
       type: "box",
       layout: "horizontal",
-      margin: "md",
+      alignItems: "center",
+      margin: "lg",
       contents: [
         {
           type: "text",
-          text: "รายจ่ายรวม",
-          size: "sm",
+          text: "รายจ่ายรวม 💰",
+          size: "lg",
           weight: "bold",
-          color: COLOR.text,
-          flex: 3,
+          color: TINT.strong,
+          flex: 5,
         },
         {
           type: "text",
           text: `฿${formatBaht(input.totalSatang)}`,
-          size: "md",
+          size: "xxl",
           weight: "bold",
-          color: COLOR.expense,
+          color: TINT.bad,
           align: "end",
           flex: 5,
         },
@@ -123,10 +110,10 @@ export function buildCategorySpendCard(input: {
   const bubble: Record<string, unknown> = {
     type: "bubble",
     size: "mega",
-    header: header("ใช้จ่ายตามหมวด", input.subtitle),
-    body: { type: "box", layout: "vertical", paddingAll: "16px", contents: body },
+    header: cardHeader("ใช้จ่ายตามหมวด", [input.subtitle], "📊"),
+    body: { type: "box", layout: "vertical", paddingAll: "18px", contents: body },
   };
-  const f = footer("ดูกราฟในแอป", input.moreUrl);
+  const f = pillFooter("ดูกราฟในแอป 📈", input.moreUrl);
   if (f) bubble.footer = f;
   return {
     type: "flex",
@@ -213,6 +200,13 @@ export function changeLabel(
   }
 }
 
+const BADGE_BG: Record<string, string> = {
+  up: TINT.badSoft,
+  new: TINT.badSoft,
+  down: TINT.goodSoft,
+  gone: TINT.goodSoft,
+};
+
 /** "เทียบรายจ่ายรายหมวด": this period against the same days of the one before, category by category. */
 export function buildCompareCard(input: {
   currentLabel: string;
@@ -224,94 +218,107 @@ export function buildCompareCard(input: {
   moreUrl?: string;
 }): LineMessage {
   const total = changeLabel(input.totalChange.kind, input.totalChange.changePercent);
+  const line = (
+    name: string,
+    previousSatang: number,
+    currentSatang: number,
+    change: { text: string; color: string },
+    kind: ChangeKind,
+    strong: boolean,
+  ) => ({
+    type: "box",
+    layout: "horizontal",
+    alignItems: "center",
+    contents: [
+      {
+        type: "box",
+        layout: "vertical",
+        flex: 5,
+        contents: [
+          {
+            type: "text",
+            text: name,
+            size: strong ? "lg" : "md",
+            weight: "bold",
+            color: TINT.strong,
+            wrap: true,
+          },
+          {
+            type: "text",
+            text: `ก่อนหน้า ฿${formatBaht(previousSatang)}`,
+            size: "xs",
+            color: COLOR.muted,
+          },
+        ],
+      },
+      {
+        type: "box",
+        layout: "vertical",
+        flex: 4,
+        alignItems: "flex-end",
+        spacing: "xs",
+        contents: [
+          {
+            type: "text",
+            text: `฿${formatBaht(currentSatang)}`,
+            size: strong ? "xl" : "md",
+            weight: strong ? "bold" : "regular",
+            color: strong ? TINT.bad : TINT.strong,
+            align: "end",
+          },
+          badge(change.text, change.color, BADGE_BG[kind] ?? TINT.neutralSoft),
+        ],
+      },
+    ],
+  });
+
   const body: unknown[] = [
     {
       type: "box",
-      layout: "horizontal",
+      layout: "vertical",
+      paddingAll: "12px",
+      cornerRadius: "14px",
+      borderWidth: "1px",
+      borderColor: "#E3E3EA",
+      backgroundColor: "#FFFFFF",
       contents: [
-        {
-          type: "box",
-          layout: "vertical",
-          flex: 5,
-          contents: [
-            { type: "text", text: "รายจ่ายรวม", size: "sm", weight: "bold", color: COLOR.text },
-            {
-              type: "text",
-              text: `ก่อนหน้า ฿${formatBaht(input.previousSatang)}`,
-              size: "xxs",
-              color: COLOR.muted,
-            },
-          ],
-        },
-        {
-          type: "box",
-          layout: "vertical",
-          flex: 4,
-          contents: [
-            {
-              type: "text",
-              text: `฿${formatBaht(input.currentSatang)}`,
-              size: "md",
-              weight: "bold",
-              color: COLOR.text,
-              align: "end",
-            },
-            { type: "text", text: total.text, size: "xs", color: total.color, align: "end" },
-          ],
-        },
+        line(
+          "💰 รายจ่ายรวม",
+          input.previousSatang,
+          input.currentSatang,
+          total,
+          input.totalChange.kind,
+          true,
+        ),
       ],
     },
-    { type: "separator", margin: "md" },
   ];
   for (const r of input.rows) {
-    const c = changeLabel(r.kind, r.changePercent);
     body.push({
-      type: "box",
-      layout: "horizontal",
-      margin: "md",
-      contents: [
-        {
-          type: "box",
-          layout: "vertical",
-          flex: 5,
-          contents: [
-            { type: "text", text: r.name, size: "sm", color: COLOR.text, wrap: true },
-            {
-              type: "text",
-              text: `ก่อนหน้า ฿${formatBaht(r.previousSatang)}`,
-              size: "xxs",
-              color: COLOR.muted,
-            },
-          ],
-        },
-        {
-          type: "box",
-          layout: "vertical",
-          flex: 4,
-          contents: [
-            {
-              type: "text",
-              text: `฿${formatBaht(r.currentSatang)}`,
-              size: "sm",
-              color: COLOR.text,
-              align: "end",
-            },
-            { type: "text", text: c.text, size: "xs", color: c.color, align: "end" },
-          ],
-        },
-      ],
+      ...line(
+        r.name,
+        r.previousSatang,
+        r.currentSatang,
+        changeLabel(r.kind, r.changePercent),
+        r.kind,
+        false,
+      ),
+      margin: "lg",
+      paddingStart: "4px",
+      paddingEnd: "4px",
     });
   }
   const bubble: Record<string, unknown> = {
     type: "bubble",
     size: "mega",
-    header: header(
+    header: cardHeader(
       "เทียบรายจ่ายรายหมวด",
-      `รอบนี้ ${input.currentLabel}\nเทียบ ${input.previousLabel}`,
+      [`รอบนี้ ${input.currentLabel}`, `เทียบ ${input.previousLabel}`],
+      "⚖️",
     ),
     body: { type: "box", layout: "vertical", paddingAll: "16px", contents: body },
   };
-  const f = footer("ดูกราฟในแอป", input.moreUrl);
+  const f = pillFooter("ดูกราฟในแอป 📈", input.moreUrl);
   if (f) bubble.footer = f;
   return {
     type: "flex",

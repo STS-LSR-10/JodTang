@@ -42,3 +42,33 @@ describe("buildInsightCard", () => {
     expect(msg.altText).toBe("AI Insight: " + ai.lines[0]);
   });
 });
+
+describe("the look of the insight card", () => {
+  const card = () =>
+    JSON.stringify(
+      buildInsightCard({
+        insight: {
+          lines: ["หมวดอาหารสูงสุด ฿3,691 ซึ่งเพิ่มจาก ฿2,000", "ช้อปปิ้ง ฿2,000"],
+          tip: "ลองตั้งงบแต่ละหมวด",
+          source: "ai",
+        } as never,
+        subtitle: "1 ต.ค. – 30 ต.ค.",
+        moreUrl: "https://liff.line.me/1/analytics",
+      }),
+    );
+
+  it("puts each observation in its own tinted box and picks the amounts out in bold", () => {
+    const out = card();
+    expect(out).toContain('"type":"span","text":"฿3,691","weight":"bold"');
+    expect(out).toContain('"type":"span","text":"฿2,000","weight":"bold"');
+    expect(out).toContain("#EDE5FB"); // the first box is lavender
+    expect(out).toContain("#FDEBDD"); // the second is peach
+  });
+
+  it("shows the tip in a warm box under its own heading, and the title with its sparkle", () => {
+    const out = card();
+    expect(out).toContain("💡 คำแนะนำเพื่อคุณ");
+    expect(out).toContain("AI Insight ✨");
+    expect(out).toContain("ดูรายละเอียดในแอป ➡️");
+  });
+});

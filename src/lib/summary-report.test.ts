@@ -246,3 +246,39 @@ describe("buildSummaryCard: the daily limit line", () => {
     expect(json(32_000)).not.toContain("งบวันนี้");
   });
 });
+
+describe("the look of the summary card", () => {
+  const data = summarize(sample, week, before);
+  const json = () =>
+    JSON.stringify(
+      buildSummaryCard({
+        title: "สรุปเดือนนี้",
+        range: week,
+        data,
+        liffUrl: "https://liff.line.me/1/summary",
+      }),
+    );
+
+  it("has an emoji and an arrow on each figure, and the balance with the money emoji", () => {
+    const out = json();
+    expect(out).toContain("💰 รายรับ");
+    expect(out).toContain("↑ +฿1,000");
+    expect(out).toContain("🧾 รายจ่าย");
+    expect(out).toContain("↓ -฿475");
+    expect(out).toContain("💵 ฿525");
+  });
+
+  it("shows each top category with a coloured bar between its name and its amount", () => {
+    const out = json();
+    expect(out).toContain("ใช้จ่ายเยอะสุด");
+    expect(out).toContain("#A583E0"); // the first bar
+    expect(out).toContain("📝 จดไว้ 5 รายการ");
+  });
+
+  it("has the calendar emoji on the header and a rounded button with the arrow", () => {
+    const out = json();
+    expect(out).toContain('"text":"📅"');
+    expect(out).toContain('"text":"ดูรายละเอียด ➡️"');
+    expect(out).toContain('"label":"ดูรายละเอียด"');
+  });
+});

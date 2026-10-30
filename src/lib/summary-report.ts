@@ -2,6 +2,7 @@ import type { DateRange } from "@/lib/budget-cycle";
 import { formatBaht } from "@/lib/money";
 import { bangkokParts, formatThaiDayMonth, fromBangkok } from "@/lib/thai-date";
 import type { BudgetCycle, LineMessage } from "@/lib/types";
+import { bar, barColor, cardHeader, pillFooter, TINT } from "@/lib/line/card-style";
 
 /** Hour (Bangkok) from which the automatic summaries may be sent. */
 export const SUMMARY_HOUR = 9;
@@ -148,15 +149,6 @@ export function rangeLabel(range: DateRange): string {
 
 const COLOR = { text: "#0F172A", muted: "#64748B", income: "#047857", expense: "#E11D48" };
 
-const row = (label: string, value: string, color: string) => ({
-  type: "box",
-  layout: "horizontal",
-  contents: [
-    { type: "text", text: label, size: "sm", color: COLOR.muted, flex: 3 },
-    { type: "text", text: value, size: "md", weight: "bold", color, align: "end", flex: 5 },
-  ],
-});
-
 /** The summary card pushed to the chat. `liffUrl` opens the analytics page (omitted when unknown). */
 export function buildSummaryMessage(input: {
   kind: SummaryKind;
@@ -194,14 +186,46 @@ export function buildSummaryCard(input: {
   const net = data.current.income - data.current.expense;
   const change = against ? expenseChangePercent(data) : null;
 
+  const stat = (emoji: string, label: string, value: string, color: string, arrow = "") => ({
+    type: "box",
+    layout: "horizontal",
+    alignItems: "center",
+    margin: "md",
+    contents: [
+      { type: "text", text: `${emoji} ${label}`, size: "lg", color: TINT.strong, flex: 4 },
+      {
+        type: "text",
+        text: `${arrow}${value}`,
+        size: "xl",
+        weight: "bold",
+        color,
+        align: "end",
+        flex: 6,
+      },
+    ],
+  });
+
   const body: unknown[] = [
-    row("รายรับ", `+฿${formatBaht(data.current.income)}`, COLOR.income),
-    row("รายจ่าย", `-฿${formatBaht(data.current.expense)}`, COLOR.expense),
-    row(
-      "เหลือ",
-      `${net < 0 ? "-" : ""}฿${formatBaht(Math.abs(net))}`,
-      net < 0 ? COLOR.expense : COLOR.income,
-    ),
+    stat("💰", "รายรับ", `+฿${formatBaht(data.current.income)}`, TINT.good, "↑ "),
+    stat("🧾", "รายจ่าย", `-฿${formatBaht(data.current.expense)}`, TINT.bad, "↓ "),
+    {
+      type: "box",
+      layout: "horizontal",
+      alignItems: "center",
+      margin: "md",
+      contents: [
+        { type: "text", text: "เหลือ", size: "lg", weight: "bold", color: TINT.strong, flex: 3 },
+        {
+          type: "text",
+          text: `💵 ${net < 0 ? "-" : ""}฿${formatBaht(Math.abs(net))}`,
+          size: "xxl",
+          weight: "bold",
+          color: net < 0 ? TINT.bad : TINT.strong,
+          align: "end",
+          flex: 7,
+        },
+      ],
+    },
   ];
 
   if (input.dailyLimitSatang && input.dailyLimitSatang > 0) {
@@ -226,27 +250,37 @@ export function buildSummaryCard(input: {
 
   if (data.topExpenses.length > 0) {
     body.push(
-      { type: "separator", margin: "lg" },
-      { type: "text", text: "ใช้จ่ายเยอะสุด", size: "xs", color: COLOR.muted, margin: "lg" },
+      { type: "separator", margin: "lg", color: "#EDEDF2" },
+      {
+        type: "text",
+        text: "ใช้จ่ายเยอะสุด",
+        size: "md",
+        weight: "bold",
+        color: "#5B5F6B",
+        margin: "lg",
+      },
     );
-    for (const c of data.topExpenses) {
+    data.topExpenses.forEach((c, i) => {
       body.push({
         type: "box",
         layout: "horizontal",
-        margin: "sm",
+        alignItems: "center",
+        spacing: "sm",
+        margin: "md",
         contents: [
-          { type: "text", text: c.name, size: "sm", color: COLOR.text, flex: 4, wrap: true },
+          { type: "text", text: c.name, size: "sm", color: TINT.strong, flex: 3, wrap: true },
+          { ...bar(c.percent, barColor(i)), flex: 3 },
           {
             type: "text",
             text: `฿${formatBaht(c.amountSatang)} · ${c.percent}%`,
             size: "sm",
-            color: COLOR.muted,
+            color: TINT.strong,
             align: "end",
-            flex: 5,
+            flex: 4,
           },
         ],
       });
-    }
+    });
   }
 
   if (change !== null) {
@@ -265,42 +299,20 @@ export function buildSummaryCard(input: {
   }
   body.push({
     type: "text",
-    text: `จดไว้ ${data.current.count} รายการ`,
-    size: "xs",
+    text: `📝 จดไว้ ${data.current.count} รายการ`,
+    size: "sm",
     color: COLOR.muted,
-    margin: "sm",
+    margin: "md",
   });
 
   const bubble: Record<string, unknown> = {
     type: "bubble",
     size: "mega",
-    header: {
-      type: "box",
-      layout: "vertical",
-      backgroundColor: "#CCFBF1",
-      paddingAll: "16px",
-      contents: [
-        { type: "text", text: title, weight: "bold", size: "lg", color: "#0B5D4F" },
-        { type: "text", text: subtitle, size: "xs", color: "#3F6B63", margin: "xs" },
-      ],
-    },
-    body: { type: "box", layout: "vertical", paddingAll: "16px", spacing: "sm", contents: body },
+    header: cardHeader(title, [subtitle], "📅"),
+    body: { type: "box", layout: "vertical", paddingAll: "18px", contents: body },
   };
-  if (input.liffUrl?.startsWith("https://")) {
-    bubble.footer = {
-      type: "box",
-      layout: "vertical",
-      contents: [
-        {
-          type: "button",
-          style: "primary",
-          color: "#0F766E",
-          height: "sm",
-          action: { type: "uri", label: "ดูรายละเอียด", uri: input.liffUrl },
-        },
-      ],
-    };
-  }
+  const foot = pillFooter("ดูรายละเอียด ➡️", input.liffUrl);
+  if (foot) bubble.footer = foot;
   return {
     type: "flex",
     altText: `${title} ${subtitle}: รายรับ ฿${formatBaht(data.current.income)} รายจ่าย ฿${formatBaht(data.current.expense)}`,

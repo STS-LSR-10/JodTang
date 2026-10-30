@@ -88,3 +88,23 @@ describe("buildForecastCard", () => {
     expect(card({}, "http://localhost/x")).not.toContain("ดูสรุปในแอป");
   });
 });
+
+describe("the look of the forecast card", () => {
+  it("says all is well in a green pill with its tick and thumb, and the piggy bank on the header", () => {
+    const out = card({ expenseSatang: baht(1_000) }, "https://liff.line.me/1/summary");
+    expect(out).toContain("✅ เงินพอใช้ไปถึงสิ้นรอบ 👍");
+    expect(out).toContain("#2F9E5B");
+    expect(out).toContain("🐷");
+    expect(out).toContain("ดูสรุปในแอป 📈");
+  });
+
+  it("a short supply is a red pill", () => {
+    const out = card();
+    expect(out).toContain("⚠️ เงินจะหมดประมาณ");
+    expect(out).not.toContain("#2F9E5B");
+  });
+
+  it("the days left carry a calendar emoji", () => {
+    expect(card()).toContain("📆");
+  });
+});
