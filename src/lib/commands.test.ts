@@ -263,3 +263,24 @@ describe("parseCommand: daily budget", () => {
     expect(parseCommand("งบวันเกิดแม่ 500")).toBeNull();
   });
 });
+
+describe("note commands", () => {
+  it.each([
+    ["โน้ต ซื้อนม รหัสไวไฟ 1234", { kind: "note-add", body: "ซื้อนม รหัสไวไฟ 1234" }],
+    ["โน๊ต ไอเดียแอป", { kind: "note-add", body: "ไอเดียแอป" }],
+    ["  โน้ต   ซื้อนม  \nไข่ ", { kind: "note-add", body: "ซื้อนม  \nไข่" }],
+    ["โน้ต", { kind: "note-list" }],
+    ["ค้นหาโน้ต ไวไฟ", { kind: "note-search", term: "ไวไฟ" }],
+    ["ค้นหา โน้ต ไวไฟ", { kind: "note-search", term: "ไวไฟ" }],
+    ["โน้ต ค้นหา ไวไฟ", { kind: "note-search", term: "ไวไฟ" }],
+    ["ค้นหาโน้ต", { kind: "note-search", term: null }],
+  ])("%j", (input, expected) => {
+    expect(parseCommand(input)).toEqual(expected);
+  });
+
+  it("the word must stand alone: a notebook is still an entry, and entry search is untouched", () => {
+    expect(parseCommand("โน้ตบุ๊ก 25000")).toBeNull();
+    expect(parseCommand("โน๊ตบุ๊ค 25000")).toBeNull();
+    expect(parseCommand("ค้นหา กาแฟ")).toEqual({ kind: "search", term: "กาแฟ" });
+  });
+});

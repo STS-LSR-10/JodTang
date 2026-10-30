@@ -12,6 +12,9 @@ export type Command =
   | { kind: "summary-range-usage" }
   | { kind: "search"; term: string }
   | { kind: "search-usage" }
+  | { kind: "note-add"; body: string }
+  | { kind: "note-list" }
+  | { kind: "note-search"; term: string | null }
   | { kind: "recent" }
   | { kind: "category-spend" }
   | { kind: "year-summary"; year: number | "last" | null }
@@ -57,6 +60,15 @@ function typedDay(d: string | undefined, m: string | undefined, y: string | unde
 /** Recognize the short commands. Returns null for anything that should be parsed as a transaction. */
 export function parseCommand(input: string): Command | null {
   const text = normalizeThaiDigits(input).trim().replace(/\s+/g, " ").toLowerCase();
+
+  // Notes: "โน้ต ซื้อนม" saves, "โน้ต" lists, "ค้นหาโน้ต ไวไฟ" / "โน้ต ค้นหา ไวไฟ" searches. The word
+  // must stand alone ("โน้ตบุ๊ก 25000" is still an entry), and the text keeps its case and line breaks.
+  const raw = input.trim();
+  const noteSearch = /^(?:ค้นหา\s*โน[้๊็]ต|โน[้๊็]ต\s+ค้นหา)(?:\s+([\s\S]+))?$/.exec(raw);
+  if (noteSearch) return { kind: "note-search", term: noteSearch[1]?.trim() || null };
+  const note = /^โน[้๊็]ต(?:\s+([\s\S]+))?$/.exec(raw);
+  if (note)
+    return note[1]?.trim() ? { kind: "note-add", body: note[1].trim() } : { kind: "note-list" };
 
   if (["ช่วยเหลือ", "วิธีใช้", "วิธีใช้งาน", "help", "?", "เมนู"].includes(text))
     return { kind: "help" };

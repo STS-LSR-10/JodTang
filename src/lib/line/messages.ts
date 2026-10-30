@@ -350,3 +350,14 @@ export const PDF_CANCELLED_TEXT = "ยกเลิกแล้ว ไม่ไ�
 export const PDF_ALREADY_DONE_TEXT = "ชุดรายการนี้จัดการไปแล้ว หรือหมดอายุแล้วนะ";
 export const pdfRecordedText = (count: number) =>
   `จดแล้ว ${count} รายการ ดูได้ที่เมนู "รายการ" และแก้ไขภายหลังได้`;
+
+// ── notes ──
+export const NOTE_SAVED_TEXT = (preview: string, url?: string) =>
+  `จดโน้ตแล้ว 📝\n"${preview}"${url ? `\nดู แก้ไข หรือค้นหาทั้งหมด: ${url}` : ""}`;
+export const NOTE_TOO_LONG_TEXT = (max: number) =>
+  `โน้ตยาวเกิน ${max.toLocaleString("en-US")} ตัวอักษร ลองแบ่งเป็นหลายโน้ตนะ`;
+export const NOTE_FULL_TEXT = (limit: number) =>
+  `โน้ตเต็ม ${limit.toLocaleString("en-US")} รายการแล้ว ลบอันเก่าที่หน้าโน้ต หรืออัปเกรดแผนเพื่อเก็บเพิ่มนะ`;
+export const NOTE_EMPTY_TEXT = 'ยังไม่มีโน้ต พิมพ์ เช่น "โน้ต ซื้อนม รหัสไวไฟ 1234" ได้เลย';
+export const NOTE_SEARCH_USAGE_TEXT = 'พิมพ์คำที่ต้องการหาต่อท้าย เช่น "ค้นหาโน้ต ไวไฟ"';
+export const noteNotFoundText = (term: string) => `ไม่เจอโน้ตที่มีคำว่า "${term}"`;

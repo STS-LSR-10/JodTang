@@ -3019,3 +3019,26 @@ describe("PDF entries (0041)", () => {
     await db.query("insert into pdf_imports (user_id, sha256) values ($1, $2)", [other, hash]);
   });
 });
+
+describe("notes (0042)", () => {
+  it("keeps a note per person, 1 to 2,000 characters, and goes with the person", async () => {
+    const u = await newUser(db, `note-${Math.random()}`);
+    await db.query("insert into notes (user_id, body) values ($1, 'ซื้อนม')", [u]);
+    await expect(
+      db.query("insert into notes (user_id, body) values ($1, '')", [u]),
+    ).rejects.toThrow();
+    await expect(
+      db.query("insert into notes (user_id, body) values ($1, $2)", [u, "ก".repeat(2001)]),
+    ).rejects.toThrow();
+    await db.query("insert into notes (user_id, body) values ($1, $2)", [u, "ก".repeat(2000)]);
+    expect(
+      (await one<{ n: number }>(db, "select count(*)::int as n from notes where user_id = $1", [u]))
+        .n,
+    ).toBe(2);
+    await db.query("delete from users where id = $1", [u]);
+    expect(
+      (await one<{ n: number }>(db, "select count(*)::int as n from notes where user_id = $1", [u]))
+        .n,
+    ).toBe(0);
+  });
+});

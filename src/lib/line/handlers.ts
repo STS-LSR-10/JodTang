@@ -135,6 +135,8 @@ import {
 import { limitAlert } from "@/lib/card";
 import { loadCardStatuses } from "@/lib/card-repo";
 import { createTransfer, deleteTransfer } from "@/lib/transfer-repo";
+import { cleanNoteBody, MAX_NOTE_LENGTH, noteCapacity, noteTitle } from "@/lib/note";
+import { countNotes, createNote, listNotes } from "@/lib/note-repo";
 import { ensureWallets, listWallets, setEntryWallet, setSlipWallet } from "@/lib/wallet-repo";
 import { balanceOf, resolveWallet, walletLabel, type Wallet } from "@/lib/wallet";
 import { walletCapacity } from "@/lib/plan";
@@ -145,11 +147,7 @@ import {
   buildRecentCard,
   buildYearCard,
 } from "./spend-flex";
-import {
-  getLivePhotoWait,
-  getPhotoTx,
-  startPhotoWait,
-} from "@/lib/photo-repo";
+import { getLivePhotoWait, getPhotoTx, startPhotoWait } from "@/lib/photo-repo";
 import {
   BACKDATE_MAX_DAYS,
   buildBackdatePrompt,
@@ -217,6 +215,12 @@ import {
   USE_CODE_USAGE_TEXT,
   VOICE_CANCELLED_TEXT,
   WALLET_AMBIGUOUS_TEXT,
+  NOTE_EMPTY_TEXT,
+  NOTE_FULL_TEXT,
+  NOTE_SAVED_TEXT,
+  NOTE_SEARCH_USAGE_TEXT,
+  NOTE_TOO_LONG_TEXT,
+  noteNotFoundText,
   WALLET_MOVE_ASK_TEXT,
   WALLET_SLIP_ASK_TEXT,
   WALLET_SLIP_MOVED_TEXT,
@@ -1751,6 +1755,20 @@ export async function editedCardFor(user: UserRow, deps: HandlerDeps): Promise<L
 
 // ───────────────────────── commands ─────────────────────────
 
+/** "• 27 ธ.ค. 2569  ซื้อนม…" lines for a short list of notes, then where to see the rest. */
+function noteListText(
+  title: string,
+  items: { body: string; createdAt: string }[],
+  url: string | undefined,
+  more = false,
+): string {
+  const lines = items.map(
+    (n) => `• ${formatThaiDate(new Date(n.createdAt))}  ${noteTitle(n.body, 50)}`,
+  );
+  const tail = url ? [`${more ? "ดูทั้งหมด" : "ดู แก้ไข หรือค้นหา"}: ${url}`] : [];
+  return [`${title} 📝`, ...lines, ...tail].join("\n");
+}
+
 async function runCommand(
   command: Command,
   user: UserRow,
@@ -2054,6 +2072,30 @@ async function runCommand(
 
     case "search-usage":
       return [text(SEARCH_USAGE_TEXT)];
+
+    case "note-add": {
+      const body = cleanNoteBody(command.body);
+      if (!body) return [text(NOTE_EMPTY_TEXT)];
+      if (body.length > MAX_NOTE_LENGTH) return [text(NOTE_TOO_LONG_TEXT(MAX_NOTE_LENGTH))];
+      const limit = noteCapacity(effectivePlan(user.plan, user.plan_expires_at, deps.now()));
+      if ((await countNotes(db, user.id)) >= limit) return [text(NOTE_FULL_TEXT(limit))];
+      await createNote(db, user.id, body);
+      return [text(NOTE_SAVED_TEXT(noteTitle(body, 60), pageUrl("/notes")))];
+    }
+
+    case "note-list": {
+      const { items } = await listNotes(db, user.id, { limit: 5 });
+      if (items.length === 0) return [text(NOTE_EMPTY_TEXT)];
+      return [text(noteListText("โน้ตล่าสุด", items, pageUrl("/notes")))];
+    }
+
+    case "note-search": {
+      if (!command.term) return [text(NOTE_SEARCH_USAGE_TEXT)];
+      const { items, hasMore } = await listNotes(db, user.id, { q: command.term, limit: 5 });
+      if (items.length === 0) return [text(noteNotFoundText(command.term))];
+      const url = pageUrl(`/notes?q=${encodeURIComponent(command.term)}`);
+      return [text(noteListText(`โน้ตที่มี "${command.term}"`, items, url, hasMore))];
+    }
 
     case "search": {
       if (!can(effectivePlan(user.plan, user.plan_expires_at, deps.now()), "searchTotals")) {
