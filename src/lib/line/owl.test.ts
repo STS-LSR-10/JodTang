@@ -34,8 +34,12 @@ vi.mock("@/lib/ask-repo", () => ({
   },
   isAskWaitLive: async () => live,
 }));
+const loaded: string[] = [];
 vi.mock("@/lib/owl-context", () => ({
-  loadOwlFacts: async () => ({}),
+  loadOwlFacts: async (_d: unknown, _u: string, q: string) => {
+    loaded.push(q);
+    return {};
+  },
   renderOwlContext: () => "DATA",
 }));
 vi.mock("./upsell-reply", () => ({
@@ -45,7 +49,7 @@ vi.mock("./upsell-reply", () => ({
 }));
 
 const answer = vi.fn<(input: { question: string; data: string }) => Promise<string>>(
-  async (input) => (input.data ? "**ใช้ไป** ฿1,000" : ""),
+  async () => "**ใช้ไป** ฿1,000",
 );
 const owl: Owl = { name: "t", answer };
 const deps = (over: Partial<OwlDeps> = {}): OwlDeps => ({
@@ -67,9 +71,10 @@ beforeEach(() => {
   usageLeft = 50;
   live = false;
   waits.length = 0;
+  loaded.length = 0;
   refunds.length = 0;
   answer.mockClear();
-  answer.mockImplementation(async (input) => (input.data ? "**ใช้ไป** ฿1,000" : ""));
+  answer.mockImplementation(async () => "**ใช้ไป** ฿1,000");
 });
 
 describe("starting and ending", () => {
@@ -79,7 +84,7 @@ describe("starting and ending", () => {
     expect(out.text).toContain("พี่ฮูกมาแล้ว");
     const items = out.quickReply?.items ?? [];
     expect(items.filter((i) => i.action.type === "message").map((i) => i.action.text)).toContain(
-      "เดือนนี้ใช้ไปเท่าไร",
+      "วิเคราะห์เดือนนี้",
     );
     expect(items.at(-1)?.action.data).toBe("a=owlx");
   });
@@ -113,6 +118,21 @@ describe("asking", () => {
     const out = first(await owlAsk(deps(), user(), "หมวดไหนเยอะสุด", true, "U1"));
     expect(waits).toEqual(["start"]);
     expect(out.quickReply?.items.map((i) => i.action.data)).toEqual(["a=owlx"]);
+  });
+
+  it("a general question gets no data from the person's records, and still costs one question", async () => {
+    const out = first(await owlAsk(deps(), user(), "ทำไมท้องฟ้าสีฟ้า", false, "U1"));
+    expect(loaded).toEqual([]);
+    expect(answer).toHaveBeenCalledWith({ question: "ทำไมท้องฟ้าสีฟ้า", data: "" });
+    expect(out.text).toBe("ใช้ไป ฿1,000");
+    expect(refunds).toHaveLength(0);
+    expect(usageLeft).toBe(49);
+  });
+
+  it("a question about their money loads their records and sends them along", async () => {
+    await owlAsk(deps(), user(), "วิเคราะห์การใช้จ่ายเดือนนี้", false, "U1");
+    expect(loaded).toEqual(["วิเคราะห์การใช้จ่ายเดือนนี้"]);
+    expect(answer).toHaveBeenCalledWith({ question: "วิเคราะห์การใช้จ่ายเดือนนี้", data: "DATA" });
   });
 
   it("an empty question starts the mode instead", async () => {

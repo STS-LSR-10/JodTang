@@ -36,6 +36,10 @@ export interface OwlFacts {
   previousMonth: Money | null;
   year: Money | null;
   topCategories: { name: string; amountSatang: number }[];
+  /** Last month's biggest categories, to compare with this month's. */
+  previousCategories: { name: string; amountSatang: number }[];
+  /** Income and expense of the last six months, oldest first (the current month last). */
+  monthly: { monthStart: Date; incomeSatang: number; expenseSatang: number }[];
   budgets: { scope: string | null; spentSatang: number; limitSatang: number }[];
   cycleLabel: string | null;
   recent: {
@@ -71,6 +75,26 @@ export function renderOwlContext(f: OwlFacts): string {
   if (f.topCategories.length > 0) {
     lines.push(
       `หมวดรายจ่ายเดือนนี้ (มากไปน้อย): ${f.topCategories.map((c) => `${c.name} ${baht(c.amountSatang)}`).join(" · ")}`,
+    );
+  }
+  if (f.previousCategories.length > 0) {
+    lines.push(
+      `หมวดรายจ่ายเดือนก่อน (มากไปน้อย): ${f.previousCategories.map((c) => `${c.name} ${baht(c.amountSatang)}`).join(" · ")}`,
+    );
+  }
+  if (f.month && f.month.expenseSatang > 0) {
+    lines.push(
+      `รายจ่ายเฉลี่ยต่อวันเดือนนี้ (${p.day} วันที่ผ่านมา): ${baht(Math.round(f.month.expenseSatang / p.day))}`,
+    );
+  }
+  if (f.monthly.length > 0) {
+    lines.push(
+      `ย้อนหลัง ${f.monthly.length} เดือน (รายรับ/รายจ่าย): ${f.monthly
+        .map(
+          (m) =>
+            `${formatThaiMonthShort(m.monthStart)} ${baht(m.incomeSatang)}/${baht(m.expenseSatang)}`,
+        )
+        .join(" · ")}`,
     );
   }
   if (f.budgets.length > 0) {
@@ -146,92 +170,121 @@ export async function loadOwlFacts(
   const previous = { from: fromBangkok(p.year, p.month - 1, 1), to: month.from };
   const year = { from: fromBangkok(p.year, 1, 1), to: fromBangkok(p.year + 1, 1, 1) };
 
-  const [thisMonth, lastMonth, thisYear, categories, budgetPart, recent, reminders, notes] =
-    await Promise.all([
-      part("month", () => periodSummary(db, { userId, ...month }), null),
-      part("previous_month", () => periodSummary(db, { userId, ...previous }), null),
-      part("year", () => periodSummary(db, { userId, ...year }), null),
-      part("categories", () => loadCategorySpend(db, userId, month), []),
-      part(
-        "budgets",
-        async () => {
-          const [settings, mode, budgets, cats] = await Promise.all([
-            getSettings(db, userId),
-            getBudgetMode(db, userId),
-            loadBudgets(db, userId),
-            loadCategories(db, userId),
-          ]);
-          const range = cycleRange(now, settings.budget_cycle, settings.cycle_start_day);
-          const wanted = budgets
-            .filter((b) => (mode === "category" ? b.category_id !== null : b.category_id === null))
-            .slice(0, MAX_BUDGET_LINES);
-          const rows = await Promise.all(
-            wanted.map(async (b) => ({
-              scope: b.category_id
-                ? (cats.find((c) => c.id === b.category_id)?.name ?? null)
-                : null,
-              limitSatang: toSatang(b.amount),
-              spentSatang: await expenseTotalSatang(db, {
-                userId,
-                ...range,
-                categoryId: b.category_id ?? undefined,
-              }),
+  const [
+    thisMonth,
+    lastMonth,
+    thisYear,
+    categories,
+    previousCategories,
+    monthly,
+    budgetPart,
+    recent,
+    reminders,
+    notes,
+  ] = await Promise.all([
+    part("month", () => periodSummary(db, { userId, ...month }), null),
+    part("previous_month", () => periodSummary(db, { userId, ...previous }), null),
+    part("year", () => periodSummary(db, { userId, ...year }), null),
+    part("categories", () => loadCategorySpend(db, userId, month), []),
+    part("previous_categories", () => loadCategorySpend(db, userId, previous), []),
+    part(
+      "monthly",
+      async () => {
+        const starts = [5, 4, 3, 2, 1, 0].map((back) => fromBangkok(p.year, p.month - back, 1));
+        const rows = await Promise.all(
+          starts.map(async (from, i) => ({
+            monthStart: from,
+            ...(await periodSummary(db, {
+              userId,
+              from,
+              to: i === starts.length - 1 ? month.to : (starts[i + 1] as Date),
             })),
-          );
+          })),
+        );
+        return rows.map((r) => ({
+          monthStart: r.monthStart,
+          incomeSatang: r.incomeSatang,
+          expenseSatang: r.expenseSatang,
+        }));
+      },
+      [],
+    ),
+    part(
+      "budgets",
+      async () => {
+        const [settings, mode, budgets, cats] = await Promise.all([
+          getSettings(db, userId),
+          getBudgetMode(db, userId),
+          loadBudgets(db, userId),
+          loadCategories(db, userId),
+        ]);
+        const range = cycleRange(now, settings.budget_cycle, settings.cycle_start_day);
+        const wanted = budgets
+          .filter((b) => (mode === "category" ? b.category_id !== null : b.category_id === null))
+          .slice(0, MAX_BUDGET_LINES);
+        const rows = await Promise.all(
+          wanted.map(async (b) => ({
+            scope: b.category_id ? (cats.find((c) => c.id === b.category_id)?.name ?? null) : null,
+            limitSatang: toSatang(b.amount),
+            spentSatang: await expenseTotalSatang(db, {
+              userId,
+              ...range,
+              categoryId: b.category_id ?? undefined,
+            }),
+          })),
+        );
+        return {
+          rows: rows.filter((r) => r.limitSatang > 0 && (mode !== "category" || r.scope !== null)),
+          label:
+            settings.budget_cycle === "weekly"
+              ? "รายสัปดาห์"
+              : `รายเดือน วันที่ ${settings.cycle_start_day}`,
+        };
+      },
+      { rows: [], label: "" },
+    ),
+    part(
+      "recent",
+      async () => {
+        const { data, error } = await db
+          .from("transactions")
+          .select("occurred_at,type,title,amount,categories(name)")
+          .eq("user_id", userId)
+          .eq("status", "confirmed")
+          .order("occurred_at", { ascending: false })
+          .limit(MAX_RECENT);
+        if (error) throw new Error(error.message);
+        return (data ?? []).map((r) => {
+          const cat = Array.isArray(r.categories) ? r.categories[0] : r.categories;
           return {
-            rows: rows.filter(
-              (r) => r.limitSatang > 0 && (mode !== "category" || r.scope !== null),
-            ),
-            label:
-              settings.budget_cycle === "weekly"
-                ? "รายสัปดาห์"
-                : `รายเดือน วันที่ ${settings.cycle_start_day}`,
+            occurredAt: new Date(r.occurred_at as string),
+            type: r.type as "income" | "expense",
+            title: String(r.title ?? ""),
+            amountSatang: toSatang(r.amount as string | number),
+            category: (cat as { name?: string } | null)?.name ?? null,
           };
-        },
-        { rows: [], label: "" },
-      ),
-      part(
-        "recent",
-        async () => {
-          const { data, error } = await db
-            .from("transactions")
-            .select("occurred_at,type,title,amount,categories(name)")
-            .eq("user_id", userId)
-            .eq("status", "confirmed")
-            .order("occurred_at", { ascending: false })
-            .limit(MAX_RECENT);
-          if (error) throw new Error(error.message);
-          return (data ?? []).map((r) => {
-            const cat = Array.isArray(r.categories) ? r.categories[0] : r.categories;
-            return {
-              occurredAt: new Date(r.occurred_at as string),
-              type: r.type as "income" | "expense",
-              title: String(r.title ?? ""),
-              amountSatang: toSatang(r.amount as string | number),
-              category: (cat as { name?: string } | null)?.name ?? null,
-            };
-          });
-        },
-        [],
-      ),
-      part("reminders", () => listReminders(db, userId, MAX_REMINDERS), []),
-      part(
-        "notes",
-        async () => {
-          if (asksAboutNotes(question)) {
-            return (await listNotes(db, userId, { limit: MAX_NOTES })).items;
+        });
+      },
+      [],
+    ),
+    part("reminders", () => listReminders(db, userId, MAX_REMINDERS), []),
+    part(
+      "notes",
+      async () => {
+        if (asksAboutNotes(question)) {
+          return (await listNotes(db, userId, { limit: MAX_NOTES })).items;
+        }
+        const found = new Map<string, { createdAt: string; body: string }>();
+        for (const w of noteSearchWords(question)) {
+          for (const n of (await listNotes(db, userId, { q: w, limit: 3 })).items) {
+            found.set(n.id, n);
           }
-          const found = new Map<string, { createdAt: string; body: string }>();
-          for (const w of noteSearchWords(question)) {
-            for (const n of (await listNotes(db, userId, { q: w, limit: 3 })).items) {
-              found.set(n.id, n);
-            }
-          }
-          return [...found.values()].slice(0, 5);
-        },
-        [],
-      ),
-    ]);
+        }
+        return [...found.values()].slice(0, 5);
+      },
+      [],
+    ),
+  ]);
 
   return {
     now,
@@ -242,6 +295,11 @@ export async function loadOwlFacts(
       name: c.name,
       amountSatang: c.amountSatang,
     })),
+    previousCategories: previousCategories.slice(0, MAX_CATEGORIES).map((c) => ({
+      name: c.name,
+      amountSatang: c.amountSatang,
+    })),
+    monthly,
     budgets: budgetPart.rows,
     cycleLabel: budgetPart.label || null,
     recent,

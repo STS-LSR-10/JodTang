@@ -89,6 +89,10 @@ describe("renderOwlContext", () => {
       "เดือนนี้ (ต.ค.): รายรับ ฿30,000 · รายจ่าย ฿4,000 · คงเหลือ ฿26,000 · 12 รายการ",
     );
     expect(text).toContain("เดือนก่อน (ก.ย.)");
+    // for analysis: last month's categories, the daily average (30 days so far: ฿4,000 / 30) and 6 months
+    expect(text).toContain("หมวดรายจ่ายเดือนก่อน (มากไปน้อย): อาหาร ฿3,000 · เดินทาง ฿1,000");
+    expect(text).toContain("รายจ่ายเฉลี่ยต่อวันเดือนนี้ (30 วันที่ผ่านมา): ฿133.33");
+    expect(text).toContain("ย้อนหลัง 6 เดือน (รายรับ/รายจ่าย): พ. giữ".replace("พ. giữ", "พ.ค."));
     expect(text).toContain("ปีนี้ (2569)");
     expect(text).toContain("หมวดรายจ่ายเดือนนี้ (มากไปน้อย): อาหาร ฿3,000 · เดินทาง ฿1,000");
     expect(text).toContain("งบ (รอบรายเดือน วันที่ 1): งบรวม ใช้ไป ฿4,000 จาก ฿5,000 (80%)");
@@ -103,6 +107,8 @@ describe("renderOwlContext", () => {
       previousMonth: null,
       year: null,
       topCategories: [],
+      previousCategories: [],
+      monthly: [],
       budgets: [],
       cycleLabel: null,
       recent: [],

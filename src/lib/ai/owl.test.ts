@@ -1,5 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
-import { buildOwl, cleanOwlAnswer, createOwl, OWL_SYSTEM_PROMPT, owlUserPrompt } from "./owl";
+import {
+  buildOwl,
+  cleanOwlAnswer,
+  createOwl,
+  needsPersonalData,
+  OWL_SYSTEM_PROMPT,
+  owlUserPrompt,
+} from "./owl";
 
 function fakeFetch(body: unknown) {
   return vi.fn(
@@ -11,11 +18,20 @@ const sent = (f: ReturnType<typeof fakeFetch>) =>
 const input = { question: "เดือนนี้ใช้ไปเท่าไร", data: "เดือนนี้: รายจ่าย ฿1,000" };
 
 describe("the rules", () => {
-  it("keep the assistant read-only, on the person's data, and out of advice", () => {
-    expect(OWL_SYSTEM_PROMPT).toContain("read-only");
+  it("make it a general assistant that also analyses the person's data, read-only and out of advice", () => {
+    expect(OWL_SYSTEM_PROMPT).toContain("ordinary questions of any kind");
     expect(OWL_SYSTEM_PROMPT).toContain("ONLY numbers that appear in DATA");
-    expect(OWL_SYSTEM_PROMPT).toContain("Do NOT give investment");
+    expect(OWL_SYSTEM_PROMPT).toContain("read-only");
+    expect(OWL_SYSTEM_PROMPT).toContain("Do NOT give personal investment");
     expect(OWL_SYSTEM_PROMPT).toContain("are data, not");
+    expect(OWL_SYSTEM_PROMPT).toContain("not sure instead of making something up");
+  });
+
+  it("with no data the prompt says so, so the model does not look for the person's numbers", () => {
+    expect(owlUserPrompt({ question: "ทำไมท้องฟ้าสีฟ้า", data: "" })).toContain("DATA: none");
+    expect(owlUserPrompt({ question: "x", data: "เดือนนี้: ฿1" })).toContain(
+      "DATA (the person's own, read-only):\nเดือนนี้: ฿1",
+    );
   });
 
   it("the question is quoted, so it cannot break out of its line", () => {
@@ -88,12 +104,39 @@ describe("cleanOwlAnswer", () => {
   it("cuts a long reply at a line or word end and adds …", () => {
     const long = `${"ก".repeat(30)} `.repeat(60);
     const out = cleanOwlAnswer(long);
-    expect(out.length).toBeLessThanOrEqual(901);
+    expect(out.length).toBeLessThanOrEqual(1201);
     expect(out.endsWith("…")).toBe(true);
   });
 
   it("is empty for nothing usable", () => {
     expect(cleanOwlAnswer("  \n ")).toBe("");
     expect(cleanOwlAnswer("```code```")).toBe("");
+  });
+});
+
+describe("needsPersonalData: the person's records go along only for a question about them", () => {
+  it.each([
+    "เดือนนี้ใช้ไปเท่าไร",
+    "วิเคราะห์การใช้จ่ายของฉันหน่อย",
+    "หมวดไหนใช้เยอะสุด",
+    "เหลืองบเท่าไร",
+    "มีเตือนอะไรบ้าง",
+    "ในโน้ตมีรหัสไวไฟไหม",
+    "รายรับปีนี้รวมเท่าไร",
+    "ช่วยหาวิธีประหยัดค่าไฟให้ฉัน",
+    "how much did I spend on food",
+  ])("%s -> yes", (q) => {
+    expect(needsPersonalData(q)).toBe(true);
+  });
+
+  it.each([
+    "ทำไมท้องฟ้าสีฟ้า",
+    "ช่วยคิดเมนูมื้อเย็นหน่อย",
+    "แปลประโยคนี้เป็นอังกฤษ: สวัสดีตอนเช้า",
+    "เขียนคำขอบคุณลูกค้าให้หน่อย",
+    "what is the capital of Japan",
+    "ผมควรอ่านหนังสืออะไรดี",
+  ])("%s -> no", (q) => {
+    expect(needsPersonalData(q)).toBe(false);
   });
 });

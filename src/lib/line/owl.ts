@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { cleanOwlAnswer, MAX_QUESTION_LENGTH, type Owl } from "@/lib/ai/owl";
+import { cleanOwlAnswer, MAX_QUESTION_LENGTH, needsPersonalData, type Owl } from "@/lib/ai/owl";
 import { clearAskWait, isAskWaitLive, startAskWait } from "@/lib/ask-repo";
 import { log, safeMessage } from "@/lib/log";
 import { loadOwlFacts, renderOwlContext } from "@/lib/owl-context";
@@ -123,8 +123,11 @@ export async function owlAsk(
 
   let answered = false;
   try {
-    const facts = await loadOwlFacts(db, user.id, q, now);
-    const reply = cleanOwlAnswer(await owl.answer({ question: q, data: renderOwlContext(facts) }));
+    // the person's records go to the AI only for a question about them; "ทำไมท้องฟ้าสีฟ้า" gets none
+    const data = needsPersonalData(q)
+      ? renderOwlContext(await loadOwlFacts(db, user.id, q, now))
+      : "";
+    const reply = cleanOwlAnswer(await owl.answer({ question: q, data }));
     if (!reply) return [text(OWL_FAILED_TEXT)];
     answered = true;
     if (inMode) {
