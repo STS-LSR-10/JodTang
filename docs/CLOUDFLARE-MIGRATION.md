@@ -51,3 +51,10 @@
 3. เก็บ Vercel ไว้อย่างน้อย 1 สัปดาห์เป็นทางย้อนกลับ (ย้อน = เปลี่ยน URL กลับ) แล้วค่อยปิด
 
 **หมายเหตุ:** ระบบ PIN ถูกลบออกแล้ว (migration 0045) จึงไม่มี scrypt ที่กิน CPU อีก ส่วน `SESSION_JWT_SECRET` ยังต้องใช้ค่าเดิมเพื่อให้ session และลิงก์ส่งออกที่ออกไปแล้วยังใช้ได้
+
+## 4) ผลทดลองบิลด์จริง (31 ต.ค. 2569, branch `cloudflare-trial`)
+
+- `pnpm cf:build` ผ่าน (OpenNext 1.20.15 + Next 15.5.28) · ขนาดที่ wrangler รายงาน: **13.2 MB ไม่บีบอัด / 2.6 MB บีบอัด** (ลิมิตแผนฟรี 3 MB บีบอัด)
+- ทดสอบ `cf:preview` บน workerd ในเครื่อง: หน้าเว็บ/ไฟล์ static ตอบ 200 · LINE webhook ลายเซ็นผิด 401 / ถูก 200 · cron ไม่มี secret 401 · PDF และ Excel สร้างได้
+- ต้องมี `cf-polyfill.mjs` (ตอบ `process.umask()`) เพราะไลบรารีส่งออกเรียกตอนโหลดแล้ว Workers ตอบ not implemented · `wrangler.jsonc` ชี้ `main` ไปที่ `cf-worker.mjs` ซึ่งโหลด polyfill ก่อน
+- รัน `pnpm cf:build` ต้องมี `pnpm` อยู่ใน PATH (OpenNext เรียก `pnpm build` เอง)

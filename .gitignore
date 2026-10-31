@@ -36,3 +36,8 @@ pnpm-debug.log*
 
 # generated helper for setting up a new Supabase project
 supabase/_all-migrations.sql
+
+# Cloudflare
+.open-next
+.wrangler
+.dev.vars

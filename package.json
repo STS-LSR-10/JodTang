@@ -7,6 +7,9 @@
     "node": ">=20"
   },
   "scripts": {
+    "cf:build": "opennextjs-cloudflare build",
+    "cf:preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
+    "cf:deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
@@ -21,6 +24,7 @@
   "dependencies": {
     "@expo-google-fonts/noto-sans-thai": "^0.4.2",
     "@line/liff": "^2.31.2",
+    "@opennextjs/cloudflare": "1.20.15",
     "@supabase/supabase-js": "^2.117.3",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
@@ -60,6 +64,7 @@
     "tailwindcss": "^3.4.17",
     "tsx": "^4.23.15",
     "typescript": "^5.7.2",
-    "vitest": "^2.1.8"
+    "vitest": "^2.1.8",
+    "wrangler": "4.156.0"
   }
 }
