@@ -50,8 +50,6 @@ export const LIMITS = {
   joinWallet: { limit: 10, windowSeconds: 3600 },
   /** Account deletion attempts per user. */
   deleteAccount: { limit: 3, windowSeconds: 3600 },
-  /** PIN set / change / reset requests per user (the wrong-PIN count itself lives in the database). */
-  pinChange: { limit: 10, windowSeconds: 3600 },
   /** Erasing history / a month (each is permanent) per user. */
   eraseData: { limit: 5, windowSeconds: 3600 },
 } as const satisfies Record<string, LimitRule>;

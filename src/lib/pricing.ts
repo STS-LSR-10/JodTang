@@ -330,7 +330,6 @@ export const FEATURE_GROUPS: FeatureGroup[] = [
   {
     title: "ส่วนตัวและรางวัล",
     rows: [
-      { label: "ล็อกด้วย PIN", icon: "lock", cells: [false, true, true], feature: "pinLock" },
       {
         label: "ธีมการ์ดและนิสัยบอท",
         icon: "palette",

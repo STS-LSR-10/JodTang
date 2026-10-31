@@ -102,7 +102,11 @@ function Content({ me, onChanged }: { me: Me; onChanged: () => void }) {
       >
         {me.pictureUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={me.pictureUrl} alt="" className="h-12 w-12 shrink-0 rounded-full object-cover" />
+          <img
+            src={me.pictureUrl}
+            alt=""
+            className="h-12 w-12 shrink-0 rounded-full object-cover"
+          />
         ) : (
           <span
             aria-hidden

@@ -6,13 +6,12 @@ test.describe("opening screen (360px)", () => {
     page,
   }) => {
     await mockApi(page, {
-      "GET /api/pin/status": async () => {
-        await new Promise((r) => setTimeout(r, 1200));
-        return { required: false };
-      },
       "GET /api/transactions": { items: [], hasMore: false },
       "GET /api/me": ME_FREE,
       "GET /api/wallets": { items: [] },
+    });
+    await page.addInitScript(() => {
+      (window as { __E2E_AUTH_DELAY_MS?: number }).__E2E_AUTH_DELAY_MS = 1200;
     });
     await page.goto("/transactions");
 
@@ -36,12 +35,11 @@ test.describe("opening screen (360px)", () => {
   }) => {
     // hold the redirect target so the entry page stays on screen
     await mockApi(page, {
-      "GET /api/pin/status": async () => {
-        await new Promise((r) => setTimeout(r, 1500));
-        return { required: false };
-      },
       "GET /api/me": ME_FREE,
       "GET /api/wallets": { items: [] },
+    });
+    await page.addInitScript(() => {
+      (window as { __E2E_AUTH_DELAY_MS?: number }).__E2E_AUTH_DELAY_MS = 1500;
     });
     await page.route("**/summary**", (route) => route.abort());
     await page.goto("/");

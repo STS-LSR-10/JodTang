@@ -16,13 +16,13 @@
 | ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | ตัวตั้งเวลา (cron)           | ✅ อยู่ที่ GitHub Actions ทั้งหมด (`.github/workflows/cron.yml`, ทุกชั่วโมง: จดรายการประจำ + เตือน/สรุป) ไม่มี Vercel Cron แล้ว ย้ายโฮสต์ได้โดยแก้แค่ secret `APP_BASE_URL`                                                                                       |
 | ไม่ผูกกับ Vercel             | ✅ ไม่มี `@vercel/*`, ไม่อ่าน `VERCEL_*`, ไม่มี route แบบ edge-only (มีเทสต์ `src/portability.test.ts` กันไม่ให้หลุดเข้ามา)                                                                                                                                       |
-| โมดูล Node ที่ใช้            | ✅ ใช้เฉพาะ `node:crypto` (ลายเซ็น LINE/Stripe, แฮช PIN แบบ scrypt, rate limit) เทสต์เดียวกันกัน import `fs`/`path`/`zlib`/ฯลฯ ที่ Workers ไม่รองรับ                                                                                                              |
+| โมดูล Node ที่ใช้            | ✅ ใช้เฉพาะ `node:crypto` (ลายเซ็น LINE/Stripe, rate limit) เทสต์เดียวกันกัน import `fs`/`path`/`zlib`/ฯลฯ ที่ Workers ไม่รองรับ                                                                                                                                  |
 | ทดลองบน workerd จริง (local) | ✅ ผ่านบน Cloudflare Workers runtime ในเครื่อง (`wrangler dev --local`, `nodejs_compat`): `createHash`, `createHmac`, `timingSafeEqual`, `randomBytes`, **`scrypt` (N=16384, r=8, p=1)**, สร้างไฟล์ Excel ด้วย `exceljs`, `jose` (HS256), `@supabase/supabase-js` |
 | endpoint ตั้งเวลา            | ✅ เรียกซ้ำได้ปลอดภัย (จดประจำถูกจองครั้งเดียวต่อวันครบกำหนด และตามให้ครบถ้าพลาดรอบ)                                                                                                                                                                              |
 
 ## 2) สิ่งที่ยังไม่รู้ (ต้องวัดตอนย้ายจริง)
 
-- **เวลา CPU ของ scrypt บน Workers จริง:** ในเครื่อง workerd ไม่นับเวลา CPU จึงวัดไม่ได้ แผนฟรีจำกัด CPU 10 ms ต่อคำขอ แผน Paid ให้ 30 วินาที จึงต้องใช้ Paid ตั้งแต่ต้น
+- **เวลา CPU ต่อคำขอ:** แผนฟรีจำกัด 10 ms (แผน Paid ให้ 30 วินาที) เดิมตัวที่เสี่ยงคือ scrypt ของ PIN ซึ่งลบออกแล้ว เหลือส่งออก Excel และการอ่านไฟล์ PDF/ภาพ ที่ต้องวัดตอนทดลองจริง
 - **ขนาดโค้ดหลังบิลด์ด้วย OpenNext:** Next 15 + `exceljs` มักเกินลิมิตแผนฟรี (3 MB บีบอัด) แผน Paid ให้ราว 15 MB (เช็กหน้า Limits ล่าสุดก่อน)
 - **ความเข้ากันของ OpenNext กับเวอร์ชัน Next ที่ใช้อยู่** ตอนบิลด์จริง (ทดสอบตอนย้าย ไม่ใช่ตอนนี้)
 
@@ -31,7 +31,7 @@
 **ผมทำให้ (โค้ด):**
 
 1. เพิ่ม `@opennextjs/cloudflare` + `wrangler`, `wrangler.jsonc` (`nodejs_compat`, compatibility date ล่าสุด), `open-next.config.ts`, สคริปต์ `cf:preview` / `cf:deploy`, `.dev.vars.example`
-2. รัน `opennextjs-cloudflare preview` ในเครื่อง ทดสอบ: บิลด์ผ่าน ขนาดไม่เกินลิมิต, LINE/Stripe webhook ลายเซ็นผ่าน, ตั้ง/ตรวจ PIN, ส่งออก Excel
+2. รัน `opennextjs-cloudflare preview` ในเครื่อง ทดสอบ: บิลด์ผ่าน ขนาดไม่เกินลิมิต, LINE/Stripe webhook ลายเซ็นผ่าน, ส่งออก Excel
 3. ปรับ CI ให้ตรวจว่าบิลด์สำหรับ Cloudflare ผ่านทุกครั้ง · อัปเดต `docs/DEPLOY.md`
 4. (ถ้าต้องการ) ย้ายตัวตั้งเวลาไป Cloudflare Cron Triggers แทน GitHub Actions
 
@@ -50,4 +50,4 @@
 2. เปลี่ยน URL ที่ LINE → Stripe → GitHub secret `APP_BASE_URL` → ทดสอบบนมือถือ
 3. เก็บ Vercel ไว้อย่างน้อย 1 สัปดาห์เป็นทางย้อนกลับ (ย้อน = เปลี่ยน URL กลับ) แล้วค่อยปิด
 
-**หมายเหตุ:** เปลี่ยน `SESSION_JWT_SECRET` ไม่ได้ตอนย้าย (PIN ของผู้ใช้ทุกคนจะใช้ไม่ได้ เพราะใช้เป็น pepper) ใช้ค่าเดิม
+**หมายเหตุ:** ระบบ PIN ถูกลบออกแล้ว (migration 0045) จึงไม่มี scrypt ที่กิน CPU อีก ส่วน `SESSION_JWT_SECRET` ยังต้องใช้ค่าเดิมเพื่อให้ session และลิงก์ส่งออกที่ออกไปแล้วยังใช้ได้

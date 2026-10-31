@@ -56,7 +56,6 @@ const FEATURES: Feature[] = [
   "billReminder",
   "groupLedger",
   "sharedWallet",
-  "pinLock",
   "personalize",
 ];
 

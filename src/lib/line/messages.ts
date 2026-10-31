@@ -320,7 +320,6 @@ export const SHARED_OWNER_CANNOT_LEAVE_TEXT =
   "เจ้าของออกจากกระเป๋าร่วมไม่ได้ ถ้าไม่ใช้แล้วให้ลบกระเป๋าที่หน้ากระเป๋าเงินนะ";
 export const SHARED_JOIN_USAGE_TEXT =
   'พิมพ์ "ร่วมกระเป๋า" ตามด้วยรหัส 6 หลัก เช่น "ร่วมกระเป๋า 482913" นะ';
-export const PIN_RESET_CANCELLED_TEXT = "ยกเลิกคำขอลบ PIN แล้ว PIN เดิมยังใช้ได้ตามปกติ";
 
 // ── PDF (statements, bills, lists) ──
 export const PDF_UNAVAILABLE_TEXT = "ตอนนี้ยังไม่เปิดให้จดจากไฟล์ PDF ลองพิมพ์จดเองไปก่อนนะ";

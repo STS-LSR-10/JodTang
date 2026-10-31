@@ -111,7 +111,6 @@ export type Feature =
   | "billReminder"
   | "groupLedger"
   | "sharedWallet"
-  | "pinLock"
   | "personalize";
 
 /** The lowest tier that has each feature (Elite always includes everything Pro has). */
@@ -149,7 +148,6 @@ export const MIN_PLAN: Record<Feature, "plus" | "ultimate"> = {
   billReminder: "ultimate",
   groupLedger: "ultimate",
   sharedWallet: "plus",
-  pinLock: "plus",
   personalize: "plus",
 };
 

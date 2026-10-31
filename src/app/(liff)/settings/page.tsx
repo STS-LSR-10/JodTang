@@ -19,7 +19,6 @@ import { useApi, useLiff } from "@/components/liff/liff-provider";
 import { DeleteCard } from "@/components/liff/settings/delete-card";
 import { PersonalizeCard } from "@/components/liff/settings/personalize-card";
 import { PhotoPromptCard } from "@/components/liff/settings/photo-prompt-card";
-import { PinCard } from "@/components/liff/settings/pin-card";
 import { ResetCard } from "@/components/liff/settings/reset-card";
 import { MemoryCard } from "@/components/liff/settings/memory-card";
 import { PlanCard } from "@/components/liff/settings/plan-card";
@@ -290,7 +289,6 @@ export default function SettingsPage() {
               />
             </MenuGroup>
 
-            <PinCard />
             <ResetCard />
             <DeleteCard />
           </>
