@@ -9,11 +9,15 @@ import { cn } from "@/lib/utils";
  */
 let resumeAt = 0;
 
+/** The background colour of the opening video (and of its first-frame picture). */
+const SPLASH_BG = "#F9F3DF";
+
 /**
  * Full-screen opening screen while the app signs in. The first frame of the opening video shows at
  * once (same size and place as the video, so nothing jumps); the muted video fades in over it, plays
  * once and rests on its last frame. People who asked their device for less motion keep the still
- * frame. White on purpose: the video is on white, in dark mode too.
+ * frame. Cream on purpose: the owl video is on cream (#F9F3DF), so the whole screen takes that colour
+ * (in dark mode too) and the video has no visible edges.
  */
 export function Splash() {
   const video = useRef<HTMLVideoElement>(null);
@@ -39,9 +43,10 @@ export function Splash() {
     <div
       role="status"
       aria-label="กำลังเปิดแอป"
-      className="fixed inset-0 z-50 flex items-center justify-center bg-white"
+      className="fixed inset-0 z-50 flex items-center justify-center"
+      style={{ backgroundColor: SPLASH_BG }}
     >
-      <div className="relative aspect-[668/720] w-full max-w-sm">
+      <div className="relative aspect-video w-full max-w-md">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src="/loading-poster.jpg"
@@ -66,7 +71,7 @@ export function Splash() {
             resumeAt = e.currentTarget.duration;
           }}
           className={cn(
-            "absolute inset-0 h-full w-full bg-white object-contain transition-opacity duration-300 motion-reduce:hidden",
+            "absolute inset-0 h-full w-full object-contain transition-opacity duration-300 motion-reduce:hidden",
             playing ? "opacity-100" : "opacity-0",
           )}
         />

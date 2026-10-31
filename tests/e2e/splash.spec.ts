@@ -23,6 +23,8 @@ test.describe("opening screen (360px)", () => {
     // muted, plays once (no loop) and rests on its last frame
     expect(await video.evaluate((v: HTMLVideoElement) => [v.muted, v.loop])).toEqual([true, false]);
     await expect(splash.locator('img[src="/loading-poster.jpg"]')).toBeAttached();
+    // the owl video is on cream: the whole screen is that cream, so the video has no visible edges
+    await expect(splash).toHaveCSS("background-color", "rgb(249, 243, 223)");
     await expectNoHorizontalScroll(page);
 
     await expect(splash).toHaveCount(0);
