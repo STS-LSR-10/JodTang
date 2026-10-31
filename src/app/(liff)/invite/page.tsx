@@ -62,7 +62,7 @@ function Content({ me, onChanged }: { me: Me; onChanged: () => void }) {
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
 
-  const shareText = `มาจดรายรับรายจ่ายง่าย ๆ ในไลน์กับจดตังค์ (JodTang) ด้วยกันนะ เพิ่มเพื่อนแล้วพิมพ์ "ใช้รหัส ${me.referralCode}" ทั้งคู่ได้โบนัสเหรียญสะสม${
+  const shareText = `มาจดรายรับรายจ่ายง่าย ๆ ในไลน์กับพี่ฮูก (P'Hook) ด้วยกันนะ เพิ่มเพื่อนแล้วพิมพ์ "ใช้รหัส ${me.referralCode}" ทั้งคู่ได้โบนัสเหรียญสะสม${
     LINK ? `\n${LINK}` : ""
   }`;
 

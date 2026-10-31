@@ -51,7 +51,7 @@ export function DeleteCard() {
       <section className={cardClass} role="status">
         <p className="font-semibold">ลบข้อมูลทั้งหมดแล้ว</p>
         <p className="text-sm text-muted">
-          ขอบคุณที่ใช้จดตังค์ ถ้าอยากกลับมาใช้ใหม่ แค่พิมพ์ข้อความในแชทได้เลย
+          ขอบคุณที่ใช้พี่ฮูก ถ้าอยากกลับมาใช้ใหม่ แค่พิมพ์ข้อความในแชทได้เลย
         </p>
       </section>
     );

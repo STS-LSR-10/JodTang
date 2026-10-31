@@ -28,7 +28,7 @@ test.describe("open the group ledger page (360px)", () => {
     await mockApi(page, { "GET /api/group-open": { ...CHECK, friend: false } });
     await page.goto("/group-open");
     await expect(
-      page.getByRole("heading", { name: /ยังไม่ได้เพิ่มจดตังค์เป็นเพื่อน/ }),
+      page.getByRole("heading", { name: /ยังไม่ได้เพิ่มพี่ฮูกเป็นเพื่อน/ }),
     ).toBeVisible();
     const add = page.getByRole("link", { name: "เพิ่มเพื่อน" });
     await expect(add).toHaveAttribute("href", "https://line.me/R/ti/p/%40964jamyy");

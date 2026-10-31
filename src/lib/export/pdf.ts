@@ -141,7 +141,7 @@ export async function buildPdf(rows: ExportRow[], options: PdfOptions): Promise<
     margin: 40,
     bufferPages: true,
     font: regular as unknown as string, // PDFKit takes a path or the font bytes
-    info: { Title: "JodTang", Author: "JodTang" },
+    info: { Title: "P'Hook", Author: "P'Hook" },
   });
   doc.registerFont("bold", bold);
   doc.registerFont("regular", regular);
@@ -165,7 +165,7 @@ export async function buildPdf(rows: ExportRow[], options: PdfOptions): Promise<
     .font("regular")
     .fontSize(10)
     .fillColor("#E9EFE0")
-    .text("จดตังค์ (JodTang)", left, 52, { lineBreak: false });
+    .text("พี่ฮูก (P'Hook)", left, 52, { lineBreak: false });
   doc.font("regular");
 
   // ── what the file covers

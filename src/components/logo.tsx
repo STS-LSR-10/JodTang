@@ -6,7 +6,7 @@ function Mark({ size, className }: { size: number; className?: string }) {
     // eslint-disable-next-line @next/next/no-img-element
     <img
       src="/logo.png"
-      alt="จดตังค์ (JodTang)"
+      alt="พี่ฮูก (P'Hook)"
       width={size}
       height={size}
       style={{ width: size, height: size }}
@@ -15,7 +15,7 @@ function Mark({ size, className }: { size: number; className?: string }) {
   );
 }
 
-/** Logo with an optional "JodTang" wordmark under the mark. */
+/** Logo with an optional "P'Hook" wordmark under the mark. */
 export function Logo({
   size = 96,
   withWordmark = false,

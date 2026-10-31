@@ -85,8 +85,7 @@ const HAS_DIGIT = /[0-9๐-๙]/;
  * The entry in a message that says "จด" somewhere: "จด ข้าว 300", "จดค่าน้ำ 200", "เครื่องเล่น 500 จด"
  * and "ข้าว จด 300" all mean the same. "จด " in front is an explicit command and always counts (with no
  * amount the bot explains how). Every other place needs an amount in the message, so ordinary chat that
- * happens to contain the word ("จดทะเบียนเสร็จแล้ว") stays unanswered. The bot's own name ("จดตังค์")
- * is not the word. Null when this is not an entry.
+ * happens to contain the word ("จดทะเบียนเสร็จแล้ว") stays unanswered. The bot's old name ("จดตังค์") is not the word. Null when this is not an entry.
  */
 export function recordBody(text: string): string | null {
   const t = text.trim();

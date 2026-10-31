@@ -1,9 +1,9 @@
 /**
- * Create and publish the JodTang Rich Menu.
+ * Create and publish the P'Hook Rich Menu.
  *
  *   pnpm richmenu --dry-run     render assets/richmenu.jpg only (no network)
  *   pnpm richmenu               create the menu, upload the image, set it as default
- *   pnpm richmenu --replace     same, but first delete earlier "jodtang-main" / "meetang-main" menus
+ *   pnpm richmenu --replace     same, but first delete earlier "phook-main" / "jodtang-main" / "meetang-main" menus
  *
  * Reads LINE_CHANNEL_ACCESS_TOKEN and NEXT_PUBLIC_LIFF_ID from .env.local (or the environment).
  */
@@ -21,9 +21,9 @@ import {
   type TileKey,
 } from "./richmenu-design";
 
-const MENU_NAME = "jodtang-main";
+const MENU_NAME = "phook-main";
 // --replace also removes menus published before the rename.
-const REPLACEABLE_NAMES = new Set([MENU_NAME, "meetang-main"]);
+const REPLACEABLE_NAMES = new Set([MENU_NAME, "jodtang-main", "meetang-main"]);
 const API = "https://api.line.me/v2/bot";
 const API_DATA = "https://api-data.line.me/v2/bot";
 const IMAGE_PATH = resolve("assets/richmenu.jpg");

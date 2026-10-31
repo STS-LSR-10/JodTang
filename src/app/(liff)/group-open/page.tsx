@@ -60,7 +60,7 @@ export default function GroupOpenPage() {
         ) : data.friend === false ? (
           <section className={cn(cardClass, "space-y-3 text-center")}>
             <UserPlus className="mx-auto h-8 w-8 text-primary" aria-hidden />
-            <h2 className="text-lg font-bold">คุณยังไม่ได้เพิ่มจดตังค์เป็นเพื่อน</h2>
+            <h2 className="text-lg font-bold">คุณยังไม่ได้เพิ่มพี่ฮูกเป็นเพื่อน</h2>
             <p className="text-sm text-muted">
               บอทต้องเป็นเพื่อนกับคุณก่อน ถึงจะรู้ว่าใครเป็นคนเปิดสมุดกลุ่ม
               เพิ่มเพื่อนแล้วกลับไปกดปุ่ม “เปิดสมุดกลุ่ม” ในกลุ่มอีกครั้งนะ

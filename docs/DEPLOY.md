@@ -1,4 +1,4 @@
-# คู่มือ Deploy, Rollback และแก้ปัญหา (JodTang)
+# คู่มือ Deploy, Rollback และแก้ปัญหา (P'Hook)
 
 เอกสารนี้ไม่มีความลับใด ๆ ค่า secret อยู่ใน Vercel / GitHub Secrets / `.env.local` เท่านั้น
 

@@ -2310,7 +2310,7 @@ async function handlePostback(
 ): Promise<LineMessage[]> {
   const params = new URLSearchParams(data);
   const action = params.get("a");
-  // Rich Menu "จดตังค์": answer with the how-to card; its button opens the keyboard (a=compose-go).
+  // Rich Menu "พี่ฮูก": answer with the how-to card; its button opens the keyboard (a=compose-go).
   if (action === "compose") return [buildComposeCard()];
   // "จบการถาม" under an answer of พี่ฮูก.
   if (action === "owlx") return owlEnd(owlDeps(deps), user);

@@ -229,7 +229,7 @@ export default function UpgradePage() {
         >
           <Logo size={64} />
           <div className="min-w-0">
-            <p className="text-base font-bold">จดตังค์ได้เต็มที่ขึ้น</p>
+            <p className="text-base font-bold">พี่ฮูกได้เต็มที่ขึ้น</p>
             <p className="text-sm text-muted">
               แผนของคุณตอนนี้: <span className="font-semibold">{PLAN_LABEL[current]}</span>
             </p>

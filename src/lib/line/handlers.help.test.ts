@@ -117,7 +117,7 @@ describe("the help flow in the chat", () => {
     await handleEvent({ type: "follow", replyToken: "rt", source }, deps);
     const m = first(reply);
     expect(m.type).toBe("flex");
-    expect(JSON.stringify(m)).toContain("สวัสดี! เราคือจดตังค์");
+    expect(JSON.stringify(m)).toContain("สวัสดี! เราคือพี่ฮูก");
   });
 
   it("a message the bot cannot read gets the short text plus a button to the guide", async () => {

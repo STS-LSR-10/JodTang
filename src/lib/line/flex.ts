@@ -83,7 +83,7 @@ export function row(label: string, value: string) {
 
 export function shareText(input: ConfirmCardInput): string {
   const sign = input.type === "income" ? "+" : "-";
-  return `${input.title} ${sign}฿${formatBaht(input.amountSatang)} (${formatThaiDate(input.occurredAt)}) · จดด้วยจดตังค์`;
+  return `${input.title} ${sign}฿${formatBaht(input.amountSatang)} (${formatThaiDate(input.occurredAt)}) · จดด้วยพี่ฮูก`;
 }
 
 /** The soft backdrop of the saved-entry card. */
@@ -725,7 +725,7 @@ export function buildTypeQuestion(input: {
 }
 
 /**
- * Card shown when the Rich Menu "จดตังค์" tile is tapped: how to type an entry, plus a button that
+ * Card shown when the Rich Menu "พี่ฮูก" tile is tapped: how to type an entry, plus a button that
  * opens the keyboard (no text is prefilled, so nothing can be sent by accident).
  */
 export function buildComposeCard(): LineMessage {
@@ -740,7 +740,7 @@ export function buildComposeCard(): LineMessage {
   });
   return {
     type: "flex",
-    altText: "พิมพ์บอกจดตังค์ได้เลย เช่น กระเพราหมูกรอบ 65 · เงินเดือน 25000",
+    altText: "พิมพ์บอกพี่ฮูกได้เลย เช่น กระเพราหมูกรอบ 65 · เงินเดือน 25000",
     // pick a category first, then only the amount is left to type (see buildCategoryKeyboardList);
     // or pick a past day first (see buildDatePicker)
     quickReply: {
@@ -794,7 +794,7 @@ export function buildComposeCard(): LineMessage {
               },
               {
                 type: "text",
-                text: "พิมพ์บอกจดตังค์ได้เลย เช่น",
+                text: "พิมพ์บอกพี่ฮูกได้เลย เช่น",
                 weight: "bold",
                 size: "md",
                 color: "#334155",

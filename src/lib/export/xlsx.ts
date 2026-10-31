@@ -27,7 +27,7 @@ export async function buildXlsx(
   options: { advanced: boolean; transfers?: TransferDto[]; groups?: readonly ColumnGroup[] },
 ): Promise<Buffer> {
   const wb = new ExcelJS.Workbook();
-  wb.creator = "JodTang";
+  wb.creator = "P'Hook";
   wb.created = new Date();
 
   const list = wb.addWorksheet("รายการ");

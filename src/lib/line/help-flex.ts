@@ -655,7 +655,7 @@ export function buildWelcomeCard(input: { appUrl?: string }): LineMessage {
   });
   return {
     type: "flex",
-    altText: "สวัสดี! เราคือจดตังค์ พิมพ์ เช่น กาแฟ 30 หรือ เงินเดือน 25000 ได้เลย",
+    altText: "สวัสดี! เราคือพี่ฮูก พิมพ์ เช่น กาแฟ 30 หรือ เงินเดือน 25000 ได้เลย",
     contents: {
       type: "bubble",
       size: "mega",
@@ -668,7 +668,7 @@ export function buildWelcomeCard(input: { appUrl?: string }): LineMessage {
         contents: [
           {
             type: "text",
-            text: "สวัสดี! เราคือจดตังค์ 👋",
+            text: "สวัสดี! เราคือพี่ฮูก 👋",
             weight: "bold",
             size: "lg",
             color: "#0B5D4F",
@@ -821,14 +821,14 @@ export function buildGroupWelcomeCard(input: { appUrl?: string; openUrl?: string
     : { type: "message", label: "📒 เปิดสมุดกลุ่ม", text: "เปิดสมุดกลุ่ม" };
   return {
     type: "flex",
-    altText: 'จดตังค์มาแล้ว! ช่วยกันจดรายจ่ายในกลุ่ม แตะ "เปิดสมุดกลุ่ม" เพื่อเริ่ม',
+    altText: 'พี่ฮูกมาแล้ว! ช่วยกันจดรายจ่ายในกลุ่ม แตะ "เปิดสมุดกลุ่ม" เพื่อเริ่ม',
     contents: {
       type: "carousel",
       contents: [
         topicBubble({
           compact: true,
           icon: "👋",
-          title: "จดตังค์ มาช่วยจดแล้ว",
+          title: "พี่ฮูก มาช่วยจดแล้ว",
           subtitle: "ช่วยกันจดรายจ่ายของกลุ่ม",
           appUrl: input.appUrl,
           body: [

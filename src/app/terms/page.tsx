@@ -3,8 +3,8 @@ import Link from "next/link";
 import { contactText, LegalPage, Section } from "@/components/legal-page";
 
 export const metadata: Metadata = {
-  title: "ข้อกำหนดการใช้งาน · จดตังค์ (JodTang)",
-  description: "เงื่อนไขการใช้บริการจดตังค์",
+  title: "ข้อกำหนดการใช้งาน · พี่ฮูก (P'Hook)",
+  description: "เงื่อนไขการใช้บริการพี่ฮูก",
 };
 
 export default function TermsPage() {
@@ -12,7 +12,7 @@ export default function TermsPage() {
     <LegalPage title="ข้อกำหนดการใช้งาน" updated="16 ตุลาคม 2569">
       <Section title="1. การยอมรับข้อกำหนด">
         <p>
-          เมื่อคุณเพิ่มเพื่อนกับบัญชี LINE ของจดตังค์ หรือใช้งานหน้าเว็บของเรา
+          เมื่อคุณเพิ่มเพื่อนกับบัญชี LINE ของพี่ฮูก หรือใช้งานหน้าเว็บของเรา
           ถือว่าคุณยอมรับข้อกำหนดนี้ และ{" "}
           <Link href="/privacy" className="font-medium text-primary underline">
             นโยบายความเป็นส่วนตัว
@@ -22,7 +22,7 @@ export default function TermsPage() {
 
       <Section title="2. บริการของเรา">
         <p>
-          จดตังค์ช่วยจดรายรับรายจ่ายจากข้อความและรูปสลิป จัดหมวด สรุป และแสดงกราฟ
+          พี่ฮูกช่วยจดรายรับรายจ่ายจากข้อความและรูปสลิป จัดหมวด สรุป และแสดงกราฟ
           เป็นเครื่องมือช่วยบันทึกส่วนตัวเท่านั้น{" "}
           <strong>ไม่ใช่คำแนะนำทางการเงิน การลงทุน ภาษี หรือกฎหมาย</strong>
         </p>

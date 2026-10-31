@@ -1,5 +1,5 @@
 /**
- * Rich Menu artwork for JodTang: a painted picture (assets/richmenu-art.webp) cut and stretched to
+ * Rich Menu artwork for P'Hook: a painted picture (assets/richmenu-art.webp) cut and stretched to
  * LINE's 2500x1686 size. The tap areas are boxes laid over the tiles of the picture; they are
  * measured on the picture itself (ART_*) and carried over to the menu with the same crop and scale,
  * so changing the picture means changing the boxes below.

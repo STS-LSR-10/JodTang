@@ -378,7 +378,7 @@ describe("emoji in front of a category's name", () => {
   const labels = (m: Record<string, unknown>) =>
     (m.quickReply as { items: Btn[] }).items.map((i) => i.action);
 
-  it("the category buttons of จดตังค์ show it, but the text put in the box is the plain name", () => {
+  it("the category buttons of พี่ฮูก show it, but the text put in the box is the plain name", () => {
     const m = buildCategoryKeyboardList("expense", [
       { name: "ค่าอาหารแมว", icon: "🐱", type: "expense", sort_order: 1, is_hidden: false },
       { name: "อาหาร", icon: "utensils", type: "expense", sort_order: 2, is_hidden: false },

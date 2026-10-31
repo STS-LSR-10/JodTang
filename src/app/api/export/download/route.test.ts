@@ -91,7 +91,7 @@ describe("GET /api/export/download", () => {
     claims = { userId: "u1", format: "pdf", filters: { type: "expense", categoryId: "c1" } };
     const res = await get();
     expect(res.headers.get("content-type")).toBe("application/pdf");
-    expect(res.headers.get("content-disposition")).toMatch(/jodtang-\d{8}\.pdf/);
+    expect(res.headers.get("content-disposition")).toMatch(/phook-\d{8}\.pdf/);
     expect(
       Buffer.from(await res.arrayBuffer())
         .subarray(0, 5)

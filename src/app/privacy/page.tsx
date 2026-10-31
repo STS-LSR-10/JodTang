@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import { contactText, LegalPage, Section } from "@/components/legal-page";
 
 export const metadata: Metadata = {
-  title: "นโยบายความเป็นส่วนตัว · จดตังค์ (JodTang)",
-  description: "ข้อมูลที่จดตังค์เก็บ วิธีใช้ ผู้ประมวลผลข้อมูล และสิทธิ์ของคุณ",
+  title: "นโยบายความเป็นส่วนตัว · พี่ฮูก (P'Hook)",
+  description: "ข้อมูลที่พี่ฮูกเก็บ วิธีใช้ ผู้ประมวลผลข้อมูล และสิทธิ์ของคุณ",
 };
 
 export default function PrivacyPage() {
@@ -11,7 +11,7 @@ export default function PrivacyPage() {
     <LegalPage title="นโยบายความเป็นส่วนตัว" updated="16 ตุลาคม 2569">
       <Section title="1. เราคือใคร">
         <p>
-          &quot;จดตังค์ (JodTang)&quot; เป็นบริการจดรายรับรายจ่ายผ่าน LINE Official Account
+          &quot;พี่ฮูก (P&apos;Hook)&quot; เป็นบริการจดรายรับรายจ่ายผ่าน LINE Official Account
           และหน้าเว็บในแอป LINE เอกสารนี้อธิบายว่าเราเก็บและใช้ข้อมูลของคุณอย่างไร
         </p>
       </Section>

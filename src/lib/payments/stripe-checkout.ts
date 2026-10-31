@@ -54,7 +54,7 @@ export function buildCheckoutFields(
       upgrade ? upgrade.amountSatang : priceFor(req.plan, now)[req.period] * 100,
     ),
     "line_items[0][price_data][product_data][name]": upgrade
-      ? `จดตังค์ อัปเกรดเป็น ${PLAN_LABEL[req.plan]} (ส่วนต่าง ${upgrade.days} วัน)`
+      ? `พี่ฮูก อัปเกรดเป็น ${PLAN_LABEL[req.plan]} (ส่วนต่าง ${upgrade.days} วัน)`
       : productName(req.plan, req.period),
   };
   for (const [k, v] of Object.entries(meta)) f[`metadata[${k}]`] = v;
@@ -71,7 +71,7 @@ export function buildCheckoutFields(
 }
 
 export function productName(plan: "plus" | "ultimate", period: "monthly" | "yearly"): string {
-  return `จดตังค์ ${PLAN_LABEL[plan]} (${period === "yearly" ? "รายปี" : "รายเดือน"})`;
+  return `พี่ฮูก ${PLAN_LABEL[plan]} (${period === "yearly" ? "รายปี" : "รายเดือน"})`;
 }
 
 /**

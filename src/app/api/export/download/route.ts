@@ -92,7 +92,7 @@ export async function GET(request: Request): Promise<Response> {
     let main: { name: string; bytes: Uint8Array };
     if (claims.format === "csv") {
       main = {
-        name: `jodtang-${stamp}.csv`,
+        name: `phook-${stamp}.csv`,
         bytes: new TextEncoder().encode(toCsv(rows, claims.groups)),
       };
     } else if (claims.format === "pdf") {
@@ -108,7 +108,7 @@ export async function GET(request: Request): Promise<Response> {
         f.q ? `ค้นหา: ${f.q}` : null,
       ].filter((n): n is string => n !== null);
       main = {
-        name: `jodtang-${stamp}.pdf`,
+        name: `phook-${stamp}.pdf`,
         bytes: new Uint8Array(
           await buildPdf(rows, {
             groups: claims.groups,
@@ -139,7 +139,7 @@ export async function GET(request: Request): Promise<Response> {
         transfers,
         groups: claims.groups,
       });
-      main = { name: `jodtang-${stamp}.xlsx`, bytes: new Uint8Array(file) };
+      main = { name: `phook-${stamp}.xlsx`, bytes: new Uint8Array(file) };
     }
 
     // the slip pictures and photos go in a zip with the file (the plan is checked again here)
@@ -156,7 +156,7 @@ export async function GET(request: Request): Promise<Response> {
         headers: {
           ...headers,
           "Content-Type": "application/zip",
-          "Content-Disposition": `attachment; filename="jodtang-${stamp}.zip"`,
+          "Content-Disposition": `attachment; filename="phook-${stamp}.zip"`,
         },
       });
     }
