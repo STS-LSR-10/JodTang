@@ -39,6 +39,11 @@ describe("env", () => {
     expect(env.AI_PROVIDER).toBe("gemini");
   });
 
+  it("an empty AI_PROVIDER counts as not set", () => {
+    const env = getServerEnv({ ...base, AI_PROVIDER: "", GEMINI_API_KEY: "k" });
+    expect(env.AI_PROVIDER).toBe("gemini");
+  });
+
   it("only requires the selected provider's key", () => {
     expect(() =>
       getServerEnv({ ...base, AI_PROVIDER: "anthropic", GEMINI_API_KEY: "k" }),

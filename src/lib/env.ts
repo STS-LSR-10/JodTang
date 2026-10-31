@@ -34,7 +34,10 @@ const serverSchema = z
     // verification. Falls back to LINE_CHANNEL_ID when both live in the same channel.
     LINE_LOGIN_CHANNEL_ID: optionalString,
     // AI: pick one provider; only that provider's key is required.
-    AI_PROVIDER: z.enum(AI_PROVIDERS).default("gemini"),
+    AI_PROVIDER: z.preprocess(
+      (v) => (typeof v === "string" && v.trim() === "" ? undefined : v),
+      z.enum(AI_PROVIDERS).default("gemini"),
+    ),
     AI_MODEL: optionalString, // overrides the provider's default model
     // Slip reading chain (see src/lib/ocr/factory.ts): EasySlip first when its key is set.
     EASYSLIP_API_KEY: optionalString,
