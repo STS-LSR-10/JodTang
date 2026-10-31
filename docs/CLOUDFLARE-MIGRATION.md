@@ -58,3 +58,24 @@
 - ทดสอบ `cf:preview` บน workerd ในเครื่อง: หน้าเว็บ/ไฟล์ static ตอบ 200 · LINE webhook ลายเซ็นผิด 401 / ถูก 200 · cron ไม่มี secret 401 · PDF และ Excel สร้างได้
 - ต้องมี `cf-polyfill.mjs` (ตอบ `process.umask()`) เพราะไลบรารีส่งออกเรียกตอนโหลดแล้ว Workers ตอบ not implemented · `wrangler.jsonc` ชี้ `main` ไปที่ `cf-worker.mjs` ซึ่งโหลด polyfill ก่อน
 - รัน `pnpm cf:build` ต้องมี `pnpm` อยู่ใน PATH (OpenNext เรียก `pnpm build` เอง)
+
+## 5) ผลวัด CPU และขั้นตอนสลับจริง (ตัดสินใจ: ใช้ Workers Paid)
+
+**ผลวัดบน workers.dev (1 พ.ย. 2569):** คำขอธรรมดา 25–47 ms, ส่งออกไฟล์ 738 ms (รวมค่าเริ่มต้น), หมวดหมู่ 326 ms (ครั้งแรก) → เกิน 10 ms ของแผนฟรีทุกคำขอ จึงใช้ **Workers Paid**
+
+**Worker:** ชื่อ `phook` (ตั้งใน `wrangler.jsonc`) · deploy ด้วย `pnpm cf:deploy` (ต้องมี `pnpm` ใน PATH และ `.env.local` ครบ `NEXT_PUBLIC_*` ตอนบิลด์) · secrets ตั้งบน Cloudflare (ชื่อตามหัวข้อ 3; ตั้ง `AI_PROVIDER` ได้ ว่างได้ = gemini)
+
+**LIFF:** Rich Menu และลิงก์ในแชททั้งหมดใช้ LIFF ID เดิม → ตอนสลับ **ใช้ LIFF ID เดิมของจริง** (ไม่ใช่ตัวทดสอบ) แล้วเปลี่ยนแค่ Endpoint URL ของมัน
+
+**ลำดับสลับ (ย้อนกลับได้ทุกขั้น ถ้ายังไม่ปิด Vercel):**
+
+1. สมัคร/ยืนยัน Workers Paid ที่ Cloudflare → Billing
+2. `.env.local` ใส่ `NEXT_PUBLIC_LIFF_ID` ของจริงกลับ → `pnpm cf:deploy`
+3. ตั้ง secret `APP_BASE_URL` บน Cloudflare เป็น URL ใหม่ (workers.dev หรือโดเมนของคุณ)
+4. LINE Developers: LIFF จริง → Endpoint URL = URL ใหม่ · Messaging API → Webhook URL = `<URL ใหม่>/api/line/webhook` → กด Verify
+5. Stripe (ถ้าใช้): Webhook endpoint ชี้ `<URL ใหม่>/api/stripe/webhook` (ใช้ signing secret ตัวเดิมได้ถ้าแก้ endpoint เดิม)
+6. GitHub → Secrets: `APP_BASE_URL` = URL ใหม่ และ `CRON_SECRET` = ค่าเดียวกับที่ตั้งบน Cloudflare
+7. ทดสอบตาม `docs/LINE-TEST-CHECKLIST.md` (แชท, LIFF, ส่งออก, จ่ายเงิน, เตือน)
+8. เก็บ Vercel ไว้ ≥ 1 สัปดาห์เป็นทางย้อนกลับ (ย้อน = เปลี่ยน Endpoint/Webhook/GitHub secret กลับ) แล้วค่อยปิด
+
+**ดูปัญหา:** Cloudflare → Workers → `phook` → Logs/Observability หรือ `npx wrangler tail phook`

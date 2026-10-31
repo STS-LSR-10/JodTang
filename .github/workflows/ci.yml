@@ -38,3 +38,22 @@ jobs:
         with:
           name: playwright-traces
           path: test-results/
+
+  cloudflare-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      NEXT_PUBLIC_LIFF_ID: ci-liff-id
+      NEXT_PUBLIC_SUPABASE_URL: https://ci.supabase.co
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ci-anon-key
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # the Workers bundle must keep building (and stay under the size limit)
+      - run: pnpm cf:build
+      - run: pnpm exec wrangler deploy --dry-run --outdir /tmp/cf-dry
